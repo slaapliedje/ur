@@ -1,32 +1,25 @@
 # Dev container for the Ur project — both retro C toolchains in one image:
-#   - cc65   : 6502 targets (Atari 8-bit, Commodore 64, Apple II)
-#   - z88dk   : Z80 target (Coleco Adam)
-# ...plus git/make and a host C compiler for the common/ unit tests.
+#   - z88dk : Z80 target (Coleco Adam)              [provided by the base image]
+#   - cc65   : 6502 targets (Atari, C64, Apple II)   [built from source below]
+# ...plus a host C compiler (gcc, via build-base) for the common/ unit tests.
 #
-# Emulators (Altirra, VICE, MAME, AppleWin, FujiNet-PC) are GUI tools and are
-# installed NATIVELY on your machine, not in this container. See docs/development.md.
+# Emulators (Altirra, VICE, MAME, AppleWin, FujiNet-PC) are GUI tools installed
+# NATIVELY on your machine, not in this container. See docs/development.md.
 #
-# This image is the single source of truth shared by local dev and CI.
-#
-# NOTE: starting point — validate on first build. The official z88dk image is
-# Debian-based, so apt is available to add cc65. If that ever changes, switch to a
-# multi-stage build that does `COPY --from=z88dk/z88dk /opt/z88dk /opt/z88dk` and
-# sets ZCCCFG / PATH manually.
+# The official z88dk image is ALPINE-based (musl), so we use `apk` and build cc65
+# from source — cc65 is not packaged for Alpine. This image is the single source
+# of truth shared by local dev and CI. Works with Docker or Podman.
 FROM z88dk/z88dk:latest
 
-# cc65 (6502 toolchain) + host build/test tooling. (z88dk is already on PATH,
-# with ZCCCFG configured, in the base image.)
-RUN apt-get update \
- && apt-get install -y --no-install-recommends \
-      cc65 \
-      build-essential \
-      git \
-      make \
-      curl \
-      ca-certificates \
- && rm -rf /var/lib/apt/lists/*
+# build-base = gcc + musl-dev + binutils (also used to run the host unit tests).
+RUN apk add --no-cache build-base git make curl ca-certificates \
+ && git clone --depth 1 https://github.com/cc65/cc65.git /tmp/cc65 \
+ && make -C /tmp/cc65 -j4 \
+ && make -C /tmp/cc65 install PREFIX=/usr/local \
+ && rm -rf /tmp/cc65
+
+# Help the cc65 driver find its target libraries/includes.
+ENV CC65_HOME=/usr/local/share/cc65
 
 WORKDIR /src
-
-# Default to an interactive shell; CI overrides the command with `make ...`.
-CMD ["/bin/bash"]
+CMD ["/bin/sh"]

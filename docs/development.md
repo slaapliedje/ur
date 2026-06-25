@@ -19,11 +19,17 @@ Three targets are 6502 and one is Z80, so there are **two C toolchains**:
 The shared `src/common/` C core must compile under **both** — keep it
 toolchain-neutral (see [`src/common/CLAUDE.md`](../src/common/CLAUDE.md)).
 
-## Setup: toolchains via Docker (recommended)
+## Setup: toolchains via a container (recommended)
 
 The toolchains live in one reproducible image (the same one CI uses), built from
-the repo [`Dockerfile`](../Dockerfile). Emulators are installed **natively** (next
-section) because they're interactive GUI apps.
+the repo [`Dockerfile`](../Dockerfile). It is Alpine-based: z88dk comes from the
+official image and cc65 is built from source. Emulators are installed **natively**
+(next section) because they're interactive GUI apps.
+
+You need a container engine — **Docker or Podman** both work (Podman is a
+drop-in, daemonless/rootless alternative; substitute `podman` for `docker`, or
+`alias docker=podman`). You do **not** need both, and you don't need a container
+at all if you install the toolchains natively (see below).
 
 ```sh
 # Build the dev image once (cc65 + z88dk + host gcc)
@@ -36,18 +42,23 @@ docker run --rm -it -v "$PWD":/src ur-dev          # interactive shell
 ```
 
 **VS Code:** open the folder and "Reopen in Container" — [`.devcontainer/`](../.devcontainer/devcontainer.json)
-uses the same `Dockerfile`.
+uses the same `Dockerfile` (and supports Podman).
 
-> First-build validation: confirm `cl65 --version`, `zcc`, and `cc65 --version`
-> all run inside the container. If the z88dk base image is ever not apt-based,
-> switch the `Dockerfile` to the multi-stage approach noted in its comments.
+> Sanity check inside the container: `cc65 --version`, `cl65 --version`, and `zcc`
+> should all run. CI builds this exact image on every push, so breakage shows up there.
 
 ### Native toolchain install (alternative)
 
-- **cc65** — package managers (`apt install cc65`, `brew install cc65`) or build
-  from https://github.com/cc65/cc65.
-- **z88dk** — https://github.com/z88dk/z88dk (nightly builds recommended; the
-  `coleco`/`adam` target needs a current build). Set `ZCCCFG`/`PATH` per its docs.
+No container required if you install the toolchains directly:
+
+- **cc65** — `pacman -S cc65` (Arch), `apt install cc65` (Debian/Ubuntu),
+  `brew install cc65` (macOS), or build from https://github.com/cc65/cc65.
+- **z88dk** — `z88dk` in the AUR (Arch), or build from
+  https://github.com/z88dk/z88dk (nightly builds recommended; the `coleco`/`adam`
+  target needs a current build). Set `ZCCCFG`/`PATH` per its docs.
+
+The `Makefile` finds tools on your `PATH` (`cl65`, `zcc`, host `cc`), so a native
+install and the container are interchangeable for building.
 
 ## Setup: emulators (install natively)
 
