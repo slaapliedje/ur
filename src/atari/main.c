@@ -466,13 +466,64 @@ static char title_screen(void)
 
     hrun(6, 16, 28, '\\', false);             /* lower cuneiform frieze */
 
-    cputsxy(8, 20, "1) Two players (hot-seat)");
-    cputsxy(8, 21, "2) One player vs computer");
-    cputsxy(8, 22, "3) Online (FujiNet)");
-    cputsxy(8, 23, "Select 1-3:");
+    cputsxy(8, 19, "1) Two players (hot-seat)");
+    cputsxy(8, 20, "2) One player vs computer");
+    cputsxy(8, 21, "3) Online (FujiNet)");
+    cputsxy(8, 22, "4) How to play");
+    cputsxy(8, 23, "Select 1-4:");
 
-    do { key = cgetc(); } while (key < '1' || key > '3');
+    do { key = cgetc(); } while (key < '1' || key > '4');
     return key;
+}
+
+/* Two pages of rules, shown as full-screen text. Flips the board rows back to
+ * mode-2 text on entry and restores the colour band on exit. */
+static void show_instructions(void)
+{
+    atari_text_mode();
+
+    clrscr();
+    revers(1); cputsxy(0, 0, " HOW TO PLAY                      1/2 "); revers(0);
+    cputsxy(0, 2,  "Race your 7 pieces from your start,");
+    cputsxy(0, 3,  "along the track and off the far end.");
+    cputsxy(0, 4,  "First to bear all 7 off wins!");
+    cputsxy(0, 6,  "THE BOARD (vertical)");
+    cputsxy(0, 7,  " Light (white) runs up the left,");
+    cputsxy(0, 8,  " Dark (green) up the right; the");
+    cputsxy(0, 9,  " middle column is shared ground.");
+    cputsxy(0, 11, "THE DICE");
+    cputsxy(0, 12, " Roll 4 dice (FIRE or a key). The");
+    cputsxy(0, 13, " marked corners showing, 0 to 4,");
+    cputsxy(0, 14, " is how far you move. 0 = no move.");
+    cputsxy(0, 16, "YOUR MOVE");
+    cputsxy(0, 17, " Push the stick to pick a legal move");
+    cputsxy(0, 18, " (the box shows it), FIRE to play it.");
+    cputsxy(0, 19, " Bring on a new piece, or move one");
+    cputsxy(0, 20, " already on the track.");
+    cputsxy(0, 23, "        FIRE or a key for more...");
+    wait_action();
+
+    clrscr();
+    revers(1); cputsxy(0, 0, " HOW TO PLAY                      2/2 "); revers(0);
+    cputsxy(0, 2,  "ROSETTES (the flower squares)");
+    cputsxy(0, 3,  " Land exactly on a rosette to earn");
+    cputsxy(0, 4,  " an extra roll - and there you are");
+    cputsxy(0, 5,  " safe: you cannot be captured.");
+    cputsxy(0, 7,  "CAPTURE");
+    cputsxy(0, 8,  " In the shared middle column, land");
+    cputsxy(0, 9,  " on an opponent's piece to send it");
+    cputsxy(0, 10, " home to their start. (Rosettes are");
+    cputsxy(0, 11, " always safe.)");
+    cputsxy(0, 13, "BEARING OFF");
+    cputsxy(0, 14, " To take a piece off the board you");
+    cputsxy(0, 15, " must roll the EXACT count needed.");
+    cputsxy(0, 17, "WINNING");
+    cputsxy(0, 18, " The first to bear off all seven");
+    cputsxy(0, 19, " pieces wins. A game fit for kings!");
+    cputsxy(0, 23, "       FIRE or a key: back to menu");
+    wait_action();
+
+    atari_mode4_board();        /* restore the colour band for the title/game */
 }
 
 int main(void)
@@ -488,7 +539,12 @@ int main(void)
     atari_pmg_init();
     atari_quiet_sio();          /* no OS SIO "drive" drone during FujiNet polling */
 
-    key = title_screen();
+    do {
+        key = title_screen();
+        if (key == '4')
+            show_instructions();
+    } while (key == '4');
+
     ai[0] = false;              /* you are Light */
     ai[1] = (key == '2');       /* Dark is the computer in mode 2 */
 

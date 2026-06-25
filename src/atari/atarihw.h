@@ -11,6 +11,7 @@ void atari_setup_colors(void);   /* set the playfield colour registers          
 void atari_quiet_sio(void);      /* SOUNDR=0: silence the OS SIO I/O "drive" drone */
 void atari_setup_charset(void);  /* install a custom font: board tiles + pieces */
 void atari_mode4_board(void);    /* switch the board rows to ANTIC mode 4 (colour) */
+void atari_text_mode(void);      /* revert the board rows to mode-2 text (full-screen text) */
 
 /* Player-missile graphics: a highlight box (player 0) over a board cell. */
 void atari_pmg_init(void);

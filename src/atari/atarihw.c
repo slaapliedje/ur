@@ -147,6 +147,16 @@ void atari_mode4_board(void)
         dl[5 + r] = 0x04;
 }
 
+/* Inverse of atari_mode4_board: put the board rows back to mode-2 text, so the
+ * whole screen can show ordinary text (e.g. the instructions pages). */
+void atari_text_mode(void)
+{
+    unsigned char *dl = *(unsigned char **)0x0230;
+    unsigned char r;
+    for (r = 4; r <= 18; r++)
+        dl[5 + r] = 0x02;
+}
+
 /* ---- player-missile graphics (highlight cursor) ------------------------- *
  * One player (P0), double-line resolution, used as a hollow box drawn around a
  * board cell. Additive over the playfield, so it can't disturb the drawn board.
