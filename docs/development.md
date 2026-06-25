@@ -103,11 +103,19 @@ Then load the image in the matching emulator:
 
 ### Network testing
 
-1. Start the game server locally (see [`src/net/CLAUDE.md`](../src/net/CLAUDE.md)
-   and `server/` once it exists).
-2. Run FujiNet-PC pointed at the emulator.
-3. Launch the game in two emulator instances (e.g. two Altirra windows, or Altirra
-   + VICE) to exercise a full cross-platform turn loop.
+**N: TCP smoke test (Phase 1).** The Atari build does a TCP echo against a local
+server through FujiNet-PC:
+
+1. Start the echo server on your machine: `python3 tools/echo-server.py` (port 1234).
+2. Start **FujiNet-PC** (it bridges the emulated Atari's SIO to your real network).
+3. `make atari`, then boot `build/atari/ur.xex` in **Altirra** (configured to use
+   FujiNet-PC). The program prints the adapter config, sends `HELLO UR`, and should
+   show the echoed reply (`recv: HELLO UR`).
+   - Change the endpoint in `src/atari/main.c` (`UR_NET_URL`) for a different host/port.
+
+**Full multiplayer (later).** Once the game server exists, run it locally, point the
+clients at it via `N:TCP://...`, and drive two emulator instances (e.g. two Altirra
+windows, or Altirra + VICE) to exercise a full cross-platform turn loop.
 
 ## Disk/image tooling
 
