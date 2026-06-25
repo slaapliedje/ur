@@ -1,0 +1,32 @@
+# Build output
+/build/
+*.o
+*.obj
+*.lst
+*.map
+*.lbl
+
+# Platform disk/cartridge images & executables
+*.xex
+*.atr
+*.car
+*.dsk
+*.po
+*.d64
+*.prg
+*.bin
+
+# Vendored / fetched dependencies (fetch via build tooling)
+/lib/fujinet-lib/
+/vendor/
+
+# Compiled Go game server
+/server/server
+/server/*.exe
+
+# Editor / OS cruft
+.DS_Store
+*.swp
+*~
+.idea/
+.vscode/
