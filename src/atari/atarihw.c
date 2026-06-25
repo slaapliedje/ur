@@ -101,6 +101,10 @@ static const unsigned char g_die1[8]    = {0x18,0x24,0x24,0x5A,0x5A,0x81,0xFF,0x
 static const unsigned char g_solid[8]   = {0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF}; /* ']' */
 static const unsigned char g_wedge[8]   = {0x3C,0x3C,0xFF,0x3C,0x3C,0x3C,0x0C,0x00}; /* '\' cuneiform nail */
 
+/* Up-arrows marking each player's start/entry: white (COLOR0) and green (COLOR1). */
+static const unsigned char g_arrow_w[8] = {0x14,0x14,0x55,0x14,0x14,0x14,0x14,0x00}; /* '{' white up */
+static const unsigned char g_arrow_g[8] = {0x28,0x28,0xAA,0x28,0x28,0x28,0x28,0x00}; /* '}' green up */
+
 /* Over-allocated so we can align the active 1 KB to a $400 boundary at run time. */
 static unsigned char font_ram[1024 + 1024];
 
@@ -130,6 +134,8 @@ void atari_setup_charset(void)
     put_glyph(font, 0x3E, g_die1);     /* '^' marked die   */
     put_glyph(font, 0x3D, g_solid);    /* ']' solid block (title art) */
     put_glyph(font, 0x3C, g_wedge);    /* '\' cuneiform wedge         */
+    put_glyph(font, 0x7B, g_arrow_w);  /* '{' white start up-arrow    */
+    put_glyph(font, 0x7D, g_arrow_g);  /* '}' green start up-arrow    */
 
     *(volatile unsigned char *)0x02F4 = (unsigned char)(base >> 8);  /* CHBAS */
 }

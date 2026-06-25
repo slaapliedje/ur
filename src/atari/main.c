@@ -134,6 +134,11 @@ static void draw_all(unsigned char roll, const char *msg)
         for (k = 0; k < n; k++) { cputcxy(36, (unsigned char)(18 - k), '@'); cputcxy(37, (unsigned char)(18 - k), '['); }
     }
 
+    /* Start markers: a coloured up-arrow beside each player's entry square (pos 1,
+     * at celly(4)=row 10). Pieces enter here and run up their side column. */
+    cputcxy(15, 10, '{');                       /* white: Light starts (left)  */
+    cputcxy(24, 10, '}');                       /* green: Dark starts (right)  */
+
     gotoxy(0, ROW_TURN);
     cprintf("Turn: %s", game.turn ? "Dark (green)" : "Light (white)");
     if (roll != NO_ROLL) {
@@ -494,14 +499,66 @@ static char title_screen(void)
     return key;
 }
 
-/* Two pages of rules, shown as full-screen text. Flips the board rows back to
- * mode-2 text on entry and restores the colour band on exit. */
+/* Draw an empty board (tiles + rosettes, no pieces) for the path demo. */
+static void demo_board(void)
+{
+    unsigned char row, col;
+    char ch;
+    for (row = 1; row <= 8; row++)
+        for (col = 0; col < 3; col++) {
+            if (!(col == 1 || row <= 4 || row >= 7))
+                continue;                       /* cut-away cell */
+            ch = ((col != 1 && (row == 1 || row == 7)) || (col == 1 && row == 4)) ? '*' : '+';
+            if (ch == '*') revers(1);
+            cputcxy(cellx(col),     celly(row), ch);
+            cputcxy(cellx(col) + 1, celly(row), ch == '*' ? '&' : '=');
+            if (ch == '*') revers(0);
+        }
+}
+
+/* Manual page 3: animate a growing line along each player's 14-step path - white
+ * up the left and across the shared middle, then green up the right - looping
+ * until the player presses a key/FIRE. Uses the mode-4 colour band. */
+static void show_path_demo(void)
+{
+    unsigned char p, pos, r, c;
+    char done = 0;
+
+    atari_mode4_board();
+    while (atari_trig()) { }                     /* drop the trigger that got us here */
+
+    while (!done) {
+        for (p = 0; p < 2 && !done; p++) {
+            clrscr();
+            revers(1); cputsxy(0, 0, " THE PATH                         3/3 "); revers(0);
+            cputsxy(0, 1, p == 0 ? "WHITE: up the left, across the"
+                                 : "GREEN: up the right, across the");
+            cputsxy(0, 2, "shared middle, then off home.");
+            cputsxy(0, 23, "FIRE or a key: back to menu");
+            demo_board();
+            for (pos = 1; pos <= 14; pos++) {
+                if (pos_to_cell(p, pos, &r, &c)) {
+                    cputcxy(cellx(c),     celly(r), p == 0 ? '#' : '@');
+                    cputcxy(cellx(c) + 1, celly(r), p == 0 ? '$' : '[');
+                }
+                atari_wait_frames(16);
+                if (kbhit() || atari_trig()) { done = 1; break; }
+            }
+            if (!done) atari_wait_frames(40);
+            if (kbhit() || atari_trig()) done = 1;
+        }
+    }
+    if (kbhit()) cgetc();                         /* consume the exit key */
+}
+
+/* Three manual pages: two of rules text, then an animated path demo. Flips the
+ * board rows to mode-2 text for the text pages; the demo restores the colour band. */
 static void show_instructions(void)
 {
     atari_text_mode();
 
     clrscr();
-    revers(1); cputsxy(0, 0, " HOW TO PLAY                      1/2 "); revers(0);
+    revers(1); cputsxy(0, 0, " HOW TO PLAY                      1/3 "); revers(0);
     cputsxy(0, 2,  "Race your 7 pieces from your start,");
     cputsxy(0, 3,  "along the track and off the far end.");
     cputsxy(0, 4,  "First to bear all 7 off wins!");
@@ -522,7 +579,7 @@ static void show_instructions(void)
     wait_action();
 
     clrscr();
-    revers(1); cputsxy(0, 0, " HOW TO PLAY                      2/2 "); revers(0);
+    revers(1); cputsxy(0, 0, " HOW TO PLAY                      2/3 "); revers(0);
     cputsxy(0, 2,  "ROSETTES (the flower squares)");
     cputsxy(0, 3,  " Land exactly on a rosette to earn");
     cputsxy(0, 4,  " an extra roll - and there you are");
@@ -538,10 +595,10 @@ static void show_instructions(void)
     cputsxy(0, 17, "WINNING");
     cputsxy(0, 18, " The first to bear off all seven");
     cputsxy(0, 19, " pieces wins. A game fit for kings!");
-    cputsxy(0, 23, "       FIRE or a key: back to menu");
+    cputsxy(0, 23, "     FIRE or a key: see the path...");
     wait_action();
 
-    atari_mode4_board();        /* restore the colour band for the title/game */
+    show_path_demo();           /* page 3: animated white/green path */
 }
 
 int main(void)
