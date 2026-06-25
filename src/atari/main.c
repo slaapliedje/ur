@@ -15,6 +15,7 @@
 #include <conio.h>
 
 #include "ur.h"
+#include "atarihw.h"
 
 #define ROW_T    0          /* top    — Light's private rows */
 #define ROW_M    1          /* middle — shared (capture zone) */
@@ -88,9 +89,16 @@ static void draw_all(unsigned char roll, const char *msg)
         }
 
     for (r = 0; r < 3; r++)
-        for (c = 1; c <= 8; c++)
-            if (grid[r][c] != ' ')
-                cputcxy(cellx(c), celly(r), grid[r][c]);
+        for (c = 1; c <= 8; c++) {
+            char ch = grid[r][c];
+            if (ch == ' ')
+                continue;
+            if (ch == '*')
+                revers(1);              /* highlight rosettes in inverse video */
+            cputcxy(cellx(c), celly(r), ch);
+            if (ch == '*')
+                revers(0);
+        }
 
     gotoxy(0, 2);
     cprintf("Turn: %s", game.turn ? "Dark (X)" : "Light (O)");
@@ -124,6 +132,15 @@ static const char *win_msg(unsigned char player)
                   : "Light (O) wins!  Press a key.";
 }
 
+static void sfx_for_result(const ur_move_result *r)
+{
+    if (r->won)           sfx_win();
+    else if (r->captured) sfx_capture();
+    else if (r->scored)   sfx_score();
+    else if (r->rosette)  sfx_rosette();
+    else                  sfx_move();
+}
+
 /* The computer takes a full turn for `player`. Returns true if the game is over. */
 static bool computer_turn(unsigned char player)
 {
@@ -135,6 +152,7 @@ static bool computer_turn(unsigned char player)
     draw_all(NO_ROLL, "Computer's turn - press a key.");
     cgetc();
     roll = ur_dice_roll();
+    sfx_roll();
 
     if (ur_legal_moves(&game, player, roll, pieces) == 0) {
         draw_all(roll, "Computer has no move. Press a key.");
@@ -147,6 +165,7 @@ static bool computer_turn(unsigned char player)
     pos  = game.piece[player][(unsigned char)pick];
     dest = (unsigned char)(pos + roll);
     ur_apply_move(&game, player, (unsigned char)pick, roll, &res);
+    sfx_for_result(&res);
 
     draw_all(roll, "Computer moved:");
     gotoxy(0, 17);
@@ -181,6 +200,7 @@ static bool human_turn(unsigned char player)
     draw_all(NO_ROLL, "Press any key to roll...");
     cgetc();
     roll = ur_dice_roll();
+    sfx_roll();
 
     count = ur_legal_moves(&game, player, roll, pieces);
     if (count == 0) {
@@ -227,6 +247,7 @@ static bool human_turn(unsigned char player)
         if (game.piece[player][pieces[i]] == pos) { picked = pieces[i]; break; }
 
     ur_apply_move(&game, player, picked, roll, &res);
+    sfx_for_result(&res);
 
     if (res.won) {
         draw_all(NO_ROLL, win_msg(player));
@@ -261,6 +282,7 @@ int main(void)
     ai[0] = false;              /* you are Light */
     ai[1] = (key == '2');       /* Dark is the computer in mode 2 */
 
+    atari_setup_colors();
     ur_init(&game);
 
     for (;;) {
