@@ -1,14 +1,14 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 /*
- * Atari 8-bit — playable Royal Game of Ur (Phase 3).
+ * Atari 8-bit Royal Game of Ur — playable client.
  *
- * Text-mode (conio) UI: draws the board, pieces and dice, and drives a full
- * game in two modes — local hot-seat 2-player, or one human (Light) vs the
- * computer (Dark). ALL rules and the AI come from the shared, tested core
- * (src/common/ur) — this file only renders and reads input. Prettier ANTIC /
- * player-missile graphics are a later polish pass.
+ * Vertical board: 8 rows x 3 columns. Left column = Light (white), middle column
+ * = the shared capture lane, right column = Dark (green). Info sits above and
+ * below the board because ANTIC's colour (mode 4) is per screen-row. Modes:
+ * local hot-seat, one player vs the AI, and online via FujiNet (N: TCP).
  *
- * Build: make atari  ->  build/atari/ur.xex   (boot in Altirra)
+ * All rules + the AI come from the shared core (src/common/ur); the protocol
+ * from src/common/proto. This file only renders, reads input, and talks N:.
  */
 #include <stdint.h>
 #include <stdbool.h>
@@ -19,41 +19,44 @@
 #include "atarihw.h"
 #include "fujinet-network.h"
 
-#define ROW_T    0          /* top    — Light's private rows */
-#define ROW_M    1          /* middle — shared (capture zone) */
-#define ROW_B    2          /* bottom — Dark's private rows */
-#define BOARD_X  8
-#define BOARD_Y  6
+/* Board cells: row 1..8, col 0=Light(left) 1=shared(mid) 2=Dark(right). */
+#define BOARD_X    14
+#define BOARD_Y    4
+#define ROW_TURN   1
+#define ROW_ROLL   2
+#define ROW_SEAT   3        /* online: which seat you are */
+#define ROW_MOVE   19       /* move description (below the board) */
+#define ROW_LIGHT  20
+#define ROW_DARK   21
+#define ROW_MSG    23
 
-#define LIGHT_CH '#'   /* board glyph: mode-4 light piece (white) */
-#define DARK_CH  '@'   /* board glyph: mode-4 dark piece (green)  */
+#define LIGHT_CH '#'        /* mode-4 light piece glyph (white) */
+#define DARK_CH  '@'        /* mode-4 dark piece glyph (green)  */
 #define NO_ROLL  0xFF
-#define UR_NET_URL "N:TCP://localhost:1234/"   /* the game server (via FujiNet) */
-
-#define DIE_MARKED   '^'   /* filled die glyph (a marked corner is up) */
-#define DIE_UNMARKED '_'   /* outline die glyph                        */
+#define UR_NET_URL "N:TCP://localhost:1234/"
+#define DIE_MARKED   '^'
+#define DIE_UNMARKED '_'
 
 static ur_state game;
 
-static unsigned char cellx(unsigned char col) { return (unsigned char)(BOARD_X + (col - 1) * 2); }
-static unsigned char celly(unsigned char row) { return (unsigned char)(BOARD_Y + row * 2); }
+static unsigned char cellx(unsigned char col) { return (unsigned char)(BOARD_X + col * 4); }
+static unsigned char celly(unsigned char row) { return (unsigned char)(BOARD_Y + (row - 1) * 2); }
 
-/* Map a path position (1..14) for a player to a board cell (row, col 1..8).
- * Returns false for off-board positions (start / home). */
+/* Path position (1..14) -> board cell (row 1..8, col 0..2). False if off-board. */
 static bool pos_to_cell(unsigned char player, unsigned char pos,
                         unsigned char *row, unsigned char *col)
 {
     if (pos < 1 || pos > 14)
         return false;
-    if (pos <= 4) {                 /* private entry: cols 4,3,2,1 */
-        *row = player ? ROW_B : ROW_T;
-        *col = (unsigned char)(5 - pos);
-    } else if (pos <= 12) {         /* shared middle: cols 1..8 */
-        *row = ROW_M;
-        *col = (unsigned char)(pos - 4);
-    } else {                        /* private exit: 13->col8, 14->col7 */
-        *row = player ? ROW_B : ROW_T;
-        *col = (pos == 13) ? 8 : 7;
+    if (pos <= 4) {                       /* private entry: rows 4,3,2,1 */
+        *col = player ? 2 : 0;
+        *row = (unsigned char)(5 - pos);
+    } else if (pos <= 12) {               /* shared middle column: rows 1..8 */
+        *col = 1;
+        *row = (unsigned char)(pos - 4);
+    } else {                              /* private exit: 13->row8, 14->row7 */
+        *col = player ? 2 : 0;
+        *row = (pos == 13) ? 8 : 7;
     }
     return true;
 }
@@ -74,18 +77,20 @@ static bool opp_on(unsigned char player, unsigned char pos)
 
 static void draw_all(unsigned char roll, const char *msg)
 {
-    char grid[3][9];
-    unsigned char r, c, pl, i, pos, rr, cc;
+    char grid[9][3];
+    unsigned char row, col, pl, i, pos, rr, cc;
 
     clrscr();
     cputsxy(0, 0, "The Royal Game of Ur");
 
-    for (r = 0; r < 3; r++)
-        for (c = 1; c <= 8; c++)
-            grid[r][c] = (r == ROW_M || c <= 4 || c >= 7) ? '+' : ' ';
-    grid[ROW_T][1] = '*'; grid[ROW_T][7] = '*';
-    grid[ROW_M][4] = '*';
-    grid[ROW_B][1] = '*'; grid[ROW_B][7] = '*';
+    /* base board: '+' playable, ' ' cut-away, '*' rosettes.
+     * Middle column is the full shared lane; the side columns skip rows 5-6. */
+    for (row = 1; row <= 8; row++)
+        for (col = 0; col < 3; col++)
+            grid[row][col] = (col == 1 || row <= 4 || row >= 7) ? '+' : ' ';
+    grid[1][0] = '*'; grid[7][0] = '*';   /* Light rosettes  (entry, exit) */
+    grid[4][1] = '*';                      /* central shared rosette */
+    grid[1][2] = '*'; grid[7][2] = '*';   /* Dark rosettes */
 
     for (pl = 0; pl < UR_NUM_PLAYERS; pl++)
         for (i = 0; i < UR_PIECES; i++) {
@@ -94,40 +99,37 @@ static void draw_all(unsigned char roll, const char *msg)
                 grid[rr][cc] = pl ? DARK_CH : LIGHT_CH;
         }
 
-    for (r = 0; r < 3; r++)
-        for (c = 1; c <= 8; c++) {
-            char ch = grid[r][c];
+    for (row = 1; row <= 8; row++)
+        for (col = 0; col < 3; col++) {
+            char ch = grid[row][col];
             if (ch == ' ')
                 continue;
             if (ch == '*')
-                revers(1);          /* rosette -> COLOR3 (orange) in mode 4 */
-            cputcxy(cellx(c), celly(r), ch);
+                revers(1);
+            cputcxy(cellx(col), celly(row), ch);
             if (ch == '*')
                 revers(0);
         }
 
-    gotoxy(0, 2);
+    gotoxy(0, ROW_TURN);
     cprintf("Turn: %s", game.turn ? "Dark (green)" : "Light (white)");
     if (roll != NO_ROLL) {
-        gotoxy(22, 2);
+        gotoxy(0, ROW_ROLL);
         cputs("Roll:");
-        for (i = 0; i < 4; i++)             /* four dice; `roll` show a marked corner */
+        for (i = 0; i < 4; i++)
             cputc(i < roll ? DIE_MARKED : DIE_UNMARKED);
         cprintf(" %u", roll);
     }
 
-    gotoxy(0, 13);
-    cprintf("Light  start:%u home:%u",
-            count_at(0, UR_POS_START), ur_score(&game, 0));
-    gotoxy(0, 14);
-    cprintf("Dark   start:%u home:%u",
-            count_at(1, UR_POS_START), ur_score(&game, 1));
+    gotoxy(0, ROW_LIGHT);
+    cprintf("Light  start:%u home:%u", count_at(0, UR_POS_START), ur_score(&game, 0));
+    gotoxy(0, ROW_DARK);
+    cprintf("Dark   start:%u home:%u", count_at(1, UR_POS_START), ur_score(&game, 1));
 
     if (msg && msg[0])
-        cputsxy(0, 16, msg);
+        cputsxy(0, ROW_MSG, msg);
 }
 
-/* Seed the core RNG from POKEY's hardware random register ($D20A). */
 static void seed_rng(void)
 {
     volatile unsigned char *RANDOM = (volatile unsigned char *)0xD20A;
@@ -137,11 +139,11 @@ static void seed_rng(void)
 
 static const char *win_msg(unsigned char player)
 {
-    return player ? "Dark (X) wins!  Press a key."
-                  : "Light (O) wins!  Press a key.";
+    return player ? "Dark (green) wins!  FIRE/key."
+                  : "Light (white) wins! FIRE/key.";
 }
 
-/* Move the PMG highlight box onto a piece's board cell (or hide it if home). */
+/* Move the PMG highlight onto a piece's board cell (or hide it if home). */
 static void highlight_dest(unsigned char player, unsigned char dest)
 {
     unsigned char rr, cc;
@@ -163,14 +165,14 @@ static void sfx_for_result(const ur_move_result *r)
 /* Wait for the player to acknowledge: a fresh trigger press or any key. */
 static void wait_action(void)
 {
-    while (atari_trig()) { }            /* release a held trigger first */
+    while (atari_trig()) { }
     for (;;) {
         if (kbhit()) { cgetc(); return; }
         if (atari_trig()) return;
     }
 }
 
-/* Highlight move option `sel` (its cell) and print a one-line description. */
+/* Highlight move option `sel` and describe it on ROW_MOVE. */
 static void show_option(unsigned char player, const unsigned char *srcs,
                         unsigned char nsrc, unsigned char sel, unsigned char roll)
 {
@@ -182,7 +184,7 @@ static void show_option(unsigned char player, const unsigned char *srcs,
     if (pos_to_cell(player, cell, &rr, &cc))
         atari_pmg_highlight(cellx(cc), celly(rr));
 
-    gotoxy(0, 18);
+    gotoxy(0, ROW_MOVE);
     cprintf("Move %u/%u: ", sel + 1, nsrc);
     if (src == UR_POS_START)
         cprintf("enter -> %u  ", dest);
@@ -194,7 +196,99 @@ static void show_option(unsigned char player, const unsigned char *srcs,
     else                                                  cprintf("          ");
 }
 
-/* The computer takes a full turn for `player`. Returns true if the game is over. */
+/* Joystick/number-key move chooser, shared by hot-seat and online play. The
+ * highlight cursor moves over the legal options; FIRE (or 1..N) selects.
+ * Returns the chosen piece index, or -1 if there is no legal move. */
+static int8_t choose_move(unsigned char player, unsigned char roll)
+{
+    unsigned char pieces[UR_PIECES], srcs[UR_PIECES];
+    unsigned char count, nsrc, i, j, pos, sel, centered, s;
+    bool seen;
+    char key;
+
+    count = ur_legal_moves(&game, player, roll, pieces);
+    if (count == 0)
+        return -1;
+
+    nsrc = 0;
+    for (i = 0; i < count; i++) {
+        pos = game.piece[player][pieces[i]];
+        seen = false;
+        for (j = 0; j < nsrc; j++)
+            if (srcs[j] == pos) { seen = true; break; }
+        if (!seen)
+            srcs[nsrc++] = pos;
+    }
+
+    draw_all(roll, "Stick: choose   FIRE/1-N: move");
+    sel = 0;
+    show_option(player, srcs, nsrc, sel, roll);
+    while (atari_trig()) { }            /* don't inherit the roll's trigger press */
+    centered = 1;
+    for (;;) {
+        if (kbhit()) {
+            key = cgetc();
+            if (key >= '1' && key < (char)('1' + nsrc)) { sel = (unsigned char)(key - '1'); break; }
+        }
+        if (atari_trig())
+            break;
+        s = atari_stick();
+        if ((s & 0x0F) == 0x0F) {
+            centered = 1;
+        } else if (centered) {
+            if (!(s & 0x04) || !(s & 0x01))   /* left/up -> previous */
+                sel = (unsigned char)((sel + nsrc - 1) % nsrc);
+            else                              /* right/down -> next */
+                sel = (unsigned char)((sel + 1) % nsrc);
+            show_option(player, srcs, nsrc, sel, roll);
+            centered = 0;
+        }
+    }
+
+    pos = srcs[sel];
+    for (i = 0; i < count; i++)
+        if (game.piece[player][pieces[i]] == pos)
+            return (int8_t)pieces[i];
+    return (int8_t)pieces[0];
+}
+
+static bool human_turn(unsigned char player)
+{
+    unsigned char roll;
+    int8_t picked;
+    ur_move_result res;
+
+    draw_all(NO_ROLL, "Roll: press FIRE or a key");
+    wait_action();
+    roll = ur_dice_roll();
+    sfx_roll();
+
+    picked = choose_move(player, roll);
+    if (picked < 0) {
+        draw_all(roll, "No legal move. FIRE/key.");
+        wait_action();
+        ur_advance_turn(&game, (const ur_move_result *)0);
+        return false;
+    }
+
+    ur_apply_move(&game, player, (unsigned char)picked, roll, &res);
+    sfx_for_result(&res);
+    highlight_dest(player, game.piece[player][(unsigned char)picked]);
+
+    if (res.won) {
+        draw_all(NO_ROLL, win_msg(player));
+        wait_action();
+        return true;
+    }
+    if (res.captured || res.rosette) {
+        draw_all(NO_ROLL, res.captured ? "Capture!  FIRE/key."
+                                       : "Rosette - roll again! FIRE/key.");
+        wait_action();
+    }
+    ur_advance_turn(&game, &res);
+    return false;
+}
+
 static bool computer_turn(unsigned char player)
 {
     unsigned char pieces[UR_PIECES];
@@ -221,8 +315,8 @@ static bool computer_turn(unsigned char player)
     sfx_for_result(&res);
     highlight_dest(player, game.piece[player][(unsigned char)pick]);
 
-    draw_all(roll, "Computer moved:");
-    gotoxy(0, 17);
+    draw_all(roll, "Computer moved - FIRE/key.");
+    gotoxy(0, ROW_MOVE);
     if (pos == UR_POS_START)
         cprintf("CPU: enter -> %u", dest);
     else
@@ -230,100 +324,12 @@ static bool computer_turn(unsigned char player)
     if (res.captured)      cprintf("  capture!");
     else if (res.scored)   cprintf("  home!");
     else if (res.rosette)  cprintf("  rosette!");
-    cputsxy(0, 19, "Press FIRE or a key.");
     wait_action();
 
     if (res.won) {
         draw_all(NO_ROLL, win_msg(player));
         wait_action();
         return true;
-    }
-    ur_advance_turn(&game, &res);
-    return false;
-}
-
-/* A human takes a full turn for `player`. Returns true if the game is over. */
-static bool human_turn(unsigned char player)
-{
-    unsigned char pieces[UR_PIECES], srcs[UR_PIECES];
-    unsigned char roll, count, nsrc, picked, i, j, pos;
-    unsigned char sel, centered, s;
-    bool seen;
-    char key;
-    ur_move_result res;
-
-    draw_all(NO_ROLL, "Roll: press FIRE or a key");
-    wait_action();
-    roll = ur_dice_roll();
-    sfx_roll();
-
-    count = ur_legal_moves(&game, player, roll, pieces);
-    if (count == 0) {
-        draw_all(roll, "No legal move. FIRE/key.");
-        wait_action();
-        ur_advance_turn(&game, (const ur_move_result *)0);
-        return false;
-    }
-
-    /* collapse identical source squares into one menu entry */
-    nsrc = 0;
-    for (i = 0; i < count; i++) {
-        pos = game.piece[player][pieces[i]];
-        seen = false;
-        for (j = 0; j < nsrc; j++)
-            if (srcs[j] == pos) { seen = true; break; }
-        if (!seen)
-            srcs[nsrc++] = pos;
-    }
-
-    /* Joystick cursor: move the highlight over the options, FIRE to pick.
-     * Number keys 1..N still work as a fallback. */
-    draw_all(roll, "Stick: choose   FIRE/1-N: move");
-    sel = 0;
-    show_option(player, srcs, nsrc, sel, roll);
-    while (atari_trig()) { }            /* don't inherit the roll's trigger press */
-    centered = 1;
-    for (;;) {
-        if (kbhit()) {
-            key = cgetc();
-            if (key >= '1' && key < (char)('1' + nsrc)) {
-                sel = (unsigned char)(key - '1');
-                break;
-            }
-        }
-        if (atari_trig())
-            break;
-        s = atari_stick();
-        if ((s & 0x0F) == 0x0F) {
-            centered = 1;                          /* stick centred */
-        } else if (centered) {
-            if (!(s & 0x04) || !(s & 0x01))        /* left or up -> previous */
-                sel = (unsigned char)((sel + nsrc - 1) % nsrc);
-            else                                   /* right or down -> next  */
-                sel = (unsigned char)((sel + 1) % nsrc);
-            show_option(player, srcs, nsrc, sel, roll);
-            centered = 0;
-        }
-    }
-
-    pos = srcs[sel];
-    picked = pieces[0];
-    for (i = 0; i < count; i++)
-        if (game.piece[player][pieces[i]] == pos) { picked = pieces[i]; break; }
-
-    ur_apply_move(&game, player, picked, roll, &res);
-    sfx_for_result(&res);
-    highlight_dest(player, game.piece[player][picked]);
-
-    if (res.won) {
-        draw_all(NO_ROLL, win_msg(player));
-        wait_action();
-        return true;
-    }
-    if (res.captured || res.rosette) {
-        draw_all(NO_ROLL, res.captured ? "Capture!  FIRE/key."
-                                       : "Rosette - roll again! FIRE/key.");
-        wait_action();
     }
     ur_advance_turn(&game, &res);
     return false;
@@ -331,7 +337,6 @@ static bool human_turn(unsigned char player)
 
 /* ---- online mode (FujiNet N:TCP, server-authoritative) ------------------ */
 
-/* Read one 21-byte STATE message from the server. Returns false on disconnect. */
 static bool read_state(ur_snapshot *snap)
 {
     uint8_t  buf[UR_STATE_MSG_LEN];
@@ -345,8 +350,8 @@ static bool read_state(ur_snapshot *snap)
         if (bw >= UR_STATE_MSG_LEN)
             break;
         if (conn == 0)
-            return false;            /* connection closed */
-        atari_wait_frames(3);        /* ~20 polls/s: gentle on NetSIO, far less log spam */
+            return false;
+        atari_wait_frames(3);          /* ~20 polls/s: gentle on NetSIO */
     }
     n = network_read(UR_NET_URL, buf, UR_STATE_MSG_LEN);
     if (n < (int16_t)UR_STATE_MSG_LEN)
@@ -354,23 +359,17 @@ static bool read_state(ur_snapshot *snap)
     return ur_proto_decode_state(buf, (uint8_t)n, snap);
 }
 
-/* Render a server snapshot (reuses draw_all) plus which seat we are. */
-static void draw_online(const ur_snapshot *snap, const char *msg)
+static void show_seat(const ur_snapshot *snap)
 {
-    game = snap->state;
-    draw_all(snap->phase == UR_PHASE_MOVE ? snap->roll : NO_ROLL, msg);
-    gotoxy(0, 3);
+    gotoxy(0, ROW_SEAT);
     cprintf("You: %s", snap->seat ? "Dark (green)" : "Light (white)");
 }
 
 static void online_game(void)
 {
     ur_snapshot snap;
-    uint8_t pieces[UR_PIECES], srcs[UR_PIECES], cmd[4];
-    unsigned char i, j, nsrc, pos, dest, count;
-    bool seen;
+    uint8_t cmd[4];
     int8_t picked;
-    char key;
 
     if (network_init() != FN_ERR_OK) {
         draw_all(NO_ROLL, "network_init failed. FIRE/key."); wait_action(); return;
@@ -384,58 +383,35 @@ static void online_game(void)
         if (!read_state(&snap)) {
             draw_all(NO_ROLL, "Disconnected. FIRE/key."); wait_action(); break;
         }
+        game = snap.state;
         if (snap.flags & UR_FLAG_CAPTURED)      sfx_capture();
         else if (snap.flags & UR_FLAG_SCORED)   sfx_score();
         else if (snap.flags & UR_FLAG_ROSETTE)  sfx_rosette();
 
         if (snap.phase == UR_PHASE_OVER) {
-            draw_online(&snap, (snap.winner == (int8_t)snap.seat)
-                               ? "You win!  FIRE/key." : "You lose.  FIRE/key.");
+            draw_all(NO_ROLL, (snap.winner == (int8_t)snap.seat)
+                              ? "You win!  FIRE/key." : "You lose.  FIRE/key.");
+            show_seat(&snap);
             wait_action();
             break;
         }
         if (snap.state.turn != snap.seat) {
-            draw_online(&snap, "Opponent's turn...");
+            draw_all(snap.phase == UR_PHASE_MOVE ? snap.roll : NO_ROLL, "Opponent's turn...");
+            show_seat(&snap);
             continue;                          /* loop reads the next STATE */
         }
         if (snap.phase == UR_PHASE_ROLL) {
-            draw_online(&snap, "Your turn - FIRE/key to roll");
+            draw_all(NO_ROLL, "Your turn - FIRE/key to roll");
+            show_seat(&snap);
             wait_action();
             sfx_roll();
             network_write(UR_NET_URL, cmd, ur_proto_roll(cmd));
             continue;
         }
-
-        /* my turn, choose a move (number-key menu) */
-        game = snap.state;
-        count = ur_legal_moves(&game, snap.seat, snap.roll, pieces);
-        if (count == 0)
-            continue;                          /* server will have passed */
-        nsrc = 0;
-        for (i = 0; i < count; i++) {
-            pos = game.piece[snap.seat][pieces[i]];
-            seen = false;
-            for (j = 0; j < nsrc; j++)
-                if (srcs[j] == pos) { seen = true; break; }
-            if (!seen) srcs[nsrc++] = pos;
-        }
-        draw_online(&snap, "Your move - press 1-N:");
-        for (i = 0; i < nsrc; i++) {
-            dest = (unsigned char)(srcs[i] + snap.roll);
-            gotoxy(0, (unsigned char)(17 + i));
-            if (srcs[i] == UR_POS_START)
-                cprintf("%u) enter -> %u", i + 1, dest);
-            else
-                cprintf("%u) %u -> %u", i + 1, srcs[i], dest);
-        }
-        do {
-            key = cgetc();
-        } while (key < '1' || key >= (char)('1' + nsrc));
-        pos = srcs[key - '1'];
-        picked = (int8_t)pieces[0];
-        for (i = 0; i < count; i++)
-            if (game.piece[snap.seat][pieces[i]] == pos) { picked = (int8_t)pieces[i]; break; }
-        network_write(UR_NET_URL, cmd, ur_proto_move(cmd, (unsigned char)picked));
+        /* your turn, choose a move (shared cursor chooser) */
+        picked = choose_move(snap.seat, snap.roll);
+        if (picked >= 0)
+            network_write(UR_NET_URL, cmd, ur_proto_move(cmd, (unsigned char)picked));
     }
     network_close(UR_NET_URL);
 }
@@ -447,7 +423,6 @@ int main(void)
 
     seed_rng();
 
-    /* mode select */
     clrscr();
     cputsxy(0, 0, "The Royal Game of Ur");
     cputsxy(0, 3, "1) Two players (hot-seat)");
@@ -464,15 +439,14 @@ int main(void)
     atari_setup_charset();
     atari_mode4_board();
     atari_pmg_init();
-    atari_quiet_sio();   /* no OS SIO "drive" drone during FujiNet polling */
+    atari_quiet_sio();          /* no OS SIO "drive" drone during FujiNet polling */
 
-    if (key == '3') {           /* online: server-authoritative, its own loop */
+    if (key == '3') {
         online_game();
         return 0;
     }
 
     ur_init(&game);
-
     for (;;) {
         unsigned char player = game.turn;
         bool over = ai[player] ? computer_turn(player) : human_turn(player);

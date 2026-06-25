@@ -123,12 +123,13 @@ void atari_setup_charset(void)
 /* Switch the board's character rows to ANTIC mode 4 (multicolour) by patching the
  * OS display list in place. Standard GR.0 DL: 3x$70 (blank), $42+addr (char row 0),
  * then 23x$02 (char rows 1..23), $41+addr. Char row R lives at dl[5 + R], so we
- * set the board rows (6..10) to $04. Text rows stay mode 2. */
+ * set the board rows to $04. Text rows stay mode 2. The vertical board spans
+ * screen char rows 4..18. */
 void atari_mode4_board(void)
 {
     unsigned char *dl = *(unsigned char **)0x0230;   /* SDLSTL / SDLSTH */
     unsigned char r;
-    for (r = 6; r <= 10; r++)
+    for (r = 4; r <= 18; r++)
         dl[5 + r] = 0x04;
 }
 
