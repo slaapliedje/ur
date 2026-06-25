@@ -184,6 +184,14 @@ void atari_pmg_highlight(unsigned char char_x, unsigned char char_y)
 unsigned char atari_stick(void) { return STICK0_R; }
 unsigned char atari_trig(void)  { return (unsigned char)(STRIG0_R == 0); }
 
+/* Busy-wait roughly `frames` display frames (~262 scanlines each, NTSC). */
+void atari_wait_frames(unsigned char frames)
+{
+    unsigned int i, lines = (unsigned int)frames * 262u;
+    for (i = 0; i < lines; i++)
+        WSYNC = 0;
+}
+
 /* Lower AUDF1 = higher pitch (it's a divisor). Durations in scanlines. */
 void sfx_roll(void)    { tone(96, 8, 500);  tone(72, 8, 500); }
 void sfx_move(void)    { tone(80, 6, 600); }

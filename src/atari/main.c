@@ -340,6 +340,7 @@ static bool read_state(ur_snapshot *snap)
             break;
         if (conn == 0)
             return false;            /* connection closed */
+        atari_wait_frames(3);        /* ~20 polls/s: gentle on NetSIO, far less log spam */
     }
     n = network_read(UR_NET_URL, buf, UR_STATE_MSG_LEN);
     if (n < (int16_t)UR_STATE_MSG_LEN)
@@ -394,6 +395,7 @@ static void online_game(void)
         if (snap.phase == UR_PHASE_ROLL) {
             draw_online(&snap, "Your turn - FIRE/key to roll");
             wait_action();
+            sfx_roll();
             network_write(UR_NET_URL, cmd, ur_proto_roll(cmd));
             continue;
         }

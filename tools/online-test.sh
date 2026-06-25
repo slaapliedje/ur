@@ -27,7 +27,12 @@ die() { echo "error: $*" >&2; exit 1; }
 
 command -v atari800 >/dev/null 2>&1 || die "atari800 not found (install it; needs -netsio support, e.g. AUR atari800 6.1.0)"
 [ -x "$FUJINET_BIN" ] || die "FujiNet-PC not found at '$FUJINET_BIN' (build it, or set FUJINET_BIN)"
-[ -f "$XEX" ] || die "no '$XEX' — build it first:  CSP_COMPAT=1 make atari   (cc65 <= 2.19)  or  make atari"
+echo "building client (ur.xex)..."
+if ! make -C "$repo" atari >/dev/null 2>&1; then
+    echo "  retrying with CSP_COMPAT=1 (cc65 <= 2.19)..."
+    CSP_COMPAT=1 make -C "$repo" atari >/dev/null 2>&1 || die "atari build failed — run 'make atari' to see the error"
+fi
+[ -f "$XEX" ] || die "build did not produce $XEX"
 
 if command -v go >/dev/null 2>&1; then
     echo "building game server..."
@@ -62,14 +67,17 @@ enabled=1
 host=127.0.0.1
 port=$nport
 CFG
-    echo "pair $i: atari800 netsio:$nport  fujinet web:$wport  ($dir)"
-    atari800 -netsio "$nport" -windowed -win-width "$WIN_W" -win-height "$WIN_H" -nobasic "$XEX" &
+    echo "pair $i: atari800 netsio:$nport  fujinet web:$wport  (logs in $dir/)"
+    # Emulator + FujiNet output go to log files so the terminal shows only the
+    # server's game flow. tail -f "$dir"/{atari800,fujinet}.log to watch them.
+    atari800 -netsio "$nport" -windowed -win-width "$WIN_W" -win-height "$WIN_H" -nobasic "$XEX" \
+        >"$dir/atari800.log" 2>&1 &
     pids+=($!)
     # FujiNet-PC exits with code 75 (EX_TEMPFAIL) on an emulated reboot — which the
     # Atari does at cold boot. Relaunch it in a loop, like FujiNet's run-fujinet does.
     ( cd "$dir" || exit 1
       while :; do
-          "$FUJINET_BIN" -c "$dir/fnconfig.ini" -s "$dir/SD" -u "http://0.0.0.0:$wport"
+          "$FUJINET_BIN" -c "$dir/fnconfig.ini" -s "$dir/SD" -u "http://0.0.0.0:$wport" >>fujinet.log 2>&1
           [ $? -eq 75 ] || break
       done ) &
     pids+=($!)
