@@ -415,7 +415,7 @@ static void show_seat(const ur_snapshot *snap)
 static void online_game(void)
 {
     ur_snapshot snap;
-    uint8_t cmd[4];
+    uint8_t cmd[6];             /* JOIN is 5 bytes (type, version, 3-char name) */
     int8_t picked;
 
     if (network_init() != FN_ERR_OK) {
@@ -424,7 +424,7 @@ static void online_game(void)
     if (network_open(UR_NET_URL, OPEN_MODE_RW, 0) != FN_ERR_OK) {
         draw_all(NO_ROLL, "connect failed. FIRE/key."); wait_action(); return;
     }
-    network_write(UR_NET_URL, cmd, ur_proto_join(cmd));
+    network_write(UR_NET_URL, cmd, ur_proto_join(cmd, g_name));
 
     for (;;) {
         if (!read_state(&snap)) {

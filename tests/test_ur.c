@@ -304,8 +304,11 @@ static void test_proto_winner(void)
 
 static void test_proto_commands(void)
 {
-    uint8_t buf[4];
-    CHECK(ur_proto_join(buf) == 2 && buf[0] == UR_MSG_JOIN && buf[1] == UR_PROTO_VERSION);
+    uint8_t buf[8];
+    CHECK(ur_proto_join(buf, "ABC") == 5 && buf[0] == UR_MSG_JOIN && buf[1] == UR_PROTO_VERSION);
+    CHECK(buf[2] == 'A' && buf[3] == 'B' && buf[4] == 'C');
+    CHECK(ur_proto_join(buf, "Z") == 5 && buf[2] == 'Z' && buf[3] == ' ' && buf[4] == ' ');
+    CHECK(ur_proto_join(buf, 0) == 5 && buf[2] == ' ' && buf[3] == ' ' && buf[4] == ' ');
     CHECK(ur_proto_roll(buf) == 1 && buf[0] == UR_MSG_ROLL);
     CHECK(ur_proto_move(buf, 5) == 2 && buf[0] == UR_MSG_MOVE && buf[1] == 5);
 }

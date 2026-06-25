@@ -3,11 +3,21 @@
 
 #include "proto.h"
 
-uint8_t ur_proto_join(uint8_t *buf)
+uint8_t ur_proto_join(uint8_t *buf, const char *name)
 {
+    uint8_t i;
+    bool ended = false;
+    char ch;
+
     buf[0] = UR_MSG_JOIN;
     buf[1] = UR_PROTO_VERSION;
-    return 2;
+    for (i = 0; i < UR_NAME_LEN; i++) {
+        ch = (name && !ended) ? name[i] : '\0';
+        if (ch == '\0')
+            ended = true;                       /* don't read past the terminator */
+        buf[2 + i] = (ch >= 'A' && ch <= 'Z') ? (uint8_t)ch : (uint8_t)' ';
+    }
+    return (uint8_t)(2 + UR_NAME_LEN);
 }
 
 uint8_t ur_proto_roll(uint8_t *buf)

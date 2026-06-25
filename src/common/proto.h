@@ -15,9 +15,10 @@
 #include "ur.h"
 
 #define UR_PROTO_VERSION 1
+#define UR_NAME_LEN 3        /* player initials carried in JOIN (A-Z, space-padded) */
 
 /* Message type bytes (byte 0 of every message). */
-#define UR_MSG_JOIN   0x01   /* client->server: join          (byte1 = version)     */
+#define UR_MSG_JOIN   0x01   /* client->server: join (byte1=version, byte2..4 = name) */
 #define UR_MSG_ROLL   0x02   /* client->server: request a roll                       */
 #define UR_MSG_MOVE   0x03   /* client->server: move a piece  (byte1 = piece index) */
 #define UR_MSG_STATE  0x81   /* server->client: full state snapshot                 */
@@ -45,8 +46,10 @@ typedef struct {
     ur_state state;    /* board positions + whose turn                       */
 } ur_snapshot;
 
-/* Client->server encoders. Each returns the number of bytes written to buf. */
-uint8_t ur_proto_join(uint8_t *buf);
+/* Client->server encoders. Each returns the number of bytes written to buf.
+ * JOIN carries the player's UR_NAME_LEN-char name (for the server leaderboard);
+ * `name` may be NULL/short and is padded with spaces. buf must hold >= 5 bytes. */
+uint8_t ur_proto_join(uint8_t *buf, const char *name);
 uint8_t ur_proto_roll(uint8_t *buf);
 uint8_t ur_proto_move(uint8_t *buf, uint8_t piece);
 

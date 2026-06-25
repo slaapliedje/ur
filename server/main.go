@@ -14,6 +14,9 @@ import (
 	"os"
 )
 
+// store is the persistent leaderboard, shared by the game loop and HTTP handlers.
+var store *Store
+
 func main() {
 	addr := os.Getenv("UR_ADDR")
 	if addr == "" {
@@ -24,6 +27,8 @@ func main() {
 		log.Fatalf("listen %s: %v", addr, err)
 	}
 	log.Printf("Ur server listening on %s", addr)
+	store = loadStore(envOr("UR_DATA", "ur-stats.json"))
+	startHTTP(store)
 	startLobby()
 
 	for {
@@ -65,7 +70,8 @@ func runGame(c [2]net.Conn) {
 
 	r := [2]*bufio.Reader{bufio.NewReader(c[0]), bufio.NewReader(c[1])}
 
-	// Expect a JOIN from each client (type byte, then version).
+	// Expect a JOIN from each client (type, version, then NameLen name bytes).
+	var names [2]string
 	for i := 0; i < 2; i++ {
 		t, err := readByte(r[i])
 		if err != nil {
@@ -74,7 +80,17 @@ func runGame(c [2]net.Conn) {
 		}
 		if t == MsgJoin {
 			v, _ := readByte(r[i]) // version
-			log.Printf("player %d JOIN (version %d)", i, v)
+			nm := make([]byte, NameLen)
+			for k := 0; k < NameLen; k++ {
+				b, e := readByte(r[i])
+				if e != nil {
+					log.Printf("player %d: short JOIN: %v", i, e)
+					return
+				}
+				nm[k] = b
+			}
+			names[i] = cleanName(nm)
+			log.Printf("player %d JOIN v%d name %q", i, v, names[i])
 		} else {
 			log.Printf("player %d: unexpected first byte 0x%02x (expected JOIN)", i, t)
 		}
@@ -128,7 +144,8 @@ func runGame(c [2]net.Conn) {
 			flags = flagsFrom(res)
 			if res.Won {
 				broadcast(c, st, PhaseOver, 0xFF, flags)
-				log.Printf("player %d wins", cur)
+				log.Printf("player %d (%q) wins", cur, names[cur])
+				store.recordResult(names[cur], names[1-cur])
 				return
 			}
 			st.advanceTurn(res)
