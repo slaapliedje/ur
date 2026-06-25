@@ -29,7 +29,7 @@
 
 static ur_state game;
 
-static unsigned char cellx(unsigned char col) { return (unsigned char)(BOARD_X + (col - 1) * 3); }
+static unsigned char cellx(unsigned char col) { return (unsigned char)(BOARD_X + (col - 1) * 2); }
 static unsigned char celly(unsigned char row) { return (unsigned char)(BOARD_Y + row * 2); }
 
 /* Map a path position (1..14) for a player to a board cell (row, col 1..8).
@@ -76,7 +76,7 @@ static void draw_all(unsigned char roll, const char *msg)
 
     for (r = 0; r < 3; r++)
         for (c = 1; c <= 8; c++)
-            grid[r][c] = (r == ROW_M || c <= 4 || c >= 7) ? '.' : ' ';
+            grid[r][c] = (r == ROW_M || c <= 4 || c >= 7) ? '+' : ' ';
     grid[ROW_T][1] = '*'; grid[ROW_T][7] = '*';
     grid[ROW_M][4] = '*';
     grid[ROW_B][1] = '*'; grid[ROW_B][7] = '*';
@@ -89,16 +89,9 @@ static void draw_all(unsigned char roll, const char *msg)
         }
 
     for (r = 0; r < 3; r++)
-        for (c = 1; c <= 8; c++) {
-            char ch = grid[r][c];
-            if (ch == ' ')
-                continue;
-            if (ch == '*')
-                revers(1);              /* highlight rosettes in inverse video */
-            cputcxy(cellx(c), celly(r), ch);
-            if (ch == '*')
-                revers(0);
-        }
+        for (c = 1; c <= 8; c++)
+            if (grid[r][c] != ' ')
+                cputcxy(cellx(c), celly(r), grid[r][c]);   /* custom glyphs */
 
     gotoxy(0, 2);
     cprintf("Turn: %s", game.turn ? "Dark (X)" : "Light (O)");
@@ -283,6 +276,7 @@ int main(void)
     ai[1] = (key == '2');       /* Dark is the computer in mode 2 */
 
     atari_setup_colors();
+    atari_setup_charset();
     ur_init(&game);
 
     for (;;) {

@@ -8,6 +8,7 @@
 #define ATARIHW_H
 
 void atari_setup_colors(void);   /* set GR.0 background / text / border colours */
+void atari_setup_charset(void);  /* install a custom font: board tiles + pieces */
 
 void sfx_roll(void);
 void sfx_move(void);

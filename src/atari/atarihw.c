@@ -51,6 +51,50 @@ void atari_setup_colors(void)
     COLOR4 = 0x00;   /* border: black                   */
 }
 
+/* ---- custom character set ----------------------------------------------- *
+ * We copy the 1 KB ROM font ($E000) into RAM and overwrite a few glyphs, then
+ * point ANTIC at it via CHBAS ($02F4). Only the characters used to draw the
+ * board are changed, so all normal text still uses the standard glyphs.
+ * Glyph bytes are 8 rows, top first, MSB = leftmost pixel.
+ *
+ * Internal (screen) codes of the characters we redefine:
+ *   '+' -> 0x0B  (empty board cell)   '*' -> 0x0A  (rosette)
+ *   'O' -> 0x2F  (light piece)        'X' -> 0x38  (dark piece)
+ */
+static const unsigned char g_tile[8]    = {0x00,0x7E,0x42,0x42,0x42,0x42,0x7E,0x00};
+static const unsigned char g_rosette[8] = {0x18,0x5A,0x3C,0xFF,0xFF,0x3C,0x5A,0x18};
+static const unsigned char g_light[8]   = {0x3C,0x7E,0xFF,0xFF,0xFF,0xFF,0x7E,0x3C};
+static const unsigned char g_dark[8]    = {0x18,0x3C,0x7E,0xFF,0xFF,0x7E,0x3C,0x18};
+
+/* Over-allocated so we can align the active 1 KB to a $400 boundary at run time. */
+static unsigned char font_ram[1024 + 1024];
+
+static void put_glyph(unsigned char *font, unsigned char code, const unsigned char *g)
+{
+    unsigned char i;
+    unsigned char *dst = font + (unsigned int)code * 8;
+    for (i = 0; i < 8; i++)
+        dst[i] = g[i];
+}
+
+void atari_setup_charset(void)
+{
+    unsigned int   base = ((unsigned int)font_ram + 0x3FF) & 0xFC00;  /* 1 KB align */
+    unsigned char *font = (unsigned char *)base;
+    const unsigned char *rom = (const unsigned char *)0xE000;
+    unsigned int i;
+
+    for (i = 0; i < 1024; i++)
+        font[i] = rom[i];
+
+    put_glyph(font, 0x0B, g_tile);
+    put_glyph(font, 0x0A, g_rosette);
+    put_glyph(font, 0x2F, g_light);
+    put_glyph(font, 0x38, g_dark);
+
+    *(volatile unsigned char *)0x02F4 = (unsigned char)(base >> 8);  /* CHBAS */
+}
+
 /* Lower AUDF1 = higher pitch (it's a divisor). Durations in scanlines. */
 void sfx_roll(void)    { tone(96, 8, 500);  tone(72, 8, 500); }
 void sfx_move(void)    { tone(80, 6, 600); }
