@@ -805,6 +805,8 @@ static void show_instructions(void)
     cputsxy(0, 17, "WINNING");
     cputsxy(0, 18, " The first to bear off all seven");
     cputsxy(0, 19, " pieces wins. A game fit for kings!");
+    cputsxy(0, 21, "Rules deciphered by Dr Irving Finkel,");
+    cputsxy(0, 22, "British Museum - with thanks.");
     cputsxy(0, 23, "     FIRE or a key: see the path...");
     wait_action();
 

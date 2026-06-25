@@ -96,6 +96,7 @@ func htmlLeaderboard(w http.ResponseWriter, store *Store) {
 		}
 		fmt.Fprint(w, `</table>`)
 	}
+	fmt.Fprint(w, `<p><small>Rules deciphered by Dr Irving Finkel, British Museum &mdash; with thanks.</small></p>`)
 	fmt.Fprint(w, `<p><small>JSON: <a href="/leaderboard.json">/leaderboard.json</a></small></p>`)
 	fmt.Fprint(w, `</body></html>`)
 }
