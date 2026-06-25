@@ -177,12 +177,14 @@ unsigned char dli_len;              /* number of gradient entries (_dli_len)    
 
 void atari_title_sky_on(void)
 {
-    /* Lapis (hue 9), dark at the top fading lighter toward the horizon. The
-     * Atari has only 8 luminances, so this is steady banded shading — one colour
-     * per board-band row (dithering for more apparent shades just flickers). */
+    /* Two-hue sky: deep indigo-violet (hue 7) easing through blue (hue 8) to
+     * bright lapis (hue 9), luminance rising top->bottom. Blending hues yields
+     * more apparent steps than one hue's 8 luminances, so the fade looks smooth
+     * with no dithering (which flickered). Hue changes sit at equal luminance so
+     * there's no brightness jump. One steady colour per board-band row. */
     static const unsigned char grad[14] = {
-        0x90, 0x90, 0x92, 0x94, 0x96, 0x98, 0x9A,
-        0x9C, 0x9E, 0x9E, 0x9E, 0x9E, 0x9C, 0x9A
+        0x72, 0x72, 0x74, 0x84, 0x86, 0x86, 0x88,   /* indigo-violet -> blue   */
+        0x98, 0x9A, 0x9A, 0x9C, 0x9C, 0x9E, 0x9E    /* -> lapis (brightening)  */
     };
     unsigned char *dl = *(unsigned char **)0x0230;
     unsigned char i;
