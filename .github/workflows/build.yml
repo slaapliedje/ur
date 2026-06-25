@@ -45,6 +45,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.22'
+          cache: false
       - name: Vet, test and build the game server
         working-directory: server
         run: |

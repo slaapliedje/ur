@@ -15,7 +15,9 @@
 #include <conio.h>
 
 #include "ur.h"
+#include "proto.h"
 #include "atarihw.h"
+#include "fujinet-network.h"
 
 #define ROW_T    0          /* top    — Light's private rows */
 #define ROW_M    1          /* middle — shared (capture zone) */
@@ -26,6 +28,7 @@
 #define LIGHT_CH '#'   /* board glyph: mode-4 light piece (white) */
 #define DARK_CH  '@'   /* board glyph: mode-4 dark piece (green)  */
 #define NO_ROLL  0xFF
+#define UR_NET_URL "N:TCP://localhost:1234/"   /* the game server (via FujiNet) */
 
 static ur_state game;
 
@@ -320,6 +323,115 @@ static bool human_turn(unsigned char player)
     return false;
 }
 
+/* ---- online mode (FujiNet N:TCP, server-authoritative) ------------------ */
+
+/* Read one 21-byte STATE message from the server. Returns false on disconnect. */
+static bool read_state(ur_snapshot *snap)
+{
+    uint8_t  buf[UR_STATE_MSG_LEN];
+    uint16_t bw;
+    uint8_t  conn, err;
+    int16_t  n;
+
+    for (;;) {
+        if (network_status(UR_NET_URL, &bw, &conn, &err) != FN_ERR_OK)
+            return false;
+        if (bw >= UR_STATE_MSG_LEN)
+            break;
+        if (conn == 0)
+            return false;            /* connection closed */
+    }
+    n = network_read(UR_NET_URL, buf, UR_STATE_MSG_LEN);
+    if (n < (int16_t)UR_STATE_MSG_LEN)
+        return false;
+    return ur_proto_decode_state(buf, (uint8_t)n, snap);
+}
+
+/* Render a server snapshot (reuses draw_all) plus which seat we are. */
+static void draw_online(const ur_snapshot *snap, const char *msg)
+{
+    game = snap->state;
+    draw_all(snap->phase == UR_PHASE_MOVE ? snap->roll : NO_ROLL, msg);
+    gotoxy(0, 3);
+    cprintf("You: %s", snap->seat ? "Dark (green)" : "Light (white)");
+}
+
+static void online_game(void)
+{
+    ur_snapshot snap;
+    uint8_t pieces[UR_PIECES], srcs[UR_PIECES], cmd[4];
+    unsigned char i, j, nsrc, pos, dest, count;
+    bool seen;
+    int8_t picked;
+    char key;
+
+    if (network_init() != FN_ERR_OK) {
+        draw_all(NO_ROLL, "network_init failed. FIRE/key."); wait_action(); return;
+    }
+    if (network_open(UR_NET_URL, OPEN_MODE_RW, 0) != FN_ERR_OK) {
+        draw_all(NO_ROLL, "connect failed. FIRE/key."); wait_action(); return;
+    }
+    network_write(UR_NET_URL, cmd, ur_proto_join(cmd));
+
+    for (;;) {
+        if (!read_state(&snap)) {
+            draw_all(NO_ROLL, "Disconnected. FIRE/key."); wait_action(); break;
+        }
+        if (snap.flags & UR_FLAG_CAPTURED)      sfx_capture();
+        else if (snap.flags & UR_FLAG_SCORED)   sfx_score();
+        else if (snap.flags & UR_FLAG_ROSETTE)  sfx_rosette();
+
+        if (snap.phase == UR_PHASE_OVER) {
+            draw_online(&snap, (snap.winner == (int8_t)snap.seat)
+                               ? "You win!  FIRE/key." : "You lose.  FIRE/key.");
+            wait_action();
+            break;
+        }
+        if (snap.state.turn != snap.seat) {
+            draw_online(&snap, "Opponent's turn...");
+            continue;                          /* loop reads the next STATE */
+        }
+        if (snap.phase == UR_PHASE_ROLL) {
+            draw_online(&snap, "Your turn - FIRE/key to roll");
+            wait_action();
+            network_write(UR_NET_URL, cmd, ur_proto_roll(cmd));
+            continue;
+        }
+
+        /* my turn, choose a move (number-key menu) */
+        game = snap.state;
+        count = ur_legal_moves(&game, snap.seat, snap.roll, pieces);
+        if (count == 0)
+            continue;                          /* server will have passed */
+        nsrc = 0;
+        for (i = 0; i < count; i++) {
+            pos = game.piece[snap.seat][pieces[i]];
+            seen = false;
+            for (j = 0; j < nsrc; j++)
+                if (srcs[j] == pos) { seen = true; break; }
+            if (!seen) srcs[nsrc++] = pos;
+        }
+        draw_online(&snap, "Your move - press 1-N:");
+        for (i = 0; i < nsrc; i++) {
+            dest = (unsigned char)(srcs[i] + snap.roll);
+            gotoxy(0, (unsigned char)(17 + i));
+            if (srcs[i] == UR_POS_START)
+                cprintf("%u) enter -> %u", i + 1, dest);
+            else
+                cprintf("%u) %u -> %u", i + 1, srcs[i], dest);
+        }
+        do {
+            key = cgetc();
+        } while (key < '1' || key >= (char)('1' + nsrc));
+        pos = srcs[key - '1'];
+        picked = (int8_t)pieces[0];
+        for (i = 0; i < count; i++)
+            if (game.piece[snap.seat][pieces[i]] == pos) { picked = (int8_t)pieces[i]; break; }
+        network_write(UR_NET_URL, cmd, ur_proto_move(cmd, (unsigned char)picked));
+    }
+    network_close(UR_NET_URL);
+}
+
 int main(void)
 {
     bool ai[UR_NUM_PLAYERS];
@@ -332,10 +444,11 @@ int main(void)
     cputsxy(0, 0, "The Royal Game of Ur");
     cputsxy(0, 3, "1) Two players (hot-seat)");
     cputsxy(0, 4, "2) One player vs computer");
-    cputsxy(0, 6, "Select (1/2):");
+    cputsxy(0, 5, "3) Online (FujiNet)");
+    cputsxy(0, 7, "Select (1-3):");
     do {
         key = cgetc();
-    } while (key != '1' && key != '2');
+    } while (key < '1' || key > '3');
     ai[0] = false;              /* you are Light */
     ai[1] = (key == '2');       /* Dark is the computer in mode 2 */
 
@@ -343,6 +456,12 @@ int main(void)
     atari_setup_charset();
     atari_mode4_board();
     atari_pmg_init();
+
+    if (key == '3') {           /* online: server-authoritative, its own loop */
+        online_game();
+        return 0;
+    }
+
     ur_init(&game);
 
     for (;;) {
