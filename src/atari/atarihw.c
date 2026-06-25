@@ -75,14 +75,21 @@ void atari_setup_colors(void)
  *
  * Glyphs are ANTIC mode-4 encoded: 4 colour-pixels wide, 2 bits each
  * (00=bg, 01=COLOR0, 10=COLOR1, 11=COLOR2/COLOR3-if-inverse), 8 rows tall.
- * Internal (screen) codes of the characters we redefine (board rows only):
- *   '+' -> 0x0B  empty cell  ("11" outline)   '*' -> 0x0A  rosette ("11", drawn inverse)
- *   '#' -> 0x03  light piece ("01")           '@' -> 0x20  dark piece  ("10")
+ * Each board cell is TWO characters wide (8 colour-pixels), so every element has
+ * a left-half and right-half glyph. Internal (screen) codes, board rows only:
+ *   tile    '+' 0x0B / '=' 0x1D   ("11" blue diamond outline)
+ *   rosette '*' 0x0A / '&' 0x06   ("11", drawn inverse -> orange flower)
+ *   light   '#' 0x03 / '$' 0x04   ("01" white disc)
+ *   dark    '@' 0x20 / '[' 0x3B   ("10" green ring)
  */
-static const unsigned char g_tile[8]    = {0x00,0x3C,0xC3,0xC3,0xC3,0x3C,0x00,0x00}; /* blue diamond inlay */
-static const unsigned char g_rosette[8] = {0x3C,0x3C,0xFF,0xFF,0xFF,0x3C,0x3C,0x00}; /* orange rosette cross */
-static const unsigned char g_light[8]   = {0x14,0x55,0x55,0x55,0x55,0x55,0x14,0x00}; /* white disc */
-static const unsigned char g_dark[8]    = {0x28,0xAA,0x82,0x82,0x82,0xAA,0x28,0x00}; /* green ring */
+static const unsigned char g_tile_l[8]    = {0x03,0x0C,0x30,0xC0,0xC0,0x30,0x0C,0x03};
+static const unsigned char g_tile_r[8]    = {0xC0,0x30,0x0C,0x03,0x03,0x0C,0x30,0xC0};
+static const unsigned char g_rosette_l[8] = {0x03,0x33,0x0F,0xFF,0xFF,0x0F,0x33,0x03};
+static const unsigned char g_rosette_r[8] = {0xC0,0xCC,0xF0,0xFF,0xFF,0xF0,0xCC,0xC0};
+static const unsigned char g_light_l[8]   = {0x05,0x15,0x55,0x55,0x55,0x55,0x15,0x05};
+static const unsigned char g_light_r[8]   = {0x50,0x54,0x55,0x55,0x55,0x55,0x54,0x50};
+static const unsigned char g_dark_l[8]    = {0x0A,0x20,0x80,0x80,0x80,0x80,0x20,0x0A};
+static const unsigned char g_dark_r[8]    = {0xA0,0x08,0x02,0x02,0x02,0x02,0x08,0xA0};
 
 /* Dice glyphs are 1bpp (drawn on mode-2 text rows): a tetrahedral die,
  * '_' = unmarked (outline), '^' = marked (filled). Internal codes 0x3F / 0x3E. */
@@ -110,10 +117,10 @@ void atari_setup_charset(void)
     for (i = 0; i < 1024; i++)
         font[i] = rom[i];
 
-    put_glyph(font, 0x0B, g_tile);     /* '+' */
-    put_glyph(font, 0x0A, g_rosette);  /* '*' */
-    put_glyph(font, 0x03, g_light);    /* '#' */
-    put_glyph(font, 0x20, g_dark);     /* '@' */
+    put_glyph(font, 0x0B, g_tile_l);    put_glyph(font, 0x1D, g_tile_r);    /* '+' '=' */
+    put_glyph(font, 0x0A, g_rosette_l); put_glyph(font, 0x06, g_rosette_r); /* '*' '&' */
+    put_glyph(font, 0x03, g_light_l);   put_glyph(font, 0x04, g_light_r);   /* '#' '$' */
+    put_glyph(font, 0x20, g_dark_l);    put_glyph(font, 0x3B, g_dark_r);    /* '@' '[' */
     put_glyph(font, 0x3F, g_die0);     /* '_' unmarked die */
     put_glyph(font, 0x3E, g_die1);     /* '^' marked die   */
 
@@ -145,7 +152,8 @@ void atari_mode4_board(void)
 #define SIZEP0_R (*(volatile unsigned char *)0xD008)   /* P0 width               */
 #define PCOLR0_R (*(volatile unsigned char *)0x02C0)   /* P0 colour (shadow)     */
 
-#define PM_HLEFT 46    /* HPOSP0 for screen char column 0 (tune if off)        */
+#define PM_HLEFT 48    /* HPOSP0 for screen char column 0 (tune if off); a normal
+                          player is 8 colour clocks = one 2-char board cell wide  */
 #define PM_VTOP  16    /* P0 byte offset for screen char row 0 (double-line)   */
 
 static unsigned char pm_ram[2048];   /* 1 KB P/M area, aligned to 1 KB at run time */

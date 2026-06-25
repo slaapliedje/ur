@@ -19,8 +19,9 @@
 #include "atarihw.h"
 #include "fujinet-network.h"
 
-/* Board cells: row 1..8, col 0=Light(left) 1=shared(mid) 2=Dark(right). */
-#define BOARD_X    14
+/* Board cells: row 1..8, col 0=Light(left) 1=shared(mid) 2=Dark(right).
+ * Each cell is two characters wide (8 mode-4 pixels) for detailed glyphs. */
+#define BOARD_X    16       /* 3 cells, 2 chars each + gaps, centred on 40 cols */
 #define BOARD_Y    4
 #define ROW_TURN   1
 #define ROW_ROLL   2
@@ -39,7 +40,7 @@
 
 static ur_state game;
 
-static unsigned char cellx(unsigned char col) { return (unsigned char)(BOARD_X + col * 4); }
+static unsigned char cellx(unsigned char col) { return (unsigned char)(BOARD_X + col * 3); }
 static unsigned char celly(unsigned char row) { return (unsigned char)(BOARD_Y + (row - 1) * 2); }
 
 /* Path position (1..14) -> board cell (row 1..8, col 0..2). False if off-board. */
@@ -102,13 +103,20 @@ static void draw_all(unsigned char roll, const char *msg)
     for (row = 1; row <= 8; row++)
         for (col = 0; col < 3; col++) {
             char ch = grid[row][col];
+            char rch;                    /* right-half glyph of the cell */
             if (ch == ' ')
                 continue;
-            if (ch == '*')
-                revers(1);
-            cputcxy(cellx(col), celly(row), ch);
-            if (ch == '*')
-                revers(0);
+            switch (ch) {
+                case '+': rch = '='; break;
+                case '*': rch = '&'; break;
+                case '#': rch = '$'; break;
+                case '@': rch = '['; break;
+                default:  rch = ch;  break;
+            }
+            if (ch == '*') revers(1);
+            cputcxy(cellx(col),     celly(row), ch);
+            cputcxy(cellx(col) + 1, celly(row), rch);
+            if (ch == '*') revers(0);
         }
 
     gotoxy(0, ROW_TURN);
