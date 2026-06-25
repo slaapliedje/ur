@@ -125,6 +125,16 @@ static const char *win_msg(unsigned char player)
                   : "Light (O) wins!  Press a key.";
 }
 
+/* Move the PMG highlight box onto a piece's board cell (or hide it if home). */
+static void highlight_dest(unsigned char player, unsigned char dest)
+{
+    unsigned char rr, cc;
+    if (pos_to_cell(player, dest, &rr, &cc))
+        atari_pmg_highlight(cellx(cc), celly(rr));
+    else
+        atari_pmg_hide();
+}
+
 static void sfx_for_result(const ur_move_result *r)
 {
     if (r->won)           sfx_win();
@@ -159,6 +169,7 @@ static bool computer_turn(unsigned char player)
     dest = (unsigned char)(pos + roll);
     ur_apply_move(&game, player, (unsigned char)pick, roll, &res);
     sfx_for_result(&res);
+    highlight_dest(player, game.piece[player][(unsigned char)pick]);
 
     draw_all(roll, "Computer moved:");
     gotoxy(0, 17);
@@ -241,6 +252,7 @@ static bool human_turn(unsigned char player)
 
     ur_apply_move(&game, player, picked, roll, &res);
     sfx_for_result(&res);
+    highlight_dest(player, game.piece[player][picked]);
 
     if (res.won) {
         draw_all(NO_ROLL, win_msg(player));
@@ -277,6 +289,7 @@ int main(void)
 
     atari_setup_colors();
     atari_setup_charset();
+    atari_pmg_init();
     ur_init(&game);
 
     for (;;) {

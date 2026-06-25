@@ -95,6 +95,62 @@ void atari_setup_charset(void)
     *(volatile unsigned char *)0x02F4 = (unsigned char)(base >> 8);  /* CHBAS */
 }
 
+/* ---- player-missile graphics (highlight cursor) ------------------------- *
+ * One player (P0), double-line resolution, used as a hollow box drawn around a
+ * board cell. Additive over the playfield, so it can't disturb the drawn board.
+ * If the box is misaligned, nudge PM_HLEFT / PM_VTOP.
+ */
+#define PMBASE_R (*(volatile unsigned char *)0xD407)   /* P/M base (high byte)   */
+#define GRACTL_R (*(volatile unsigned char *)0xD01D)   /* P/M output enable      */
+#define SDMCTL_R (*(volatile unsigned char *)0x022F)   /* DMACTL shadow          */
+#define HPOSP0_R (*(volatile unsigned char *)0xD000)   /* P0 horizontal position */
+#define SIZEP0_R (*(volatile unsigned char *)0xD008)   /* P0 width               */
+#define PCOLR0_R (*(volatile unsigned char *)0x02C0)   /* P0 colour (shadow)     */
+
+#define PM_HLEFT 46    /* HPOSP0 for screen char column 0 (tune if off)        */
+#define PM_VTOP  16    /* P0 byte offset for screen char row 0 (double-line)   */
+
+static unsigned char pm_ram[2048];   /* 1 KB P/M area, aligned to 1 KB at run time */
+static unsigned char *pm_p0;         /* -> player-0 strip                          */
+
+void atari_pmg_init(void)
+{
+    unsigned int   base = ((unsigned int)pm_ram + 0x3FF) & 0xFC00;  /* 1 KB align */
+    unsigned char *pm   = (unsigned char *)base;
+    unsigned int   i;
+
+    for (i = 0; i < 1024; i++)
+        pm[i] = 0;
+    pm_p0 = pm + 0x200;                 /* double-line player 0 */
+
+    PMBASE_R = (unsigned char)(base >> 8);
+    PCOLR0_R = 0x1A;                    /* bright yellow */
+    SIZEP0_R = 0;                       /* normal width */
+    HPOSP0_R = 0;                       /* hidden until placed */
+    SDMCTL_R = (unsigned char)(SDMCTL_R | 0x0C);  /* + player & missile DMA */
+    GRACTL_R = 0x03;                    /* enable P/M output */
+}
+
+void atari_pmg_hide(void)
+{
+    HPOSP0_R = 0;
+}
+
+void atari_pmg_highlight(unsigned char char_x, unsigned char char_y)
+{
+    unsigned char off, i;
+    if (pm_p0 == 0)
+        return;
+    for (i = 0; i < 128; i++)
+        pm_p0[i] = 0;
+    off = (unsigned char)(PM_VTOP + char_y * 4);   /* 4 bytes/char row (double-line) */
+    pm_p0[off]     = 0xFF;                          /* hollow box ~8 scanlines tall */
+    pm_p0[off + 1] = 0x81;
+    pm_p0[off + 2] = 0x81;
+    pm_p0[off + 3] = 0xFF;
+    HPOSP0_R = (unsigned char)(PM_HLEFT + char_x * 4);
+}
+
 /* Lower AUDF1 = higher pitch (it's a divisor). Durations in scanlines. */
 void sfx_roll(void)    { tone(96, 8, 500);  tone(72, 8, 500); }
 void sfx_move(void)    { tone(80, 6, 600); }
