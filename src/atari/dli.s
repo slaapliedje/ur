@@ -14,23 +14,35 @@
 WSYNC = $D40A
 COLBK = $D01A
 
+SCANLINES = 8              ; mode-4 board rows are 8 scanlines tall
+
         .segment "BSS"
 idx:    .res 1
 
         .segment "CODE"
+; One DLI per board-band row, but we recolour every scanline of that row from
+; dli_table[] for a smooth per-scanline gradient. dli_len is the table length
+; (14 rows * 8 = 112), so idx wraps back to 0 exactly once per frame.
 .proc _dli_handler
         pha
         txa
         pha
+        tya
+        pha
         ldx idx
-        lda _dli_table,x
+        ldy #SCANLINES
+loop:   lda _dli_table,x
         sta WSYNC          ; align to horizontal blank, then change the colour
         sta COLBK
         inx
+        dey
+        bne loop
         cpx _dli_len
-        bne save
+        bcc save
         ldx #$00           ; wrap at the end of the gradient (= top of next frame)
 save:   stx idx
+        pla
+        tay
         pla
         tax
         pla

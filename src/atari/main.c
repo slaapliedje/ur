@@ -398,6 +398,8 @@ static bool computer_turn(unsigned char player)
 static void show_result(const char *banner)
 {
     draw_all(NO_ROLL, "");
+    cclearxy(0, ROW_TURN, 40);          /* wipe the "Turn:" / roll lines so the */
+    cclearxy(0, ROW_ROLL, 40);          /* banner sits on a clean row           */
     revers(1); center(ROW_TURN, banner); revers(0);
     center(ROW_MSG, "Press FIRE or a key to play again");
     wait_action();
