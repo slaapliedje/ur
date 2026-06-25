@@ -36,6 +36,7 @@
 #define DARK_CH  '@'        /* mode-4 dark piece glyph (green)  */
 #define NO_ROLL  0xFF
 #define UR_NET_URL "N:TCP://localhost:1234/"
+#define UR_TOP_URL "N:HTTP://localhost:8080/top"   /* compact leaderboard (GET) */
 #define DIE_MARKED   '^'
 #define DIE_UNMARKED '_'
 
@@ -607,10 +608,10 @@ static char title_screen(void)
     cputsxy(8, 19, "1) Two players (hot-seat)");
     cputsxy(8, 20, "2) One player vs computer");
     cputsxy(8, 21, "3) Online (FujiNet)");
-    cputsxy(8, 22, "4) How to play");
-    cputsxy(8, 23, "5) Set name        Select 1-5:");
+    cputsxy(8, 22, "4) How to play     5) Set name");
+    cputsxy(8, 23, "6) Leaderboard     Select 1-6:");
 
-    do { key = cgetc(); } while (key < '1' || key > '5');
+    do { key = cgetc(); } while (key < '1' || key > '6');
     return key;
 }
 
@@ -716,6 +717,68 @@ static void show_instructions(void)
     show_path_demo();           /* page 3: animated white/green path */
 }
 
+/* Fetch the compact /top leaderboard over N:HTTP and show it. The body is
+ * 1 count byte then up to 10 records of name[3] + wins (uint16 LE). */
+static void show_leaderboard(void)
+{
+    uint8_t  buf[64];
+    uint16_t bw;
+    uint8_t  conn, err;
+    int16_t  n = 0;
+    unsigned char count, i, base;
+    char name[4];
+    uint16_t wins;
+
+    atari_text_mode();
+    clrscr();
+    revers(1); cputsxy(13, 0, " LEADERBOARD "); revers(0);
+
+    if (network_init() != FN_ERR_OK ||
+        network_open(UR_TOP_URL, 4 /* HTTP GET */, 0) != FN_ERR_OK) {
+        cputsxy(2, 4, "Could not reach the server.");
+        cputsxy(2, 6, "Needs FujiNet and the Ur server's");
+        cputsxy(2, 7, "web port (8080) reachable.");
+        cputsxy(2, 23, "FIRE or a key to return");
+        wait_action();
+        atari_mode4_board();
+        return;
+    }
+
+    for (i = 0; i < 100; i++) {                 /* wait briefly for the body */
+        if (network_status(UR_TOP_URL, &bw, &conn, &err) != FN_ERR_OK)
+            break;
+        if (bw > 0) { n = network_read(UR_TOP_URL, buf, sizeof(buf)); break; }
+        if (conn == 0)
+            break;
+        atari_wait_frames(3);
+    }
+    network_close(UR_TOP_URL);
+
+    if (n < 1) {
+        cputsxy(2, 4, "No reply from server.");
+    } else if (buf[0] == 0) {
+        cputsxy(2, 4, "No games recorded yet.");
+    } else {
+        count = buf[0];
+        cputsxy(3, 2, "#   NAME   WINS");
+        for (i = 0; i < count; i++) {
+            base = (unsigned char)(1 + i * 5);
+            if ((int16_t)(base + 5) > n)
+                break;
+            name[0] = (char)buf[base];
+            name[1] = (char)buf[base + 1];
+            name[2] = (char)buf[base + 2];
+            name[3] = 0;
+            wins = (uint16_t)(buf[base + 3] | ((uint16_t)buf[base + 4] << 8));
+            gotoxy(3, (unsigned char)(4 + i));
+            cprintf("%-2u  %s    %u", i + 1, name, wins);
+        }
+    }
+    cputsxy(2, 23, "FIRE or a key to return");
+    wait_action();
+    atari_mode4_board();
+}
+
 int main(void)
 {
     bool ai[UR_NUM_PLAYERS];
@@ -738,7 +801,8 @@ int main(void)
             key = title_screen();
             if (key == '4')      show_instructions();
             else if (key == '5') enter_name();
-        } while (key == '4' || key == '5');
+            else if (key == '6') show_leaderboard();
+        } while (key == '4' || key == '5' || key == '6');
 
         if (key == '3') {
             online_game();      /* shows its own result, then back to the menu */
