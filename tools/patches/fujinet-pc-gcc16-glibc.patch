@@ -1,0 +1,61 @@
+diff --git a/lib/compat/linux_termios2.h b/lib/compat/linux_termios2.h
+index 5a5f4de..ee03fd9 100644
+--- a/lib/compat/linux_termios2.h
++++ b/lib/compat/linux_termios2.h
+@@ -24,12 +24,25 @@
+ #include <sys/ioctl.h>
+ #include <termios.h>
+ 
+-#ifndef BOTHER
++/* Modern glibc exposes BOTHER via <termios.h> but still does NOT provide
++   struct termios2 / LINUX_IBSHIFT (those live in <asm/termbits.h>, which
++   conflicts with <termios.h>). Define each symbol independently instead of
++   gating them all on `#ifndef BOTHER`. */
+ 
++#ifndef BOTHER
+ #define BOTHER		CBAUDEX
++#endif
++
++#ifndef LINUX_NCCS
+ #define LINUX_NCCS	19
++#endif
++
++#ifndef LINUX_IBSHIFT
+ #define LINUX_IBSHIFT	16
++#endif
+ 
++#ifndef HAVE_STRUCT_TERMIOS2
++#define HAVE_STRUCT_TERMIOS2
+ struct termios2 {
+         tcflag_t c_iflag;               /* input mode flags */
+         tcflag_t c_oflag;               /* output mode flags */
+@@ -40,7 +53,6 @@ struct termios2 {
+         speed_t c_ispeed;               /* input speed */
+         speed_t c_ospeed;               /* output speed */
+ };
+-
+ #endif
+ 
+ #ifndef TCGETS2
+diff --git a/lib/utils/string_utils.cpp b/lib/utils/string_utils.cpp
+index 2ef7737..7ccb9e9 100644
+--- a/lib/utils/string_utils.cpp
++++ b/lib/utils/string_utils.cpp
+@@ -112,7 +112,7 @@ namespace mstr {
+     /*
+     * String Comparision
+     */
+-    bool compare_char(char &c1, char &c2)
++    bool compare_char(const char &c1, const char &c2)
+     {
+         if (c1 == c2)
+             return true;
+@@ -120,7 +120,7 @@ namespace mstr {
+         return false;
+     }
+ 
+-    bool compare_char_insensitive(char &c1, char &c2)
++    bool compare_char_insensitive(const char &c1, const char &c2)
+     {
+         if (c1 == c2)
+             return true;

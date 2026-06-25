@@ -166,6 +166,22 @@ plays against the Go game server in [`server/`](../server/CLAUDE.md).
 Without FujiNet attached, selecting "Online" simply shows "connect failed" — which
 still confirms the client's network path runs.
 
+**One-command harness.** [`tools/online-test.sh`](../tools/online-test.sh) launches
+the server + N Atari/FujiNet-PC pairs (default 2 = a full match) and cleans up on
+Ctrl-C:
+
+```sh
+tools/online-test.sh        # server + 2 atari800+FujiNet-PC pairs; pick "3) Online" in each
+tools/online-test.sh 1      # one pair (connectivity test; it JOINs and waits)
+```
+
+Prerequisites it expects (and tells you how to get if missing): **atari800** with
+NetSIO (AUR `atari800` 6.1.0 has it), a built **FujiNet-PC** (`FUJINET_BIN`, default
+`~/dev/fujinet-pc/build/fujinet`), a built **`ur.xex`**, and **Go** for the server.
+On a current toolchain, build FujiNet-PC with
+[`tools/patches/fujinet-pc-gcc16-glibc.patch`](../tools/patches/README.md). atari800
+windowing uses `-windowed -win-width N -win-height N` (override via `WIN_W`/`WIN_H`).
+
 ## Disk/image tooling
 
 Produced by the build (and bundled with `fujinet-build-tools` / the toolchains):
