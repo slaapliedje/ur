@@ -119,6 +119,21 @@ static void draw_all(unsigned char roll, const char *msg)
             if (ch == '*') revers(0);
         }
 
+    /* Off-board pieces: those waiting to enter at the top corners, those borne
+     * off ("home") at the bottom corners. Light (white discs) left, Dark (green
+     * rings) right. start+home <= 7 per side, so the stacks never collide. */
+    {
+        unsigned char k, n;
+        n = count_at(0, UR_POS_START);          /* Light waiting   -> top-left    */
+        for (k = 0; k < n; k++) { cputcxy(2, (unsigned char)(4 + k), '#'); cputcxy(3, (unsigned char)(4 + k), '$'); }
+        n = (unsigned char)ur_score(&game, 0);  /* Light borne off -> bottom-left  */
+        for (k = 0; k < n; k++) { cputcxy(2, (unsigned char)(18 - k), '#'); cputcxy(3, (unsigned char)(18 - k), '$'); }
+        n = count_at(1, UR_POS_START);          /* Dark waiting    -> top-right    */
+        for (k = 0; k < n; k++) { cputcxy(36, (unsigned char)(4 + k), '@'); cputcxy(37, (unsigned char)(4 + k), '['); }
+        n = (unsigned char)ur_score(&game, 1);  /* Dark borne off  -> bottom-right */
+        for (k = 0; k < n; k++) { cputcxy(36, (unsigned char)(18 - k), '@'); cputcxy(37, (unsigned char)(18 - k), '['); }
+    }
+
     gotoxy(0, ROW_TURN);
     cprintf("Turn: %s", game.turn ? "Dark (green)" : "Light (white)");
     if (roll != NO_ROLL) {
@@ -145,10 +160,12 @@ static void seed_rng(void)
     ur_rng_seed(s);
 }
 
-static const char *win_msg(unsigned char player)
+/* Centre a string on a text row. */
+static void center(unsigned char y, const char *s)
 {
-    return player ? "Dark (green) wins!  FIRE/key."
-                  : "Light (white) wins! FIRE/key.";
+    unsigned char n = 0;
+    while (s[n]) n++;
+    cputsxy((unsigned char)((40 - n) / 2), y, s);
 }
 
 /* Move the PMG highlight onto a piece's board cell (or hide it if home). */
@@ -283,11 +300,8 @@ static bool human_turn(unsigned char player)
     sfx_for_result(&res);
     highlight_dest(player, game.piece[player][(unsigned char)picked]);
 
-    if (res.won) {
-        draw_all(NO_ROLL, win_msg(player));
-        wait_action();
+    if (res.won)
         return true;
-    }
     if (res.captured || res.rosette) {
         draw_all(NO_ROLL, res.captured ? "Capture!  FIRE/key."
                                        : "Rosette - roll again! FIRE/key.");
@@ -334,13 +348,20 @@ static bool computer_turn(unsigned char player)
     else if (res.rosette)  cprintf("  rosette!");
     wait_action();
 
-    if (res.won) {
-        draw_all(NO_ROLL, win_msg(player));
-        wait_action();
+    if (res.won)
         return true;
-    }
     ur_advance_turn(&game, &res);
     return false;
+}
+
+/* End-of-game screen: the finished board (the winner's seven pieces sit borne-off
+ * in the corner tray) under a result banner, with a play-again prompt. */
+static void show_result(const char *banner)
+{
+    draw_all(NO_ROLL, "");
+    revers(1); center(ROW_TURN, banner); revers(0);
+    center(ROW_MSG, "Press FIRE or a key to play again");
+    wait_action();
 }
 
 /* ---- online mode (FujiNet N:TCP, server-authoritative) ------------------ */
@@ -397,10 +418,7 @@ static void online_game(void)
         else if (snap.flags & UR_FLAG_ROSETTE)  sfx_rosette();
 
         if (snap.phase == UR_PHASE_OVER) {
-            draw_all(NO_ROLL, (snap.winner == (int8_t)snap.seat)
-                              ? "You win!  FIRE/key." : "You lose.  FIRE/key.");
-            show_seat(&snap);
-            wait_action();
+            show_result(snap.winner == (int8_t)snap.seat ? " YOU WIN! " : " YOU LOSE ");
             break;
         }
         if (snap.state.turn != snap.seat) {
@@ -530,6 +548,8 @@ int main(void)
 {
     bool ai[UR_NUM_PLAYERS];
     char key;
+    unsigned char player;
+    bool over;
 
     seed_rng();
 
@@ -539,26 +559,34 @@ int main(void)
     atari_pmg_init();
     atari_quiet_sio();          /* no OS SIO "drive" drone during FujiNet polling */
 
-    do {
-        key = title_screen();
-        if (key == '4')
-            show_instructions();
-    } while (key == '4');
+    for (;;) {                  /* play again forever; never falls out to Memo Pad */
+        do {
+            key = title_screen();
+            if (key == '4')
+                show_instructions();
+        } while (key == '4');
 
-    ai[0] = false;              /* you are Light */
-    ai[1] = (key == '2');       /* Dark is the computer in mode 2 */
+        if (key == '3') {
+            online_game();      /* shows its own result, then back to the menu */
+            continue;
+        }
 
-    if (key == '3') {
-        online_game();
-        return 0;
+        ai[0] = false;          /* you are Light */
+        ai[1] = (key == '2');   /* Dark is the computer in mode 2 */
+
+        ur_init(&game);
+        for (;;) {
+            player = game.turn;
+            over = ai[player] ? computer_turn(player) : human_turn(player);
+            if (over)
+                break;
+        }
+
+        /* `player` is the winner */
+        if (ai[1])
+            show_result(player == 0 ? " YOU WIN! " : " YOU LOSE ");
+        else
+            show_result(player == 0 ? " LIGHT (WHITE) WINS! " : " DARK (GREEN) WINS! ");
     }
-
-    ur_init(&game);
-    for (;;) {
-        unsigned char player = game.turn;
-        bool over = ai[player] ? computer_turn(player) : human_turn(player);
-        if (over)
-            break;
-    }
-    return 0;
+    return 0;                   /* not reached: the play-again loop never exits */
 }
