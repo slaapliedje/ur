@@ -143,11 +143,15 @@ void atari_pmg_highlight(unsigned char char_x, unsigned char char_y)
         return;
     for (i = 0; i < 128; i++)
         pm_p0[i] = 0;
-    off = (unsigned char)(PM_VTOP + char_y * 4);   /* 4 bytes/char row (double-line) */
-    pm_p0[off]     = 0xFF;                          /* hollow box ~8 scanlines tall */
-    pm_p0[off + 1] = 0x81;
+    /* A box one byte taller than the cell on each side, so its top/bottom bars
+     * sit in the gaps above/below the piece and the glyph stays fully visible. */
+    off = (unsigned char)(PM_VTOP + char_y * 4 - 1);
+    pm_p0[off]     = 0xFF;     /* top bar (above the glyph)    */
+    pm_p0[off + 1] = 0x81;     /* sides flank the glyph...     */
     pm_p0[off + 2] = 0x81;
-    pm_p0[off + 3] = 0xFF;
+    pm_p0[off + 3] = 0x81;
+    pm_p0[off + 4] = 0x81;
+    pm_p0[off + 5] = 0xFF;     /* bottom bar (below the glyph) */
     HPOSP0_R = (unsigned char)(PM_HLEFT + char_x * 4);
 }
 
