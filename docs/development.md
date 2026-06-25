@@ -51,15 +51,18 @@ uses the same `Dockerfile` (and supports Podman).
 
 No container required if you install the toolchains directly:
 
-- **cc65** — use a **current** build, not the packaged 2.19 release. cc65 hasn't
-  cut a release since 2.19 (2020), and `fujinet-lib`'s prebuilt libraries are built
-  with current cc65, which renamed the C-stack zeropage symbol `sp` → `c_sp`.
-  Linking the network code against 2.19 fails with `Unresolved external 'c_sp'`.
-  - Arch: `yay -S cc65-git` (AUR), **not** `pacman -S cc65`.
-  - Or build from source (what CI uses):
-    `git clone https://github.com/cc65/cc65 && cd cc65 && make && sudo make install PREFIX=/usr/local`
-  - (The 2.19 release is fine for non-networking builds, but not for the FujiNet
-    `N:`/fuji code.)
+- **cc65** — `fujinet-lib`'s prebuilt libraries are built with **current** cc65,
+  which renamed the C-stack zeropage symbol `sp` → `c_sp`. The last cc65 *release*
+  is 2.19 (2020), which predates that, so linking the FujiNet `N:`/fuji code
+  against it fails with `Unresolved external 'c_sp'`. Two ways to fix it:
+  - **Keep cc65 2.19 and enable the shim** (simplest): build with `CSP_COMPAT=1`
+    (e.g. `CSP_COMPAT=1 make run-atari`). It assembles `src/atari/csp_compat.s`,
+    aliasing `c_sp` to the 2.19 runtime's `sp`. Leave it OFF on current cc65.
+  - **Or build current cc65 from source** (what CI uses):
+    `git clone https://github.com/cc65/cc65 && cd cc65 && make && sudo make install PREFIX=/usr/local`.
+    Note: the last *release* is 2.19 and the AUR `cc65-git` is pinned to an even
+    older commit — neither has `c_sp`; only upstream **master** does.
+  - (cc65 2.19 links everything *except* the FujiNet network/fuji code fine.)
 - **z88dk** — `z88dk` in the AUR (Arch), or build from
   https://github.com/z88dk/z88dk (nightly builds recommended; the `coleco`/`adam`
   target needs a current build). Set `ZCCCFG`/`PATH` per its docs.

@@ -4,6 +4,12 @@ CL65           ?= cl65
 ATARI_TARGET   ?= atari        # use 'atarixl' for an XL/XE-only build
 ATARI_SOURCES  := $(COMMON_SOURCES) $(NET_SOURCES) $(wildcard $(SRC_DIR)/atari/*.c)
 
+# Optional shim for cc65 <= 2.19 (exports `sp`, not `c_sp`) so fujinet-lib's
+# network code links. Enable with `CSP_COMPAT=1 make ...`; leave off on current cc65.
+ifeq ($(CSP_COMPAT),1)
+ATARI_SOURCES += $(SRC_DIR)/atari/csp_compat.s
+endif
+
 # fujinet-lib (downloaded release): headers are flat in the dir; the lib is named
 # per target/version. See makefiles/common.mk for FNLIB_VERSION.
 ATARI_FNLIB_DIR := $(LIB_DIR)/fujinet-lib/atari
