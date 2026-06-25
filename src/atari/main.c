@@ -30,6 +30,9 @@
 #define NO_ROLL  0xFF
 #define UR_NET_URL "N:TCP://localhost:1234/"   /* the game server (via FujiNet) */
 
+#define DIE_MARKED   '^'   /* filled die glyph (a marked corner is up) */
+#define DIE_UNMARKED '_'   /* outline die glyph                        */
+
 static ur_state game;
 
 static unsigned char cellx(unsigned char col) { return (unsigned char)(BOARD_X + (col - 1) * 2); }
@@ -107,7 +110,10 @@ static void draw_all(unsigned char roll, const char *msg)
     cprintf("Turn: %s", game.turn ? "Dark (green)" : "Light (white)");
     if (roll != NO_ROLL) {
         gotoxy(22, 2);
-        cprintf("Roll: %u", roll);
+        cputs("Roll:");
+        for (i = 0; i < 4; i++)             /* four dice; `roll` show a marked corner */
+            cputc(i < roll ? DIE_MARKED : DIE_UNMARKED);
+        cprintf(" %u", roll);
     }
 
     gotoxy(0, 13);

@@ -84,6 +84,11 @@ static const unsigned char g_rosette[8] = {0x3C,0xFF,0xFF,0xFF,0xFF,0x3C,0x00,0x
 static const unsigned char g_light[8]   = {0x14,0x55,0x55,0x55,0x55,0x14,0x00,0x00};
 static const unsigned char g_dark[8]    = {0x28,0xAA,0xAA,0xAA,0xAA,0x28,0x00,0x00};
 
+/* Dice glyphs are 1bpp (drawn on mode-2 text rows): a tetrahedral die,
+ * '_' = unmarked (outline), '^' = marked (filled). Internal codes 0x3F / 0x3E. */
+static const unsigned char g_die0[8]    = {0x18,0x18,0x24,0x24,0x42,0x42,0xFF,0x00};
+static const unsigned char g_die1[8]    = {0x18,0x3C,0x3C,0x7E,0x7E,0xFF,0xFF,0x00};
+
 /* Over-allocated so we can align the active 1 KB to a $400 boundary at run time. */
 static unsigned char font_ram[1024 + 1024];
 
@@ -109,6 +114,8 @@ void atari_setup_charset(void)
     put_glyph(font, 0x0A, g_rosette);  /* '*' */
     put_glyph(font, 0x03, g_light);    /* '#' */
     put_glyph(font, 0x20, g_dark);     /* '@' */
+    put_glyph(font, 0x3F, g_die0);     /* '_' unmarked die */
+    put_glyph(font, 0x3E, g_die1);     /* '^' marked die   */
 
     *(volatile unsigned char *)0x02F4 = (unsigned char)(base >> 8);  /* CHBAS */
 }
