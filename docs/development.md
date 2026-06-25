@@ -111,16 +111,16 @@ make run-atari
 
 [`tools/run-atari.sh`](../tools/run-atari.sh) auto-detects the emulator:
 
-- **`altirra`** — the AUR Wine wrapper (default if present). Altirra is a Windows
-  app, so the script converts the path with `winepath -w` and passes it through.
-  Manual equivalent: `altirra "$(winepath -w build/atari/ur.xex)"`.
-- **`AltirraSDL`** — a native Linux build (no Wine). Force it with `ALTIRRA_SDL=1`.
+- **`AltirraSDL`** — native Linux build (no Wine); used by default if present.
   Manual equivalent: `AltirraSDL build/atari/ur.xex`.
+- **`altirra`** — the AUR Wine wrapper; force it with `ALTIRRA_WINE=1`. Altirra is a
+  Windows app, so the script converts the path with `winepath -w` and passes it
+  through. Manual equivalent: `altirra "$(winepath -w build/atari/ur.xex)"`.
 - a standalone Windows Altirra `.exe` — set `ALTIRRA=/path/to/Altirra64.exe`.
 
 ```sh
-make run-atari                    # uses the `altirra` Wine wrapper
-ALTIRRA_SDL=1 make run-atari       # use the native AltirraSDL instead
+make run-atari                     # native AltirraSDL (default)
+ALTIRRA_WINE=1 make run-atari       # full Windows Altirra via the Wine wrapper
 ALTIRRA_OPTS="/ntsc" make run-atari
 ```
 

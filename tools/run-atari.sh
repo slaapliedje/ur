@@ -7,9 +7,9 @@
 #
 # Backends, in order of preference:
 #   1. $ALTIRRA set         -> wine "$ALTIRRA" <win-path>   (a standalone Altirra .exe)
-#   2. ALTIRRA_SDL=1        -> AltirraSDL <unix-path>        (force the native build)
-#   3. `altirra` on PATH    -> altirra <win-path>           (AUR Wine wrapper; default)
-#   4. `AltirraSDL` on PATH -> AltirraSDL <unix-path>        (native, no Wine)
+#   2. ALTIRRA_WINE=1       -> altirra <win-path>           (force the AUR Wine wrapper)
+#   3. `AltirraSDL` on PATH -> AltirraSDL <unix-path>        (native, no Wine; default)
+#   4. `altirra` on PATH    -> altirra <win-path>           (AUR Wine wrapper)
 #   5. search the Wine prefix for Altirra*.exe
 #
 # The Wine backends need a Windows-style path, so we convert with `winepath -w`.
@@ -38,12 +38,12 @@ run_wrapper()  { need_wine; local w; w="$(to_win "$xex")"   # `altirra` does the
 
 if [ -n "${ALTIRRA:-}" ]; then
     run_wine_exe "$ALTIRRA"
-elif [ "${ALTIRRA_SDL:-0}" = 1 ] && command -v AltirraSDL >/dev/null 2>&1; then
-    run_native
-elif command -v altirra >/dev/null 2>&1; then
+elif [ "${ALTIRRA_WINE:-0}" = 1 ] && command -v altirra >/dev/null 2>&1; then
     run_wrapper
 elif command -v AltirraSDL >/dev/null 2>&1; then
     run_native
+elif command -v altirra >/dev/null 2>&1; then
+    run_wrapper
 else
     pfx="${WINEPREFIX:-$HOME/.wine}"
     exe="$(find "$pfx/drive_c" -maxdepth 5 -iname 'Altirra*.exe' 2>/dev/null | head -n1 || true)"
