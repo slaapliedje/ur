@@ -51,8 +51,15 @@ uses the same `Dockerfile` (and supports Podman).
 
 No container required if you install the toolchains directly:
 
-- **cc65** — `pacman -S cc65` (Arch), `apt install cc65` (Debian/Ubuntu),
-  `brew install cc65` (macOS), or build from https://github.com/cc65/cc65.
+- **cc65** — use a **current** build, not the packaged 2.19 release. cc65 hasn't
+  cut a release since 2.19 (2020), and `fujinet-lib`'s prebuilt libraries are built
+  with current cc65, which renamed the C-stack zeropage symbol `sp` → `c_sp`.
+  Linking the network code against 2.19 fails with `Unresolved external 'c_sp'`.
+  - Arch: `yay -S cc65-git` (AUR), **not** `pacman -S cc65`.
+  - Or build from source (what CI uses):
+    `git clone https://github.com/cc65/cc65 && cd cc65 && make && sudo make install PREFIX=/usr/local`
+  - (The 2.19 release is fine for non-networking builds, but not for the FujiNet
+    `N:`/fuji code.)
 - **z88dk** — `z88dk` in the AUR (Arch), or build from
   https://github.com/z88dk/z88dk (nightly builds recommended; the `coleco`/`adam`
   target needs a current build). Set `ZCCCFG`/`PATH` per its docs.
