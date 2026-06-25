@@ -47,6 +47,14 @@
 #define UR_APP_ID      0x01
 #define UR_KEY_PROFILE 0x00
 
+/* FujiNet lobby handoff: when the lobby boots our client it writes the chosen
+ * server's URL into AppKey creator 0x0001 / app 0x01 / key = our lobby appkey.
+ * Reading it lets us auto-connect to the lobby-selected server. (Convention
+ * confirmed against the FujiNet lobby + 5 Card Stud client.) */
+#define UR_LOBBY_CREATOR 0x0001u
+#define UR_LOBBY_APP     0x01
+#define UR_LOBBY_APPKEY  0x06     /* matches the server's lobby appkey (UR_APPKEY=6) */
+
 static ur_state game;
 
 static char     g_name[4] = "";  /* 3 initials + NUL; empty = not set yet  */
@@ -541,6 +549,39 @@ static void profile_save(void)
     fuji_write_appkey(UR_KEY_PROFILE, (uint16_t)(6 + hl), buf);
 }
 
+/* If the FujiNet lobby launched us, it left the chosen server's URL in its
+ * handoff AppKey. Parse the host out of it (e.g. "tcp://thefnords.com:1234/") into
+ * g_host so we auto-connect. Returns true if a host was found. */
+static bool lobby_host_from_appkey(void)
+{
+    uint8_t  buf[MAX_APPKEY_LEN + 2];
+    uint16_t cnt = 0;
+    unsigned char i, j, start = 0;
+    bool found = false;
+
+    fuji_set_appkey_details(UR_LOBBY_CREATOR, UR_LOBBY_APP, DEFAULT);
+    if (!fuji_read_appkey(UR_LOBBY_APPKEY, &cnt, buf) || cnt == 0)
+        return false;
+    for (i = 0; (uint16_t)(i + 2) < cnt; i++)        /* find "://" */
+        if (buf[i] == ':' && buf[i + 1] == '/' && buf[i + 2] == '/') {
+            start = (unsigned char)(i + 3);
+            found = true;
+            break;
+        }
+    if (!found)
+        return false;
+    j = 0;                                            /* host = up to ':' or '/' */
+    for (i = start; i < cnt && j < 32; i++) {
+        if (buf[i] == ':' || buf[i] == '/')
+            break;
+        g_host[j++] = (char)buf[i];
+    }
+    if (j == 0)
+        return false;
+    g_host[j] = 0;
+    return true;
+}
+
 static void draw_initials(const unsigned char *idx, unsigned char slot)
 {
     unsigned char i;
@@ -891,7 +932,8 @@ int main(void)
     atari_quiet_sio();          /* no OS SIO "drive" drone during FujiNet polling */
 
     profile_load();             /* name/wins/host from the FujiNet appkey, if any */
-    build_urls();               /* N: URLs from the saved (or default) host */
+    lobby_host_from_appkey();   /* launched from the lobby? use its server host */
+    build_urls();               /* N: URLs from the resolved host */
 
     for (;;) {                  /* play again forever; never falls out to Memo Pad */
         do {

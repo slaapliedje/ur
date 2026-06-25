@@ -59,10 +59,15 @@ it cheat-resistant.
 
 ## Pointing clients at your host
 
-The client host is **runtime-configurable** — one binary works against any server.
-On the title screen choose **`7) Set server host`** and type your host name or IP
-(stored in the player's FujiNet AppKey, shown as `Server:` at the top of the
-title). The client builds `N:TCP://<host>:1234/` (game) and
+**Launched from the FujiNet lobby**, the client auto-connects: the lobby writes
+the chosen server's URL into its handoff AppKey (creator `0x0001` / app `0x01` /
+key = the game's appkey, `6`), and the client reads it on boot to set the host —
+no manual step. The setting below is the fallback for direct connections.
+
+For direct connections the client host is **runtime-configurable** — one binary
+works against any server. On the title screen choose **`7) Set server host`** and
+type your host name or IP (stored in the player's FujiNet AppKey, shown as
+`Server:` at the top of the title). The client builds `N:TCP://<host>:1234/` (game) and
 `N:HTTP://<host>:8080/top` (leaderboard) from it. **Ports are fixed** at 1234/8080;
 if you host on different ports, change them in
 [`src/atari/main.c`](../src/atari/main.c) (`build_urls`). The default host is
