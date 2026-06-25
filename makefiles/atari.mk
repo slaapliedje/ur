@@ -3,6 +3,7 @@ ATARI_OUT      := $(BUILD_DIR)/atari
 CL65           ?= cl65
 ATARI_TARGET   ?= atari        # use 'atarixl' for an XL/XE-only build
 ATARI_SOURCES  := $(COMMON_SOURCES) $(NET_SOURCES) $(wildcard $(SRC_DIR)/atari/*.c)
+ATARI_SOURCES  += $(SRC_DIR)/atari/dli.s   # display-list-interrupt handler (title sky)
 
 # Optional shim for cc65 <= 2.19 (exports `sp`, not `c_sp`) so fujinet-lib's
 # network code links. Enable with `CSP_COMPAT=1 make ...`; leave off on current cc65.

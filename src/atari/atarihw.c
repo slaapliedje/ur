@@ -60,11 +60,12 @@ void atari_quiet_sio(void)
 
 void atari_setup_colors(void)
 {
-    COLOR0 = 0x0E;   /* white  -> Light pieces            */
-    COLOR1 = 0xCA;   /* green  -> Dark pieces + text      */
-    COLOR2 = 0x92;   /* blue   -> text bg + cell outlines */
-    COLOR3 = 0x28;   /* orange -> rosettes                */
-    COLOR4 = 0x00;   /* black  -> board bg + border       */
+    /* Standard-of-Ur palette: lapis + gold, shell-white pieces. */
+    COLOR0 = 0x0E;   /* shell white -> Light pieces           */
+    COLOR1 = 0xCA;   /* green       -> Dark pieces + text     */
+    COLOR2 = 0x94;   /* lapis       -> text bg + cell lines   */
+    COLOR3 = 0x1A;   /* gold        -> rosettes + ziggurat    */
+    COLOR4 = 0x00;   /* black       -> board bg + border      */
 }
 
 /* ---- custom character set ----------------------------------------------- *
@@ -164,6 +165,43 @@ void atari_text_mode(void)
     unsigned char r;
     for (r = 4; r <= 18; r++)
         dl[5 + r] = 0x02;
+}
+
+/* ---- title-screen lapis gradient (display list interrupt) --------------- *
+ * A DLI rewrites COLBK per board-band row, fading dark->light lapis behind the
+ * ziggurat. dli.s reads dli_table/dli_len; we flag rows 4..17 in the display
+ * list (one DLI each, 14 == dli_len so the index wraps once per frame).        */
+extern void dli_handler(void);      /* asm, src/atari/dli.s */
+unsigned char dli_table[16];        /* COLBK per flagged row (_dli_table) */
+unsigned char dli_len;              /* number of gradient entries (_dli_len) */
+
+void atari_title_sky_on(void)
+{
+    static const unsigned char grad[14] = {
+        0x90, 0x90, 0x92, 0x92, 0x94, 0x94, 0x96,
+        0x98, 0x9A, 0x9A, 0x9C, 0x9C, 0x9E, 0x9E   /* lapis, dark top -> light */
+    };
+    unsigned char *dl = *(unsigned char **)0x0230;
+    unsigned char i;
+
+    for (i = 0; i < 14; i++)
+        dli_table[i] = grad[i];
+    dli_len = 14;
+    *(volatile unsigned char *)0x0200 = (unsigned char)((unsigned int)dli_handler & 0xFF);
+    *(volatile unsigned char *)0x0201 = (unsigned char)((unsigned int)dli_handler >> 8);
+    for (i = 4; i <= 17; i++)
+        dl[5 + i] |= 0x80;                          /* DLI bit on each board-band row */
+    *(volatile unsigned char *)0xD40E = 0xC0;       /* NMIEN: DLI + VBI (write-only)  */
+}
+
+void atari_title_sky_off(void)
+{
+    unsigned char *dl = *(unsigned char **)0x0230;
+    unsigned char i;
+    *(volatile unsigned char *)0xD40E = 0x40;       /* NMIEN: VBI only (DLI off) */
+    for (i = 4; i <= 17; i++)
+        dl[5 + i] &= 0x7F;                          /* clear DLI bits */
+    COLOR4 = 0x00;                                  /* restore plain board background */
 }
 
 /* ---- player-missile graphics (highlight cursor) ------------------------- *

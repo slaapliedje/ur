@@ -12,6 +12,8 @@ void atari_quiet_sio(void);      /* SOUNDR=0: silence the OS SIO I/O "drive" dro
 void atari_setup_charset(void);  /* install a custom font: board tiles + pieces */
 void atari_mode4_board(void);    /* switch the board rows to ANTIC mode 4 (colour) */
 void atari_text_mode(void);      /* revert the board rows to mode-2 text (full-screen text) */
+void atari_title_sky_on(void);   /* DLI: lapis gradient behind the title board band */
+void atari_title_sky_off(void);  /* tear down the title DLI (restore plain background) */
 
 /* Player-missile graphics: a highlight box (player 0) over a board cell. */
 void atari_pmg_init(void);
