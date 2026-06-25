@@ -37,3 +37,17 @@ jobs:
 
       # TODO: once fujinet-lib is wired into real builds, add a cached
       # `make deps` step and assert the produced .xex/.dsk/.prg/.po artifacts.
+
+  server:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+      - name: Vet, test and build the game server
+        working-directory: server
+        run: |
+          go vet ./...
+          go test ./...
+          go build ./...
