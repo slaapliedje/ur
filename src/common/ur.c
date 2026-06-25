@@ -213,9 +213,10 @@ int8_t ur_ai_pick(const ur_state *s, uint8_t player, uint8_t roll)
         return -1;
 
     for (i = 0; i < count; i++) {
-        ur_state tmp = *s;
+        ur_state tmp;            /* cc65 won't aggregate-init from a runtime value */
         ur_move_result r;
         int16_t score;
+        tmp = *s;                /* ...so copy by assignment */
         ur_apply_move(&tmp, player, pieces[i], roll, &r);
         score = ur_eval(&tmp, player);
         if (r.rosette)
