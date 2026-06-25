@@ -119,6 +119,40 @@ func (s *State) advanceTurn(r MoveResult) {
 	s.Turn = 1 - s.Turn
 }
 
+// aiPick chooses a move for `pl` (must have at least one legal move). Greedy:
+// bear off > capture > land on a rosette > advance the furthest piece, with a
+// nudge to bring new pieces on.
+func aiPick(s *State, pl, roll uint8) uint8 {
+	moves := s.legalMoves(pl, roll)
+	best := moves[0]
+	bestScore := -1 << 30
+	for _, pi := range moves {
+		p := s.Piece[pl][pi]
+		dest := p + roll
+		score := 0
+		switch {
+		case dest == PosHome:
+			score = 1000 // bear a piece off
+		default:
+			if isShared(dest) && !isRosette(dest) && s.oppAt(1-pl, dest) >= 0 {
+				score += 200 // capture an opponent
+			}
+			if isRosette(dest) {
+				score += 100 // extra roll + safe square
+			}
+			score += int(dest) // otherwise advance the furthest piece
+			if p == PosStart {
+				score += 5 // mild preference to get pieces moving
+			}
+		}
+		if score > bestScore {
+			bestScore = score
+			best = pi
+		}
+	}
+	return best
+}
+
 func (s *State) score(pl uint8) uint8 {
 	var n uint8
 	for i := 0; i < Pieces; i++ {

@@ -60,7 +60,15 @@ by the FujiNet project; the client binary (`ur.xex`) **hosted on a TNFS server**
 listed in `clients[]`; and a per-platform **lobby client** app that lists games and
 launches ours (future — see [`src/net/CLAUDE.md`](../src/net/CLAUDE.md)).
 
+## Single-player vs the AI
+
+If a second human doesn't connect within `UR_AI_WAIT` seconds (default 6;
+`UR_AI_WAIT=off` to disable), the server seats its own AI as seat 1 (`runGameAI`)
+so a lone player still gets a game — the FGS "AI room" pattern. The AI heuristic
+is `aiPick` in `ur.go`. AI games are **not** recorded to the leaderboard.
+
 ## v1 limitations (future work)
 
-- One game at a time (then it loops to accept the next pair).
+- One game at a time (then it loops to accept the next player/pair).
 - Minimal error handling; no reconnect/resume.
+- Naive pairing (no liveness check); a stale socket can be paired in.

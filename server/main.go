@@ -12,6 +12,8 @@ import (
 	"log"
 	"net"
 	"os"
+	"strconv"
+	"time"
 )
 
 // store is the persistent leaderboard, shared by the game loop and HTTP handlers.
@@ -31,19 +33,46 @@ func main() {
 	startHTTP(store)
 	startLobby()
 
-	for {
-		var c [2]net.Conn
-		for i := 0; i < 2; i++ {
-			conn, err := ln.Accept()
-			if err != nil {
-				log.Printf("accept: %v", err)
-				i--
-				continue
-			}
-			log.Printf("player %d connected from %s", i, conn.RemoteAddr())
-			c[i] = conn
+	// If a second human doesn't join within UR_AI_WAIT seconds (default 6), seat
+	// the computer so a lone player still gets a game. UR_AI_WAIT=off disables it
+	// (always wait for two humans).
+	aiEnabled := true
+	aiWait := 6 * time.Second
+	if v := os.Getenv("UR_AI_WAIT"); v != "" {
+		if v == "off" {
+			aiEnabled = false
+		} else if s, e := strconv.Atoi(v); e == nil && s >= 0 {
+			aiWait = time.Duration(s) * time.Second
 		}
-		runGame(c)
+	}
+	tln := ln.(*net.TCPListener)
+
+	for {
+		tln.SetDeadline(time.Time{}) // block indefinitely for player 0
+		conn0, err := tln.Accept()
+		if err != nil {
+			log.Printf("accept: %v", err)
+			continue
+		}
+		log.Printf("player 0 connected from %s", conn0.RemoteAddr())
+
+		if aiEnabled {
+			tln.SetDeadline(time.Now().Add(aiWait)) // wait a bit for player 1
+		}
+		conn1, err := tln.Accept()
+		tln.SetDeadline(time.Time{})
+		if err != nil {
+			if ne, ok := err.(net.Error); ok && ne.Timeout() {
+				log.Printf("no second player after %s; starting a game vs the computer", aiWait)
+				runGameAI(conn0)
+			} else {
+				log.Printf("accept(player 1): %v", err)
+				conn0.Close()
+			}
+			continue
+		}
+		log.Printf("player 1 connected from %s", conn1.RemoteAddr())
+		runGame([2]net.Conn{conn0, conn1})
 	}
 }
 
@@ -155,6 +184,116 @@ func runGame(c [2]net.Conn) {
 
 		default:
 			// ignore unknown message types
+		}
+	}
+}
+
+// runGameAI hosts one human (seat 0) against the server's AI (seat 1). The human
+// plays normally; the server drives the AI's rolls and moves with a short delay
+// so they're visible. AI games are not recorded to the leaderboard.
+func runGameAI(conn net.Conn) {
+	defer conn.Close()
+	setPlayers(2)
+	defer setPlayers(0)
+
+	r := bufio.NewReader(conn)
+
+	// Expect a JOIN (type, version, then NameLen name bytes).
+	name0 := ""
+	if t, err := readByte(r); err != nil {
+		log.Printf("AI game: failed to read JOIN: %v", err)
+		return
+	} else if t == MsgJoin {
+		readByte(r) // version
+		nm := make([]byte, NameLen)
+		for k := 0; k < NameLen; k++ {
+			b, e := readByte(r)
+			if e != nil {
+				log.Printf("AI game: short JOIN: %v", e)
+				return
+			}
+			nm[k] = b
+		}
+		name0 = cleanName(nm)
+	}
+	log.Printf("AI game: %q (seat 0) vs computer (seat 1)", name0)
+
+	st := &State{}
+	phase := uint8(PhaseRoll)
+	roll := uint8(0xFF)
+	var flags uint8
+
+	send := func(ph, rl, fl uint8) {
+		if _, err := conn.Write(encodeState(0, ph, rl, st.winner(), fl, st)); err != nil {
+			log.Printf("AI game: write failed: %v", err)
+		}
+	}
+	send(phase, roll, flags)
+
+	for {
+		if st.Turn == 0 { // human's turn
+			t, err := readByte(r)
+			if err != nil {
+				log.Printf("AI game: player disconnected: %v", err)
+				return
+			}
+			switch t {
+			case MsgRoll:
+				if phase != PhaseRoll {
+					continue
+				}
+				roll = dice()
+				flags = 0
+				if len(st.legalMoves(0, roll)) == 0 {
+					st.advanceTurn(MoveResult{})
+					phase, roll = PhaseRoll, 0xFF
+				} else {
+					phase = PhaseMove
+				}
+				send(phase, roll, flags)
+			case MsgMove:
+				pi, err := readByte(r)
+				if err != nil {
+					log.Printf("AI game: disconnected reading move: %v", err)
+					return
+				}
+				if phase != PhaseMove {
+					continue
+				}
+				res, ok := st.applyMove(0, pi, roll)
+				if !ok {
+					continue
+				}
+				flags = flagsFrom(res)
+				if res.Won {
+					send(PhaseOver, 0xFF, flags)
+					log.Printf("AI game: %q wins", name0)
+					return
+				}
+				st.advanceTurn(res)
+				phase, roll = PhaseRoll, 0xFF
+				send(phase, roll, flags)
+			}
+		} else { // AI's turn (seat 1)
+			time.Sleep(700 * time.Millisecond)
+			roll = dice()
+			flags = 0
+			if len(st.legalMoves(1, roll)) == 0 {
+				st.advanceTurn(MoveResult{})
+				send(PhaseRoll, 0xFF, flags)
+				continue
+			}
+			send(PhaseMove, roll, flags) // let the human see the AI's roll
+			time.Sleep(700 * time.Millisecond)
+			res, _ := st.applyMove(1, aiPick(st, 1, roll), roll)
+			flags = flagsFrom(res)
+			if res.Won {
+				send(PhaseOver, 0xFF, flags)
+				log.Printf("AI game: computer beats %q", name0)
+				return
+			}
+			st.advanceTurn(res)
+			send(PhaseRoll, 0xFF, flags)
 		}
 	}
 }
