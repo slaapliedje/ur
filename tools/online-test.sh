@@ -45,6 +45,8 @@ cleanup() {
     for p in "${pids[@]:-}"; do
         [ -n "$p" ] && kill "$p" 2>/dev/null || true
     done
+    # the restart-loop subshells leave a live fujinet child; reap them by path
+    pkill -f "$FUJINET_BIN" 2>/dev/null || true
 }
 trap cleanup EXIT INT TERM
 
@@ -65,7 +67,13 @@ CFG
     echo "pair $i: atari800 netsio:$nport  fujinet web:$wport  ($dir)"
     atari800 -netsio "$nport" -windowed -win-width "$WIN_W" -win-height "$WIN_H" -nobasic "$XEX" &
     pids+=($!)
-    ( cd "$dir" && "$FUJINET_BIN" -c "$dir/fnconfig.ini" -s "$dir/SD" -u "http://0.0.0.0:$wport" ) &
+    # FujiNet-PC exits with code 75 (EX_TEMPFAIL) on an emulated reboot — which the
+    # Atari does at cold boot. Relaunch it in a loop, like FujiNet's run-fujinet does.
+    ( cd "$dir" || exit 1
+      while :; do
+          "$FUJINET_BIN" -c "$dir/fnconfig.ini" -s "$dir/SD" -u "http://0.0.0.0:$wport"
+          [ $? -eq 75 ] || break
+      done ) &
     pids+=($!)
 }
 
