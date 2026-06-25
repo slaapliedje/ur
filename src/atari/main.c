@@ -27,9 +27,7 @@
 #define ROW_TURN   1
 #define ROW_ROLL   2
 #define ROW_SEAT   3        /* online: which seat you are */
-#define ROW_MOVE   19       /* move description (below the board) */
-#define ROW_LIGHT  20
-#define ROW_DARK   21
+#define ROW_MOVE   19       /* move list (rows 19..22, below the board) */
 #define ROW_MSG    23
 
 #define LIGHT_CH '#'        /* mode-4 light piece glyph (white) */
@@ -173,11 +171,8 @@ static void draw_all(unsigned char roll, const char *msg)
         cprintf(" %u", roll);
     }
 
-    gotoxy(0, ROW_LIGHT);
-    cprintf("Light  start:%u home:%u", count_at(0, UR_POS_START), ur_score(&game, 0));
-    gotoxy(0, ROW_DARK);
-    cprintf("Dark   start:%u home:%u", count_at(1, UR_POS_START), ur_score(&game, 1));
-
+    /* Start/home counts used to live here; the corner trays now show that, so
+     * the rows below the board (19..22) are free for the move list. */
     if (msg && msg[0])
         cputsxy(0, ROW_MSG, msg);
 }
@@ -226,28 +221,43 @@ static void wait_action(void)
     }
 }
 
-/* Highlight move option `sel` and describe it on ROW_MOVE. */
+/* List the legal moves below the board (rows ROW_MOVE..+3), highlight the
+ * selected one, and place the cursor box on its board cell. Scrolls to keep the
+ * selection visible when there are more moves than rows. */
+#define MOVE_ROWS 4
 static void show_option(unsigned char player, const unsigned char *srcs,
                         unsigned char nsrc, unsigned char sel, unsigned char roll)
 {
-    unsigned char src  = srcs[sel];
-    unsigned char dest = (unsigned char)(src + roll);
-    unsigned char cell = (src == UR_POS_START) ? dest : src;   /* on-board 1..14 */
-    unsigned char rr, cc;
+    unsigned char src, dest, cell, rr, cc, k, idx, top;
 
+    src  = srcs[sel];
+    dest = (unsigned char)(src + roll);
+    cell = (src == UR_POS_START) ? dest : src;     /* on-board 1..14 */
     if (pos_to_cell(player, cell, &rr, &cc))
         atari_pmg_highlight(cellx(cc), celly(rr));
 
-    gotoxy(0, ROW_MOVE);
-    cprintf("Move %u/%u: ", sel + 1, nsrc);
-    if (src == UR_POS_START)
-        cprintf("enter -> %u  ", dest);
-    else
-        cprintf("%u -> %u  ", src, dest);
-    if (dest == UR_POS_HOME)                              cprintf("(home)    ");
-    else if (ur_is_rosette(dest))                         cprintf("(rosette) ");
-    else if (ur_is_shared(dest) && opp_on(player, dest))  cprintf("(capture) ");
-    else                                                  cprintf("          ");
+    top = 0;                                        /* scroll window */
+    if (nsrc > MOVE_ROWS && sel >= MOVE_ROWS)
+        top = (unsigned char)(sel - (MOVE_ROWS - 1));
+
+    for (k = 0; k < MOVE_ROWS; k++) {
+        cclearxy(0, (unsigned char)(ROW_MOVE + k), 39);   /* clear the line */
+        idx = (unsigned char)(top + k);
+        if (idx >= nsrc)
+            continue;
+        gotoxy(0, (unsigned char)(ROW_MOVE + k));
+        src  = srcs[idx];
+        dest = (unsigned char)(src + roll);
+        if (idx == sel) revers(1);
+        if (src == UR_POS_START)
+            cprintf("%u) enter -> %u", idx + 1, dest);
+        else
+            cprintf("%u) %u -> %u", idx + 1, src, dest);
+        if (dest == UR_POS_HOME)                              cprintf("  home");
+        else if (ur_is_rosette(dest))                         cprintf("  rosette");
+        else if (ur_is_shared(dest) && opp_on(player, dest))  cprintf("  capture!");
+        if (idx == sel) revers(0);
+    }
 }
 
 /* Joystick/number-key move chooser, shared by hot-seat and online play. The
