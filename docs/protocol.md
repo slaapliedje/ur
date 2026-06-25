@@ -34,24 +34,49 @@ for where the encode/decode codec lives.
 
 ## Message families (to be specified)
 
-| Family            | Direction        | Purpose                                          |
-|-------------------|------------------|--------------------------------------------------|
-| `JOIN` / `SEAT`   | client → server  | Join a game, claim a seat / get assigned a color |
-| `STATE`           | server → client  | Full board snapshot (piece positions, scores)    |
-| `ROLL`            | both             | Request a dice roll / report the rolled value    |
-| `MOVE`            | client → server  | Move a piece; server validates and applies        |
-| `CAPTURE`         | server → client  | Notify that a piece was sent back to start        |
-| `TURN`            | server → client  | Whose turn it is / extra-roll grant (rosette)    |
-| `GAMEOVER`        | server → client  | Winner declared                                  |
-| `PING`/`ERROR`    | both             | Heartbeat / error reporting                       |
+Encoded and decoded by [`src/common/proto.c`](../src/common/proto.c) (see
+`proto.h`); covered by round-trip tests in `tests/test_ur.c`. Byte 0 of every
+message is its type.
 
-Exact opcodes, field widths, and byte order: **TBD** — define before implementing
-the codec in `src/common`.
+### Client → server
+
+| Msg    | Byte | Bytes                          | Purpose                         |
+|--------|------|--------------------------------|---------------------------------|
+| `JOIN` | 0x01 | `[0]=0x01 [1]=version(1)`      | Join; server assigns a seat     |
+| `ROLL` | 0x02 | `[0]=0x02`                     | Request a dice roll             |
+| `MOVE` | 0x03 | `[0]=0x03 [1]=piece index 0..6`| Move one of your pieces         |
+
+### Server → client
+
+`STATE` (0x81) — a fixed **21-byte** snapshot the client renders:
+
+| Off | Field    | Meaning                                                      |
+|-----|----------|--------------------------------------------------------------|
+| 0   | type     | `0x81`                                                       |
+| 1   | seat     | which player THIS client controls (0/1)                      |
+| 2   | turn     | whose turn it is (0/1)                                        |
+| 3   | phase    | 0 = await roll, 1 = await move, 2 = game over                |
+| 4   | roll     | 0–4, or `0xFF` if none                                       |
+| 5   | winner   | 0/1, or `0xFF` if not over                                   |
+| 6   | flags    | bit0 captured, bit1 rosette, bit2 scored (from the last move)|
+| 7–13| light[7] | Light's 7 piece positions (0=start … 15=home)                |
+|14–20| dark[7]  | Dark's 7 piece positions                                     |
+
+Because both ends share the rules core, the client computes its own legal moves
+from `turn`/`roll`/positions (`ur_legal_moves`); the server need not send them.
+
+### Flow
+
+1. Client connects, sends `JOIN`; server replies `STATE` (assigns `seat`).
+2. On its turn (`seat == turn`, phase = await-roll) the client sends `ROLL`. The
+   server rolls; if moves exist → phase = await-move (with `roll`), else it
+   advances the turn. It broadcasts `STATE`.
+3. Client (await-move) shows legal moves, sends `MOVE`. Server validates, applies
+   (capture / rosette extra-roll / bear-off / win), advances turn, broadcasts `STATE`.
+4. The off-turn client polls (`network_read`) for `STATE` and renders.
 
 ## Open questions
 
-- Binary fixed-layout vs minimal ASCII framing (lean binary for 6502 parsing cost).
 - Polling cadence and timeouts over the `N:` device.
 - Reconnect / resume semantics if a client drops mid-game.
-- How closely to mirror the existing 5 Card Stud server conventions for Lobby
-  compatibility.
+- How the server registers with the FGS Lobby (mount info, player counts).

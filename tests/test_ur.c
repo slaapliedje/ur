@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include "ur.h"
+#include "proto.h"
 
 static int checks = 0, fails = 0;
 
@@ -262,6 +263,60 @@ static void test_ai_selfplay(void)
     CHECK(plies < 5000);
 }
 
+static void test_proto_state_roundtrip(void)
+{
+    ur_snapshot a, b;
+    uint8_t buf[32];
+    uint8_t n, i;
+
+    ur_init(&a.state);
+    a.state.piece[0][0] = 5;
+    a.state.piece[1][3] = 8;
+    a.state.turn = 1;
+    a.seat = 1;
+    a.phase = UR_PHASE_MOVE;
+    a.roll = 3;
+    a.winner = -1;
+    a.flags = UR_FLAG_CAPTURED;
+
+    n = ur_proto_encode_state(buf, &a);
+    CHECK(n == UR_STATE_MSG_LEN);
+    CHECK(ur_proto_decode_state(buf, n, &b));
+    CHECK(b.seat == 1 && b.state.turn == 1 && b.phase == UR_PHASE_MOVE);
+    CHECK(b.roll == 3 && b.winner == -1 && b.flags == UR_FLAG_CAPTURED);
+    for (i = 0; i < UR_PIECES; i++) {
+        CHECK(b.state.piece[0][i] == a.state.piece[0][i]);
+        CHECK(b.state.piece[1][i] == a.state.piece[1][i]);
+    }
+}
+
+static void test_proto_winner(void)
+{
+    ur_snapshot a, b;
+    uint8_t buf[32];
+
+    ur_init(&a.state);
+    a.seat = 0; a.phase = UR_PHASE_OVER; a.roll = 0xFF; a.winner = 0; a.flags = 0;
+    ur_proto_encode_state(buf, &a);
+    CHECK(ur_proto_decode_state(buf, UR_STATE_MSG_LEN, &b));
+    CHECK(b.winner == 0 && b.phase == UR_PHASE_OVER && b.roll == 0xFF);
+}
+
+static void test_proto_commands(void)
+{
+    uint8_t buf[4];
+    CHECK(ur_proto_join(buf) == 2 && buf[0] == UR_MSG_JOIN && buf[1] == UR_PROTO_VERSION);
+    CHECK(ur_proto_roll(buf) == 1 && buf[0] == UR_MSG_ROLL);
+    CHECK(ur_proto_move(buf, 5) == 2 && buf[0] == UR_MSG_MOVE && buf[1] == 5);
+}
+
+static void test_proto_truncated(void)
+{
+    ur_snapshot b;
+    uint8_t buf[4] = { UR_MSG_STATE, 0, 0, 0 };
+    CHECK(!ur_proto_decode_state(buf, 4, &b));   /* too short -> rejected */
+}
+
 int main(void)
 {
     test_init();
@@ -281,6 +336,10 @@ int main(void)
     test_ai_prefers_rosette();
     test_ai_always_legal();
     test_ai_selfplay();
+    test_proto_state_roundtrip();
+    test_proto_winner();
+    test_proto_commands();
+    test_proto_truncated();
 
     printf("%d/%d checks passed\n", checks - fails, checks);
     if (fails) {
