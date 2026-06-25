@@ -20,8 +20,8 @@ include makefiles/host-test.mk
 
 all: atari adam c64 apple2 ## Build every platform
 
-deps: $(ATARI_LIB) ## Fetch dependencies (pinned fujinet-lib release libraries)
-	@echo "fujinet-lib $(FNLIB_VERSION) ready for: atari."
+deps: $(ATARI_LIB) $(ADAM_LIB) ## Fetch dependencies (pinned fujinet-lib release libraries)
+	@echo "fujinet-lib $(FNLIB_VERSION) ready for: atari adam."
 	@echo "(Other targets download their lib once they gain sources — see their makefiles/*.mk.)"
 
 clean: ## Remove build output

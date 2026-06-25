@@ -1,20 +1,30 @@
-# Coleco Adam — Z80, built with z88dk (NOT cc65). zcc drives the build.
-ADAM_OUT     := $(BUILD_DIR)/adam
+# Coleco Adam — Z80, built with z88dk (zcc). NOT cc65.
+ADAM_OUT      := $(BUILD_DIR)/adam
 ZCC          ?= zcc
 ADAM_SOURCES := $(COMMON_SOURCES) $(NET_SOURCES) $(wildcard $(SRC_DIR)/adam/*.c)
-# z88dk: the Coleco target with the `adam` subtype (CP/M disk support + adam lib).
-# Confirm exact target/subtype/clib against the z88dk Coleco-ADAM platform docs
-# before the first real build.
-ADAM_FLAGS   := +coleco -subtype=adam -compiler=sdcc -O2 $(COMMON_INC)
+
+# fujinet-lib (downloaded release) for adam. The lib is built with z88dk's default
+# (classic / sccz80) C library for `+coleco -subtype=adam`, so we link with the
+# matching defaults — do NOT pass -clib=sdcc / -compiler=sdcc here.
+ADAM_FNLIB_DIR := $(LIB_DIR)/fujinet-lib/adam
+ADAM_LIB       := $(ADAM_FNLIB_DIR)/fujinet-adam-$(FNLIB_VERSION).lib
+ADAM_FNLIB_URL := https://github.com/FujiNetWIFI/fujinet-lib/releases/download/v$(FNLIB_VERSION)/fujinet-lib-adam-$(FNLIB_VERSION).zip
+
+# z88dk target: Coleco with the `adam` subtype (matches how the lib was built).
+ADAM_FLAGS   := +coleco -subtype=adam -I$(ADAM_FNLIB_DIR) $(COMMON_INC)
 
 .PHONY: adam
-adam: | $(ADAM_OUT) ## Build the Coleco Adam target (.dsk, z88dk)
-ifeq ($(strip $(ADAM_SOURCES)),)
-	@echo "[adam] no sources yet — add src/adam/*.c, then build (z88dk). (skeleton)"
-else
-	$(ZCC) $(ADAM_FLAGS) $(ADAM_SOURCES) -o $(ADAM_OUT)/ur -create-app
-	@echo "TODO: confirm z88dk-appmake output (.dsk/.ddp) for Adam"
-endif
+adam: $(ADAM_LIB) | $(ADAM_OUT) ## Build the Coleco Adam target (z88dk)
+	$(ZCC) $(ADAM_FLAGS) $(ADAM_SOURCES) -o $(ADAM_OUT)/ur \
+		-L$(ADAM_FNLIB_DIR) -lfujinet-adam-$(FNLIB_VERSION) -create-app
+	@echo "[adam] built in $(ADAM_OUT)/ — run in MAME (adam driver) / ADAMEm"
+
+# Download + unpack the pinned fujinet-lib release for adam.
+$(ADAM_LIB):
+	@mkdir -p $(ADAM_FNLIB_DIR)
+	curl -fsSL $(ADAM_FNLIB_URL) -o $(ADAM_FNLIB_DIR)/fujinet-lib.zip
+	cd $(ADAM_FNLIB_DIR) && unzip -o -q fujinet-lib.zip
+	@test -f $(ADAM_LIB) || { echo "ERROR: $(ADAM_LIB) missing after unzip"; exit 1; }
 
 $(ADAM_OUT):
 	mkdir -p $@

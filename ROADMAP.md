@@ -19,7 +19,8 @@ committable state.
       Altirra (with FujiNet-PC) to confirm it boots and reaches the device.**
 - [x] `make deps` / the atari target download the pinned `fujinet-lib` release library.
 - [ ] Extend to an `N:` TCP open/read against FujiNet-PC (toward the wire protocol).
-- [ ] Minimal Adam `z88dk` build that boots in MAME (`adam`) — proves the second toolchain.
+- [x] Minimal Adam `z88dk` build (`src/adam/main.c`) reading the FujiNet adapter
+      config; compiles + links in CI. **Run it in MAME (`adam`) / ADAMEm to confirm.**
 
 ## Phase 2 — Portable core (`src/common`)
 - [ ] Verify the exact board path & rosette indices against sources (see [`docs/rules.md`](docs/rules.md)).
