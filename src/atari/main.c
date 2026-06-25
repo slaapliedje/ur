@@ -757,7 +757,19 @@ static char title_screen(void)
     cputsxy(3, 22, "7) Set server host");
     cputsxy(3, 23, "Select 1-7:");
 
-    do { key = cgetc(); } while (key < '1' || key > '7');
+    /* Pulse the gold (COLOR3 = the ziggurat + rosette-sun) while waiting for a
+     * key, so the title shimmers. Restore the game palette on the way out. */
+    {
+        unsigned char lum = 2, up = 1;
+        for (;;) {
+            if (kbhit()) { key = cgetc(); if (key >= '1' && key <= '7') break; }
+            *(volatile unsigned char *)0x02C7 = (unsigned char)(0x20 | lum); /* gold hue, pulsing */
+            if (up) { lum += 2; if (lum >= 14) up = 0; }
+            else    { lum -= 2; if (lum <= 2)  up = 1; }
+            atari_wait_frames(4);
+        }
+        atari_setup_colors();
+    }
     return key;
 }
 
