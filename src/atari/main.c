@@ -144,6 +144,40 @@ static void sfx_for_result(const ur_move_result *r)
     else                  sfx_move();
 }
 
+/* Wait for the player to acknowledge: a fresh trigger press or any key. */
+static void wait_action(void)
+{
+    while (atari_trig()) { }            /* release a held trigger first */
+    for (;;) {
+        if (kbhit()) { cgetc(); return; }
+        if (atari_trig()) return;
+    }
+}
+
+/* Highlight move option `sel` (its cell) and print a one-line description. */
+static void show_option(unsigned char player, const unsigned char *srcs,
+                        unsigned char nsrc, unsigned char sel, unsigned char roll)
+{
+    unsigned char src  = srcs[sel];
+    unsigned char dest = (unsigned char)(src + roll);
+    unsigned char cell = (src == UR_POS_START) ? dest : src;   /* on-board 1..14 */
+    unsigned char rr, cc;
+
+    if (pos_to_cell(player, cell, &rr, &cc))
+        atari_pmg_highlight(cellx(cc), celly(rr));
+
+    gotoxy(0, 18);
+    cprintf("Move %u/%u: ", sel + 1, nsrc);
+    if (src == UR_POS_START)
+        cprintf("enter -> %u  ", dest);
+    else
+        cprintf("%u -> %u  ", src, dest);
+    if (dest == UR_POS_HOME)                              cprintf("(home)    ");
+    else if (ur_is_rosette(dest))                         cprintf("(rosette) ");
+    else if (ur_is_shared(dest) && opp_on(player, dest))  cprintf("(capture) ");
+    else                                                  cprintf("          ");
+}
+
 /* The computer takes a full turn for `player`. Returns true if the game is over. */
 static bool computer_turn(unsigned char player)
 {
@@ -152,14 +186,14 @@ static bool computer_turn(unsigned char player)
     int8_t pick;
     ur_move_result res;
 
-    draw_all(NO_ROLL, "Computer's turn - press a key.");
-    cgetc();
+    draw_all(NO_ROLL, "Computer's turn - FIRE/key.");
+    wait_action();
     roll = ur_dice_roll();
     sfx_roll();
 
     if (ur_legal_moves(&game, player, roll, pieces) == 0) {
-        draw_all(roll, "Computer has no move. Press a key.");
-        cgetc();
+        draw_all(roll, "Computer has no move. FIRE/key.");
+        wait_action();
         ur_advance_turn(&game, (const ur_move_result *)0);
         return false;
     }
@@ -180,12 +214,12 @@ static bool computer_turn(unsigned char player)
     if (res.captured)      cprintf("  capture!");
     else if (res.scored)   cprintf("  home!");
     else if (res.rosette)  cprintf("  rosette!");
-    cputsxy(0, 19, "Press a key.");
-    cgetc();
+    cputsxy(0, 19, "Press FIRE or a key.");
+    wait_action();
 
     if (res.won) {
         draw_all(NO_ROLL, win_msg(player));
-        cgetc();
+        wait_action();
         return true;
     }
     ur_advance_turn(&game, &res);
@@ -196,20 +230,21 @@ static bool computer_turn(unsigned char player)
 static bool human_turn(unsigned char player)
 {
     unsigned char pieces[UR_PIECES], srcs[UR_PIECES];
-    unsigned char roll, count, nsrc, picked, i, j, pos, dest;
+    unsigned char roll, count, nsrc, picked, i, j, pos;
+    unsigned char sel, centered, s;
     bool seen;
     char key;
     ur_move_result res;
 
-    draw_all(NO_ROLL, "Press any key to roll...");
-    cgetc();
+    draw_all(NO_ROLL, "Roll: press FIRE or a key");
+    wait_action();
     roll = ur_dice_roll();
     sfx_roll();
 
     count = ur_legal_moves(&game, player, roll, pieces);
     if (count == 0) {
-        draw_all(roll, "No legal move. Press a key.");
-        cgetc();
+        draw_all(roll, "No legal move. FIRE/key.");
+        wait_action();
         ur_advance_turn(&game, (const ur_move_result *)0);
         return false;
     }
@@ -225,27 +260,37 @@ static bool human_turn(unsigned char player)
             srcs[nsrc++] = pos;
     }
 
-    draw_all(roll, "Choose a move:");
-    for (i = 0; i < nsrc; i++) {
-        dest = (unsigned char)(srcs[i] + roll);
-        gotoxy(0, (unsigned char)(17 + i));
-        if (srcs[i] == UR_POS_START)
-            cprintf("%u) enter -> %u", i + 1, dest);
-        else
-            cprintf("%u) %u -> %u", i + 1, srcs[i], dest);
-        if (dest == UR_POS_HOME)
-            cprintf(" (home)");
-        else if (ur_is_rosette(dest))
-            cprintf(" (rosette)");
-        else if (ur_is_shared(dest) && opp_on(player, dest))
-            cprintf(" (capture)");
+    /* Joystick cursor: move the highlight over the options, FIRE to pick.
+     * Number keys 1..N still work as a fallback. */
+    draw_all(roll, "Stick: choose   FIRE/1-N: move");
+    sel = 0;
+    show_option(player, srcs, nsrc, sel, roll);
+    while (atari_trig()) { }            /* don't inherit the roll's trigger press */
+    centered = 1;
+    for (;;) {
+        if (kbhit()) {
+            key = cgetc();
+            if (key >= '1' && key < (char)('1' + nsrc)) {
+                sel = (unsigned char)(key - '1');
+                break;
+            }
+        }
+        if (atari_trig())
+            break;
+        s = atari_stick();
+        if ((s & 0x0F) == 0x0F) {
+            centered = 1;                          /* stick centred */
+        } else if (centered) {
+            if (!(s & 0x04) || !(s & 0x01))        /* left or up -> previous */
+                sel = (unsigned char)((sel + nsrc - 1) % nsrc);
+            else                                   /* right or down -> next  */
+                sel = (unsigned char)((sel + 1) % nsrc);
+            show_option(player, srcs, nsrc, sel, roll);
+            centered = 0;
+        }
     }
 
-    do {
-        key = cgetc();
-    } while (key < '1' || key >= (char)('1' + nsrc));
-
-    pos = srcs[key - '1'];
+    pos = srcs[sel];
     picked = pieces[0];
     for (i = 0; i < count; i++)
         if (game.piece[player][pieces[i]] == pos) { picked = pieces[i]; break; }
@@ -256,13 +301,13 @@ static bool human_turn(unsigned char player)
 
     if (res.won) {
         draw_all(NO_ROLL, win_msg(player));
-        cgetc();
+        wait_action();
         return true;
     }
     if (res.captured || res.rosette) {
-        draw_all(NO_ROLL, res.captured ? "Capture!  Press a key."
-                                       : "Rosette - roll again! Press a key.");
-        cgetc();
+        draw_all(NO_ROLL, res.captured ? "Capture!  FIRE/key."
+                                       : "Rosette - roll again! FIRE/key.");
+        wait_action();
     }
     ur_advance_turn(&game, &res);
     return false;

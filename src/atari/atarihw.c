@@ -155,6 +155,13 @@ void atari_pmg_highlight(unsigned char char_x, unsigned char char_y)
     HPOSP0_R = (unsigned char)(PM_HLEFT + char_x * 4);
 }
 
+/* ---- joystick input (port 1, OS shadow registers) ----------------------- */
+#define STICK0_R (*(volatile unsigned char *)0x0278)
+#define STRIG0_R (*(volatile unsigned char *)0x0284)
+
+unsigned char atari_stick(void) { return STICK0_R; }
+unsigned char atari_trig(void)  { return (unsigned char)(STRIG0_R == 0); }
+
 /* Lower AUDF1 = higher pitch (it's a divisor). Durations in scanlines. */
 void sfx_roll(void)    { tone(96, 8, 500);  tone(72, 8, 500); }
 void sfx_move(void)    { tone(80, 6, 600); }
