@@ -50,6 +50,14 @@ static void buzz(unsigned char pitch, unsigned char vol, unsigned int lines)
     AUDC1  = 0;
 }
 
+/* SOUNDR ($41): the OS makes the "disk drive" I/O sound during SIO when this is
+ * nonzero. FujiNet's constant SIO polling turns that into a continuous drone, so
+ * silence it. Our own sound effects write POKEY directly and are unaffected. */
+void atari_quiet_sio(void)
+{
+    *(volatile unsigned char *)0x0041 = 0;
+}
+
 void atari_setup_colors(void)
 {
     COLOR0 = 0x0E;   /* white  -> Light pieces            */

@@ -458,6 +458,7 @@ int main(void)
     atari_setup_charset();
     atari_mode4_board();
     atari_pmg_init();
+    atari_quiet_sio();   /* no OS SIO "drive" drone during FujiNet polling */
 
     if (key == '3') {           /* online: server-authoritative, its own loop */
         online_game();

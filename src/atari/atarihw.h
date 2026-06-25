@@ -8,6 +8,7 @@
 #define ATARIHW_H
 
 void atari_setup_colors(void);   /* set the playfield colour registers          */
+void atari_quiet_sio(void);      /* SOUNDR=0: silence the OS SIO I/O "drive" drone */
 void atari_setup_charset(void);  /* install a custom font: board tiles + pieces */
 void atari_mode4_board(void);    /* switch the board rows to ANTIC mode 4 (colour) */
 
