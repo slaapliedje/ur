@@ -34,10 +34,13 @@ committable state.
 - [ ] Protocol codec (encode/decode) per [`docs/protocol.md`](docs/protocol.md).
 
 ## Phase 3 — Atari single-player
-- [ ] Implement `plat_*` for Atari: board/piece/dice rendering, input, sound.
-- [ ] Title/menu/game/win screen flow.
-- [ ] Local hot-seat 2-player.
-- [ ] Single-player vs AI.
+- [x] Atari board / piece / dice rendering + input (conio text UI) in
+      `src/atari/main.c`; compiles in CI. **Run `build/atari/ur.xex` in Altirra.**
+- [x] Local hot-seat 2-player (roll, choose move, capture, rosette extra roll, win).
+- [ ] Single-player vs AI (needs the AI opponent in `src/common`).
+- [ ] Polish: ANTIC / player-missile graphics, POKEY sound, title/menu screens.
+- [ ] Lift the game loop into a shared controller behind `plat.h` so the Adam/C64/
+      Apple ports reuse it instead of re-implementing.
 
 ## Phase 4 — Networking + game server
 - [ ] Finalize the wire protocol.

@@ -8,7 +8,7 @@ APPLE2_FLAGS   := -t $(APPLE2_TARGET) -O $(COMMON_INC)
 
 .PHONY: apple2
 apple2: | $(APPLE2_OUT) ## Build the Apple II target (.po)
-ifeq ($(strip $(APPLE2_SOURCES)),)
+ifeq ($(strip $(wildcard $(SRC_DIR)/apple2/*.c)),)
 	@echo "[apple2] no sources yet — add src/apple2/*.c, then build (cc65). (skeleton)"
 else
 	$(CL65) $(APPLE2_FLAGS) -o $(APPLE2_OUT)/ur.system $(APPLE2_SOURCES) $(APPLE2_LIB)

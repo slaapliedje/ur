@@ -9,9 +9,8 @@ FNLIB_VERSION ?= 4.11.2
 COMMON_DIR := $(SRC_DIR)/common
 NET_DIR    := $(SRC_DIR)/net
 
-# Portable, toolchain-neutral core shared by EVERY target. Populate as code lands.
-# COMMON_SOURCES := $(wildcard $(COMMON_DIR)/*.c)
-COMMON_SOURCES :=
+# Portable, toolchain-neutral core shared by EVERY target.
+COMMON_SOURCES := $(wildcard $(COMMON_DIR)/*.c)
 
 # Networking client code (uses fujinet-lib); compiled per platform.
 # NET_SOURCES := $(wildcard $(NET_DIR)/*.c)

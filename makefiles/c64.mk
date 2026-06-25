@@ -7,7 +7,7 @@ C64_FLAGS   := -t c64 -O $(COMMON_INC)
 
 .PHONY: c64
 c64: | $(C64_OUT) ## Build the Commodore 64 target (.prg/.d64)
-ifeq ($(strip $(C64_SOURCES)),)
+ifeq ($(strip $(wildcard $(SRC_DIR)/c64/*.c)),)
 	@echo "[c64] no sources yet — add src/c64/*.c, then build (cc65). (skeleton)"
 else
 	$(CL65) $(C64_FLAGS) -o $(C64_OUT)/ur.prg $(C64_SOURCES) $(C64_LIB)
