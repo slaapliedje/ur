@@ -171,30 +171,25 @@ void atari_text_mode(void)
  * A DLI rewrites COLBK per board-band row, fading dark->light lapis behind the
  * ziggurat. dli.s reads dli_table/dli_len; we flag rows 4..17 in the display
  * list (one DLI each, 14 == dli_len so the index wraps once per frame).        */
-#define SKY_ROWS   14               /* board-band rows 4..17 carry the gradient   */
-#define SKY_LINES  (SKY_ROWS * 8)   /* one COLBK value per scanline (112)         */
 extern void dli_handler(void);      /* asm, src/atari/dli.s */
-unsigned char dli_table[SKY_LINES]; /* COLBK per scanline (_dli_table)            */
+unsigned char dli_table[16];        /* COLBK per board-band row (_dli_table)      */
 unsigned char dli_len;              /* number of gradient entries (_dli_len)      */
 
 void atari_title_sky_on(void)
 {
-    unsigned char *dl = *(unsigned char **)0x0230;
-    unsigned int  i;
-    unsigned char p, lum;
-
     /* Lapis (hue 9), dark at the top fading lighter toward the horizon. The
-     * Atari only has 8 luminances, so dither odd steps between neighbours on
-     * alternating scanlines for a smoother perceived gradient. */
-    for (i = 0; i < SKY_LINES; i++) {
-        p = (unsigned char)((i * 14u) / (SKY_LINES - 1));   /* 0..14 perceived */
-        if (p & 1)
-            lum = (i & 1) ? (unsigned char)(p + 1) : (unsigned char)(p - 1);
-        else
-            lum = p;
-        dli_table[i] = (unsigned char)(0x90 | (lum & 0x0E));
-    }
-    dli_len = SKY_LINES;
+     * Atari has only 8 luminances, so this is steady banded shading — one colour
+     * per board-band row (dithering for more apparent shades just flickers). */
+    static const unsigned char grad[14] = {
+        0x90, 0x90, 0x92, 0x94, 0x96, 0x98, 0x9A,
+        0x9C, 0x9E, 0x9E, 0x9E, 0x9E, 0x9C, 0x9A
+    };
+    unsigned char *dl = *(unsigned char **)0x0230;
+    unsigned char i;
+
+    for (i = 0; i < 14; i++)
+        dli_table[i] = grad[i];
+    dli_len = 14;
     *(volatile unsigned char *)0x0200 = (unsigned char)((unsigned int)dli_handler & 0xFF);
     *(volatile unsigned char *)0x0201 = (unsigned char)((unsigned int)dli_handler >> 8);
     for (i = 4; i <= 17; i++)
