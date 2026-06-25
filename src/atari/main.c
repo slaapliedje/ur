@@ -18,6 +18,7 @@
 #include "proto.h"
 #include "atarihw.h"
 #include "fujinet-network.h"
+#include "fujinet-fuji.h"      /* fuji_*_appkey: persistent profile on the FujiNet SD */
 
 /* Board cells: row 1..8, col 0=Light(left) 1=shared(mid) 2=Dark(right).
  * Each cell is two characters wide (8 mode-4 pixels) for detailed glyphs. */
@@ -38,7 +39,18 @@
 #define DIE_MARKED   '^'
 #define DIE_UNMARKED '_'
 
+/* FujiNet AppKey (persistent SD storage) for the local player profile. Creator
+ * IDs 0x0000-0x00FF are reserved by FujiNet for internal use; apps use > 0xFF.
+ * 0x5552 = 'UR'. There is no official registry yet, so this should be confirmed
+ * with the FujiNet project (same conversation as the lobby appkey). */
+#define UR_CREATOR_ID  0x5552u
+#define UR_APP_ID      0x01
+#define UR_KEY_PROFILE 0x00
+
 static ur_state game;
+
+static char     g_name[4] = "";  /* 3 initials + NUL; empty = not set yet */
+static uint16_t g_wins    = 0;   /* games won vs the computer (persisted)  */
 
 static unsigned char cellx(unsigned char col) { return (unsigned char)(BOARD_X + col * 3); }
 static unsigned char celly(unsigned char row) { return (unsigned char)(BOARD_Y + (row - 1) * 2); }
@@ -448,6 +460,104 @@ static void online_game(void)
     network_close(UR_NET_URL);
 }
 
+/* ---- persistent player profile (FujiNet AppKey) ------------------------- */
+
+static const char NAME_ALPH[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ ";   /* 27 chars */
+
+/* Load name + win count from our appkey. False if no FujiNet/SD (keeps defaults). */
+static bool profile_load(void)
+{
+    uint8_t  buf[MAX_APPKEY_LEN + 2];
+    uint16_t cnt = 0;
+    unsigned char i;
+
+    fuji_set_appkey_details(UR_CREATOR_ID, UR_APP_ID, DEFAULT);
+    if (!fuji_read_appkey(UR_KEY_PROFILE, &cnt, buf) || cnt < 5)
+        return false;
+    for (i = 0; i < 3; i++)
+        g_name[i] = (buf[i] >= 'A' && buf[i] <= 'Z') ? (char)buf[i] : ' ';
+    g_name[3] = 0;
+    if (g_name[0] == ' ' && g_name[1] == ' ' && g_name[2] == ' ')
+        g_name[0] = 0;                       /* all-blank == unset */
+    g_wins = (uint16_t)(buf[3] | ((uint16_t)buf[4] << 8));
+    return true;
+}
+
+/* Persist name + win count. Silently no-ops if no FujiNet is attached. */
+static void profile_save(void)
+{
+    uint8_t buf[5];
+    buf[0] = (uint8_t)(g_name[0] ? g_name[0] : ' ');
+    buf[1] = (uint8_t)(g_name[0] ? g_name[1] : ' ');
+    buf[2] = (uint8_t)(g_name[0] ? g_name[2] : ' ');
+    buf[3] = (uint8_t)(g_wins & 0xFF);
+    buf[4] = (uint8_t)(g_wins >> 8);
+    fuji_set_appkey_details(UR_CREATOR_ID, UR_APP_ID, DEFAULT);
+    fuji_write_appkey(UR_KEY_PROFILE, 5, buf);
+}
+
+static void draw_initials(const unsigned char *idx, unsigned char slot)
+{
+    unsigned char i;
+    for (i = 0; i < 3; i++) {
+        if (i == slot) revers(1);
+        cputcxy((unsigned char)(18 + i * 2), 11, NAME_ALPH[idx[i]]);
+        if (i == slot) revers(0);
+    }
+}
+
+/* Arcade-style 3-initial entry on the joystick; saves to the appkey on finish. */
+static void enter_name(void)
+{
+    unsigned char idx[3], slot, s, centered, i;
+    char c;
+
+    atari_text_mode();
+    clrscr();
+    revers(1); cputsxy(9, 2, " ENTER YOUR INITIALS "); revers(0);
+    cputsxy(3, 6,  "Stick up/down: change letter");
+    cputsxy(3, 7,  "Stick left/right: move");
+    cputsxy(3, 8,  "FIRE: set (on the 3rd = done)");
+    cputsxy(3, 20, "(needs FujiNet to be remembered)");
+
+    for (i = 0; i < 3; i++) {
+        c = (g_name[0] && g_name[i] >= 'A' && g_name[i] <= 'Z') ? g_name[i] : 'A';
+        idx[i] = (unsigned char)(c - 'A');
+    }
+    slot = 0; centered = 1;
+    draw_initials(idx, slot);
+    while (atari_trig()) { }
+
+    for (;;) {
+        if (atari_trig()) {
+            while (atari_trig()) { }
+            if (slot == 2) break;
+            slot++;
+            draw_initials(idx, slot);
+            continue;
+        }
+        s = atari_stick();
+        if ((s & 0x0F) == 0x0F) {
+            centered = 1;
+        } else if (centered) {
+            if (!(s & 0x01))      idx[slot] = (unsigned char)((idx[slot] + 1)  % 27);  /* up   */
+            else if (!(s & 0x02)) idx[slot] = (unsigned char)((idx[slot] + 26) % 27);  /* down */
+            else if (!(s & 0x08)) { if (slot < 2) slot++; }                            /* right */
+            else if (!(s & 0x04)) { if (slot > 0) slot--; }                            /* left  */
+            draw_initials(idx, slot);
+            centered = 0;
+        }
+    }
+
+    for (i = 0; i < 3; i++)
+        g_name[i] = NAME_ALPH[idx[i]];
+    g_name[3] = 0;
+    if (g_name[0] == ' ' && g_name[1] == ' ' && g_name[2] == ' ')
+        g_name[0] = 0;
+    profile_save();
+    atari_mode4_board();
+}
+
 /* Draw a horizontal run of `n` copies of `ch` at (x,y); `inv` selects the gold
  * (COLOR3) variant of a mode-4 glyph instead of lapis (COLOR2). */
 static void hrun(unsigned char x, unsigned char y, unsigned char n, char ch, bool inv)
@@ -473,6 +583,10 @@ static char title_screen(void)
     cputsxy(9, 1, " THE ROYAL GAME OF UR ");
     revers(0);
     cputsxy(5, 2, "Ur - Mesopotamia - c.2600 BCE");
+    if (g_name[0]) {
+        gotoxy(9, 3);
+        cprintf("Player %s   Wins %u", g_name, g_wins);
+    }
 
     hrun(6, 5, 28, '\\', false);              /* upper cuneiform frieze (lapis) */
 
@@ -494,9 +608,9 @@ static char title_screen(void)
     cputsxy(8, 20, "2) One player vs computer");
     cputsxy(8, 21, "3) Online (FujiNet)");
     cputsxy(8, 22, "4) How to play");
-    cputsxy(8, 23, "Select 1-4:");
+    cputsxy(8, 23, "5) Set name        Select 1-5:");
 
-    do { key = cgetc(); } while (key < '1' || key > '4');
+    do { key = cgetc(); } while (key < '1' || key > '5');
     return key;
 }
 
@@ -617,12 +731,14 @@ int main(void)
     atari_pmg_init();
     atari_quiet_sio();          /* no OS SIO "drive" drone during FujiNet polling */
 
+    profile_load();             /* name + win count from the FujiNet appkey, if any */
+
     for (;;) {                  /* play again forever; never falls out to Memo Pad */
         do {
             key = title_screen();
-            if (key == '4')
-                show_instructions();
-        } while (key == '4');
+            if (key == '4')      show_instructions();
+            else if (key == '5') enter_name();
+        } while (key == '4' || key == '5');
 
         if (key == '3') {
             online_game();      /* shows its own result, then back to the menu */
@@ -641,10 +757,15 @@ int main(void)
         }
 
         /* `player` is the winner */
-        if (ai[1])
+        if (ai[1]) {
+            if (player == 0) {          /* you beat the computer: record it */
+                g_wins++;
+                profile_save();
+            }
             show_result(player == 0 ? " YOU WIN! " : " YOU LOSE ");
-        else
+        } else {
             show_result(player == 0 ? " LIGHT (WHITE) WINS! " : " DARK (GREEN) WINS! ");
+        }
     }
     return 0;                   /* not reached: the play-again loop never exits */
 }

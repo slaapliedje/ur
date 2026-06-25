@@ -1,16 +1,24 @@
 ; SPDX-License-Identifier: GPL-3.0-or-later
 ;
-; Compatibility shim: alias the C-stack zeropage pointer c_sp -> sp.
+; Compatibility shims for linking fujinet-lib (built with current cc65) against an
+; OLD cc65 (<= 2.19) runtime. Current cc65 renamed some internal symbols; this
+; re-exports the new names at the old runtime's equivalents:
 ;
-; fujinet-lib's prebuilt libraries are built with current cc65, which renamed the
-; C parameter-stack zeropage symbol `sp` to `c_sp`. An older cc65 (<= 2.19) runtime
-; still exports `sp`, so linking the network code fails with "Unresolved external
-; 'c_sp'". This re-exports `c_sp` at the same address as the runtime's `sp`.
+;   c_sp     <- sp        the C parameter-stack zeropage pointer (renamed sp->c_sp).
+;                         Without it the network code fails: "Unresolved external 'c_sp'".
+;   ___bzero <- __bzero   the appkey code calls the internal bzero (C `__bzero`); the
+;                         2.19 runtime exports it as C `_bzero` (asm `__bzero`). Same
+;                         (ptr, n) contract, so aliasing is safe.
 ;
-; Only needed / safe with OLD cc65. Enable it via `CSP_COMPAT=1 make atari`.
-; With a current cc65 (which defines c_sp itself) leave it OFF to avoid a clash.
+; Only needed / safe with OLD cc65; the Makefile auto-enables it (CSP_COMPAT) when
+; the runtime lacks c_sp. With a current cc65 leave it OFF to avoid a clash.
 
         .importzp sp
         .exportzp c_sp
 
 c_sp = sp
+
+        .import __bzero
+        .export ___bzero
+
+___bzero = __bzero
