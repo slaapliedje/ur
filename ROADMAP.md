@@ -30,14 +30,16 @@ committable state.
 - [x] Dice (RNG + binary-tetrahedral roll), move generation/validation.
 - [x] Rules: capture, rosette (extra roll + safety), exact bear-off, win.
 - [x] Host unit tests (`make test`) + core compiles on both toolchains (`make core-check`).
-- [ ] AI opponent (heuristic + short expectimax over the dice distribution).
+- [x] AI opponent — positional heuristic (`ur_ai_pick`), host-tested incl. an
+      AI-vs-AI self-play game. (Expectimax lookahead is a future upgrade.)
 - [ ] Protocol codec (encode/decode) per [`docs/protocol.md`](docs/protocol.md).
 
 ## Phase 3 — Atari single-player
 - [x] Atari board / piece / dice rendering + input (conio text UI) in
       `src/atari/main.c`; compiles in CI. **Run `build/atari/ur.xex` in Altirra.**
 - [x] Local hot-seat 2-player (roll, choose move, capture, rosette extra roll, win).
-- [ ] Single-player vs AI (needs the AI opponent in `src/common`).
+- [x] Single-player vs AI — selectable from the Atari title menu (you are Light,
+      computer plays Dark).
 - [ ] Polish: ANTIC / player-missile graphics, POKEY sound, title/menu screens.
 - [ ] Lift the game loop into a shared controller behind `plat.h` so the Adam/C64/
       Apple ports reuse it instead of re-implementing.

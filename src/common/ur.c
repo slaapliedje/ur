@@ -171,6 +171,63 @@ void ur_advance_turn(ur_state *s, const ur_move_result *res)
     s->turn = (uint8_t)(1 - s->turn);
 }
 
+/* ---- AI opponent -------------------------------------------------------- */
+/* A positional heuristic: advance pieces, prize rosettes (safe + extra roll),
+ * home pieces, and capturing (which drops the opponent's value); penalise
+ * sitting exposed on the shared row. The AI picks the move that maximises
+ * (my value - their value) of the resulting position. Deterministic. */
+
+static int16_t piece_value(uint8_t pos)
+{
+    int16_t v;
+    if (pos == UR_POS_START) return 0;
+    if (pos == UR_POS_HOME)  return 100;
+    v = (int16_t)pos;                  /* progress along the 14-step path */
+    if (ur_is_rosette(pos))
+        v += 6;                        /* safe tile + earns an extra roll */
+    else if (ur_is_shared(pos))
+        v -= 3;                        /* exposed to capture */
+    return v;
+}
+
+static int16_t ur_eval(const ur_state *s, uint8_t player)
+{
+    uint8_t i, opp = (uint8_t)(1 - player);
+    int16_t me = 0, them = 0;
+    for (i = 0; i < UR_PIECES; i++) {
+        me   += piece_value(s->piece[player][i]);
+        them += piece_value(s->piece[opp][i]);
+    }
+    return (int16_t)(me - them);
+}
+
+int8_t ur_ai_pick(const ur_state *s, uint8_t player, uint8_t roll)
+{
+    uint8_t pieces[UR_PIECES];
+    uint8_t count, i;
+    int8_t  best = -1;
+    int16_t best_score = -30000;
+
+    count = ur_legal_moves(s, player, roll, pieces);
+    if (count == 0)
+        return -1;
+
+    for (i = 0; i < count; i++) {
+        ur_state tmp = *s;
+        ur_move_result r;
+        int16_t score;
+        ur_apply_move(&tmp, player, pieces[i], roll, &r);
+        score = ur_eval(&tmp, player);
+        if (r.rosette)
+            score += 4;                /* the extra roll is worth a little more */
+        if (score > best_score) {
+            best_score = score;
+            best = (int8_t)pieces[i];
+        }
+    }
+    return best;
+}
+
 /* ---- status ------------------------------------------------------------- */
 
 uint8_t ur_score(const ur_state *s, uint8_t player)

@@ -173,6 +173,95 @@ static void test_dice(void)
     }
 }
 
+static void test_ai_no_move(void)
+{
+    ur_state s;
+    ur_init(&s);
+    CHECK(ur_ai_pick(&s, 0, 0) == -1);   /* roll of 0 -> no move */
+}
+
+static void test_ai_prefers_capture(void)
+{
+    ur_state s;
+    ur_move_result r;
+    int8_t pick;
+    ur_init(&s);
+    s.piece[0][0] = 5;
+    s.piece[1][0] = 7;                   /* capturable opponent at 5+2 */
+    pick = ur_ai_pick(&s, 0, 2);
+    CHECK(pick >= 0);
+    CHECK(ur_apply_move(&s, 0, (uint8_t)pick, 2, &r));
+    CHECK(r.captured);                   /* AI takes the capture */
+}
+
+static void test_ai_prefers_bear_off(void)
+{
+    ur_state s;
+    ur_move_result r;
+    int8_t pick;
+    ur_init(&s);
+    s.piece[0][0] = 14;                  /* one roll from home */
+    pick = ur_ai_pick(&s, 0, 1);
+    CHECK(pick >= 0);
+    CHECK(ur_apply_move(&s, 0, (uint8_t)pick, 1, &r));
+    CHECK(r.scored);
+}
+
+static void test_ai_prefers_rosette(void)
+{
+    ur_state s;
+    ur_move_result r;
+    int8_t pick;
+    ur_init(&s);
+    s.piece[0][0] = 2;                   /* 2+2 = 4 rosette */
+    s.piece[0][1] = 9;                   /* 9+2 = 11 plain shared */
+    pick = ur_ai_pick(&s, 0, 2);
+    CHECK(pick >= 0);
+    CHECK(ur_apply_move(&s, 0, (uint8_t)pick, 2, &r));
+    CHECK(r.rosette);
+}
+
+static void test_ai_always_legal(void)
+{
+    ur_state s;
+    int8_t pick;
+    uint8_t roll;
+    ur_init(&s);
+    s.piece[0][0] = 3; s.piece[0][1] = 8;
+    s.piece[1][0] = 6; s.piece[1][1] = 11;
+    for (roll = 1; roll <= 4; roll++) {
+        pick = ur_ai_pick(&s, 0, roll);
+        if (pick >= 0)
+            CHECK(ur_move_legal(&s, 0, (uint8_t)pick, roll));
+    }
+}
+
+static void test_ai_selfplay(void)
+{
+    ur_state s;
+    ur_move_result r;
+    int8_t pick;
+    uint8_t roll;
+    uint16_t plies = 0;
+
+    ur_rng_seed(0xABCD);
+    ur_init(&s);
+    while (ur_winner(&s) < 0 && plies < 5000) {
+        roll = ur_dice_roll();
+        pick = ur_ai_pick(&s, s.turn, roll);
+        if (pick < 0) {
+            ur_advance_turn(&s, (const ur_move_result *)0);
+        } else {
+            ur_apply_move(&s, s.turn, (uint8_t)pick, roll, &r);
+            if (!r.won)
+                ur_advance_turn(&s, &r);
+        }
+        plies++;
+    }
+    CHECK(ur_winner(&s) >= 0);   /* AI vs AI runs to a real finish */
+    CHECK(plies < 5000);
+}
+
 int main(void)
 {
     test_init();
@@ -186,6 +275,12 @@ int main(void)
     test_win();
     test_turn_advance();
     test_dice();
+    test_ai_no_move();
+    test_ai_prefers_capture();
+    test_ai_prefers_bear_off();
+    test_ai_prefers_rosette();
+    test_ai_always_legal();
+    test_ai_selfplay();
 
     printf("%d/%d checks passed\n", checks - fails, checks);
     if (fails) {

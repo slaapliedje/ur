@@ -65,6 +65,11 @@ bool     ur_apply_move(ur_state *s, uint8_t player, uint8_t piece, uint8_t roll,
 /* Flip to the other player unless the last move earned an extra roll / won. */
 void     ur_advance_turn(ur_state *s, const ur_move_result *res);
 
+/* ---- AI opponent -------------------------------------------------------- */
+/* Heuristically pick the best legal piece for `player` to move given `roll`.
+ * Returns a piece index 0..UR_PIECES-1, or -1 if there is no legal move. */
+int8_t   ur_ai_pick(const ur_state *s, uint8_t player, uint8_t roll);
+
 /* ---- status ------------------------------------------------------------- */
 uint8_t  ur_score(const ur_state *s, uint8_t player);  /* pieces home (0..7) */
 int8_t   ur_winner(const ur_state *s);                 /* 0, 1, or -1 (none) */

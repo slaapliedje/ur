@@ -1,11 +1,12 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 /*
- * Atari 8-bit — playable Royal Game of Ur (Phase 3, local hot-seat 2-player).
+ * Atari 8-bit — playable Royal Game of Ur (Phase 3).
  *
- * Text-mode (conio) UI for now: draws the board, pieces and dice, and drives a
- * full hot-seat game. ALL rules come from the shared, tested core (src/common/ur)
- * — this file only renders and reads input. Prettier ANTIC / player-missile
- * graphics are a later polish pass.
+ * Text-mode (conio) UI: draws the board, pieces and dice, and drives a full
+ * game in two modes — local hot-seat 2-player, or one human (Light) vs the
+ * computer (Dark). ALL rules and the AI come from the shared, tested core
+ * (src/common/ur) — this file only renders and reads input. Prettier ANTIC /
+ * player-missile graphics are a later polish pass.
  *
  * Build: make atari  ->  build/atari/ur.xex   (boot in Altirra)
  */
@@ -15,7 +16,6 @@
 
 #include "ur.h"
 
-/* Board rows and screen placement. Columns are 1..8. */
 #define ROW_T    0          /* top    — Light's private rows */
 #define ROW_M    1          /* middle — shared (capture zone) */
 #define ROW_B    2          /* bottom — Dark's private rows */
@@ -60,7 +60,6 @@ static unsigned char count_at(unsigned char player, unsigned char pos)
     return n;
 }
 
-/* Does the opponent of `player` sit on path position `pos`? (capture annotation) */
 static bool opp_on(unsigned char player, unsigned char pos)
 {
     return count_at((unsigned char)(1 - player), pos) > 0;
@@ -72,9 +71,8 @@ static void draw_all(unsigned char roll, const char *msg)
     unsigned char r, c, pl, i, pos, rr, cc;
 
     clrscr();
-    cputsxy(0, 0, "The Royal Game of Ur  (hot-seat)");
+    cputsxy(0, 0, "The Royal Game of Ur");
 
-    /* base board: '.' playable, ' ' the cut-away corners, '*' rosettes */
     for (r = 0; r < 3; r++)
         for (c = 1; c <= 8; c++)
             grid[r][c] = (r == ROW_M || c <= 4 || c >= 7) ? '.' : ' ';
@@ -82,7 +80,6 @@ static void draw_all(unsigned char roll, const char *msg)
     grid[ROW_M][4] = '*';
     grid[ROW_B][1] = '*'; grid[ROW_B][7] = '*';
 
-    /* overlay pieces */
     for (pl = 0; pl < UR_NUM_PLAYERS; pl++)
         for (i = 0; i < UR_PIECES; i++) {
             pos = game.piece[pl][i];
@@ -121,84 +118,156 @@ static void seed_rng(void)
     ur_rng_seed(s);
 }
 
-int main(void)
+static const char *win_msg(unsigned char player)
+{
+    return player ? "Dark (X) wins!  Press a key."
+                  : "Light (O) wins!  Press a key.";
+}
+
+/* The computer takes a full turn for `player`. Returns true if the game is over. */
+static bool computer_turn(unsigned char player)
+{
+    unsigned char pieces[UR_PIECES];
+    unsigned char roll, pos, dest;
+    int8_t pick;
+    ur_move_result res;
+
+    draw_all(NO_ROLL, "Computer's turn - press a key.");
+    cgetc();
+    roll = ur_dice_roll();
+
+    if (ur_legal_moves(&game, player, roll, pieces) == 0) {
+        draw_all(roll, "Computer has no move. Press a key.");
+        cgetc();
+        ur_advance_turn(&game, (const ur_move_result *)0);
+        return false;
+    }
+
+    pick = ur_ai_pick(&game, player, roll);
+    pos  = game.piece[player][(unsigned char)pick];
+    dest = (unsigned char)(pos + roll);
+    ur_apply_move(&game, player, (unsigned char)pick, roll, &res);
+
+    draw_all(roll, "Computer moved:");
+    gotoxy(0, 17);
+    if (pos == UR_POS_START)
+        cprintf("CPU: enter -> %u", dest);
+    else
+        cprintf("CPU: %u -> %u", pos, dest);
+    if (res.captured)      cprintf("  capture!");
+    else if (res.scored)   cprintf("  home!");
+    else if (res.rosette)  cprintf("  rosette!");
+    cputsxy(0, 19, "Press a key.");
+    cgetc();
+
+    if (res.won) {
+        draw_all(NO_ROLL, win_msg(player));
+        cgetc();
+        return true;
+    }
+    ur_advance_turn(&game, &res);
+    return false;
+}
+
+/* A human takes a full turn for `player`. Returns true if the game is over. */
+static bool human_turn(unsigned char player)
 {
     unsigned char pieces[UR_PIECES], srcs[UR_PIECES];
-    unsigned char player, roll, count, nsrc, picked, i, j, pos, dest;
+    unsigned char roll, count, nsrc, picked, i, j, pos, dest;
     bool seen;
     char key;
     ur_move_result res;
 
+    draw_all(NO_ROLL, "Press any key to roll...");
+    cgetc();
+    roll = ur_dice_roll();
+
+    count = ur_legal_moves(&game, player, roll, pieces);
+    if (count == 0) {
+        draw_all(roll, "No legal move. Press a key.");
+        cgetc();
+        ur_advance_turn(&game, (const ur_move_result *)0);
+        return false;
+    }
+
+    /* collapse identical source squares into one menu entry */
+    nsrc = 0;
+    for (i = 0; i < count; i++) {
+        pos = game.piece[player][pieces[i]];
+        seen = false;
+        for (j = 0; j < nsrc; j++)
+            if (srcs[j] == pos) { seen = true; break; }
+        if (!seen)
+            srcs[nsrc++] = pos;
+    }
+
+    draw_all(roll, "Choose a move:");
+    for (i = 0; i < nsrc; i++) {
+        dest = (unsigned char)(srcs[i] + roll);
+        gotoxy(0, (unsigned char)(17 + i));
+        if (srcs[i] == UR_POS_START)
+            cprintf("%u) enter -> %u", i + 1, dest);
+        else
+            cprintf("%u) %u -> %u", i + 1, srcs[i], dest);
+        if (dest == UR_POS_HOME)
+            cprintf(" (home)");
+        else if (ur_is_rosette(dest))
+            cprintf(" (rosette)");
+        else if (ur_is_shared(dest) && opp_on(player, dest))
+            cprintf(" (capture)");
+    }
+
+    do {
+        key = cgetc();
+    } while (key < '1' || key >= (char)('1' + nsrc));
+
+    pos = srcs[key - '1'];
+    picked = pieces[0];
+    for (i = 0; i < count; i++)
+        if (game.piece[player][pieces[i]] == pos) { picked = pieces[i]; break; }
+
+    ur_apply_move(&game, player, picked, roll, &res);
+
+    if (res.won) {
+        draw_all(NO_ROLL, win_msg(player));
+        cgetc();
+        return true;
+    }
+    if (res.captured || res.rosette) {
+        draw_all(NO_ROLL, res.captured ? "Capture!  Press a key."
+                                       : "Rosette - roll again! Press a key.");
+        cgetc();
+    }
+    ur_advance_turn(&game, &res);
+    return false;
+}
+
+int main(void)
+{
+    bool ai[UR_NUM_PLAYERS];
+    char key;
+
     seed_rng();
+
+    /* mode select */
+    clrscr();
+    cputsxy(0, 0, "The Royal Game of Ur");
+    cputsxy(0, 3, "1) Two players (hot-seat)");
+    cputsxy(0, 4, "2) One player vs computer");
+    cputsxy(0, 6, "Select (1/2):");
+    do {
+        key = cgetc();
+    } while (key != '1' && key != '2');
+    ai[0] = false;              /* you are Light */
+    ai[1] = (key == '2');       /* Dark is the computer in mode 2 */
+
     ur_init(&game);
 
     for (;;) {
-        player = game.turn;
-
-        draw_all(NO_ROLL, "Press any key to roll...");
-        cgetc();
-        roll = ur_dice_roll();
-
-        count = ur_legal_moves(&game, player, roll, pieces);
-        if (count == 0) {
-            draw_all(roll, "No legal move. Press a key.");
-            cgetc();
-            ur_advance_turn(&game, (const ur_move_result *)0);
-            continue;
-        }
-
-        /* collapse identical source squares into one menu entry */
-        nsrc = 0;
-        for (i = 0; i < count; i++) {
-            pos = game.piece[player][pieces[i]];
-            seen = false;
-            for (j = 0; j < nsrc; j++)
-                if (srcs[j] == pos) { seen = true; break; }
-            if (!seen)
-                srcs[nsrc++] = pos;
-        }
-
-        draw_all(roll, "Choose a move:");
-        for (i = 0; i < nsrc; i++) {
-            dest = (unsigned char)(srcs[i] + roll);
-            gotoxy(0, (unsigned char)(17 + i));
-            if (srcs[i] == UR_POS_START)
-                cprintf("%u) enter -> %u", i + 1, dest);
-            else
-                cprintf("%u) %u -> %u", i + 1, srcs[i], dest);
-            if (dest == UR_POS_HOME)
-                cprintf(" (home)");
-            else if (ur_is_rosette(dest))
-                cprintf(" (rosette)");
-            else if (ur_is_shared(dest) && opp_on(player, dest))
-                cprintf(" (capture)");
-        }
-
-        do {
-            key = cgetc();
-        } while (key < '1' || key >= (char)('1' + nsrc));
-
-        /* pick any legal piece sitting on the chosen source square */
-        pos = srcs[key - '1'];
-        picked = pieces[0];
-        for (i = 0; i < count; i++)
-            if (game.piece[player][pieces[i]] == pos) { picked = pieces[i]; break; }
-
-        ur_apply_move(&game, player, picked, roll, &res);
-
-        if (res.won) {
-            draw_all(NO_ROLL, player ? "Dark (X) wins!  Press a key."
-                                     : "Light (O) wins!  Press a key.");
-            cgetc();
+        unsigned char player = game.turn;
+        bool over = ai[player] ? computer_turn(player) : human_turn(player);
+        if (over)
             break;
-        }
-        if (res.captured || res.rosette) {
-            draw_all(NO_ROLL, res.captured ? "Capture!  Press a key."
-                                           : "Rosette - roll again! Press a key.");
-            cgetc();
-        }
-        ur_advance_turn(&game, &res);
     }
-
     return 0;
 }
