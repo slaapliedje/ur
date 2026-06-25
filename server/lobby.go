@@ -60,19 +60,22 @@ func lobbyPayload(cur int, online bool) GameServer {
 	if online {
 		status = "online"
 	}
+	// Only advertise a client whose download URL is set — the lobby validates
+	// clients[].url as a real URL, so an empty entry would reject the whole POST.
+	clients := []GameClient{}
+	if u := os.Getenv("UR_CLIENT_ATARI"); u != "" {
+		clients = append(clients, GameClient{Platform: "atari", Url: u})
+	}
 	return GameServer{
 		Game:       "Royal Game of Ur",
-		Appkey:     appkey, // TODO: a real appkey assigned by the FujiNet project
+		Appkey:     appkey, // project-assigned id (UR_APPKEY); 0 is invalid
 		Server:     envOr("UR_SERVER_NAME", "ur-1"),
 		Region:     envOr("UR_REGION", "us"),
 		Serverurl:  envOr("UR_SERVER_URL", "tcp://localhost:1234/"),
 		Status:     status,
 		Maxplayers: 2,
 		Curplayers: cur,
-		Clients: []GameClient{
-			// TODO: host the client binaries on a TNFS server and list them here.
-			{Platform: "atari", Url: envOr("UR_CLIENT_ATARI", "")},
-		},
+		Clients:    clients,
 	}
 }
 
@@ -117,6 +120,9 @@ func startLobby() {
 	if !lobbyEnabled {
 		log.Printf("lobby registration disabled (set UR_LOBBY=1 to enable)")
 		return
+	}
+	if ak, _ := strconv.Atoi(envOr("UR_APPKEY", "0")); ak < 1 || ak > 255 {
+		log.Printf("WARNING: UR_APPKEY=%d invalid (need 1-255, assigned by the FujiNet project); the lobby will reject registration", ak)
 	}
 	log.Printf("registering with lobby at %s", lobbyURL)
 	updateLobby() // initial: online, 0 players
