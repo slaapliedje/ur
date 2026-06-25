@@ -1,12 +1,12 @@
 # Royal Game of Ur — game server image (build context = this server/ dir):
 #   docker build -t ur-server server/
 #   docker run -d --name ur -p 1234:1234 -p 8080:8080 -v ur-data:/data ur-server
-FROM golang:1.22-alpine AS build
+FROM docker.io/library/golang:1.22-alpine AS build
 WORKDIR /src
 COPY . .
 RUN CGO_ENABLED=0 go build -trimpath -o /ur-server .
 
-FROM alpine:3.20
+FROM docker.io/library/alpine:3.20
 RUN adduser -D -u 10001 ur
 COPY --from=build /ur-server /usr/local/bin/ur-server
 USER ur
