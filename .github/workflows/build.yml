@@ -29,6 +29,9 @@ jobs:
       - name: Host unit tests (src/common)
         run: docker run --rm -v "$PWD":/src ur-dev make test
 
+      - name: Core compiles on both toolchains (cc65 + z88dk)
+        run: docker run --rm -v "$PWD":/src ur-dev make core-check
+
       - name: Build all platforms
         run: docker run --rm -v "$PWD":/src ur-dev make all
 

@@ -1,11 +1,9 @@
 # Rules of the Royal Game of Ur (Finkel ruleset)
 
-> **Verification note.** This document captures the rules we implement. The
-> high-level rules below are well established. **Before encoding the board path
-> and rosette positions as lookup tables in [`src/common`](../src/common/CLAUDE.md),
-> verify the exact square indexing against authoritative sources** — small
-> differences in path direction and rosette placement exist between sources, and
-> the code must match one chosen convention exactly. Primary sources:
+> **Status.** The standard Finkel layout below is now **encoded and tested** in
+> [`src/common/ur.c`](../src/common/ur.c) (see [`tests/test_ur.c`](../tests/test_ur.c)):
+> a 14-step path, rosettes at steps 4/8/14, shared middle = steps 5–12, exact
+> bear-off at 15. Verified against:
 > - https://royalur.net/rules
 > - https://en.wikipedia.org/wiki/Royal_Game_of_Ur
 > - Irving Finkel / British Museum materials
@@ -60,8 +58,7 @@ There are **5 rosette squares**. In the standard Finkel/RoyalUr layout they fall
 each player's path at **steps 4, 8, and 14** (the 4th square of the private entry
 block, the central shared square, and the final private square before bearing off).
 This yields 5 distinct board squares: 2 private to each player + 1 shared center.
-
-> ⚠️ Confirm these exact step indices against the sources above before encoding.
+These indices are what `ur_is_rosette()` encodes (steps 4, 8, 14).
 
 A piece that lands on a rosette:
 

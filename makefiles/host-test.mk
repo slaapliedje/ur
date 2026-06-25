@@ -4,7 +4,7 @@
 HOST_CC   ?= cc
 TEST_DIR  := tests
 TEST_OUT  := $(BUILD_DIR)/host-test
-TEST_SRCS := $(wildcard $(TEST_DIR)/*.c) $(COMMON_SOURCES)
+TEST_SRCS := $(wildcard $(TEST_DIR)/*.c) $(wildcard $(COMMON_DIR)/*.c)
 
 .PHONY: test
 test: | $(TEST_OUT) ## Build & run host unit tests for src/common

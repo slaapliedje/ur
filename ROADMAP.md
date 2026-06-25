@@ -25,13 +25,13 @@ committable state.
       config; compiles + links in CI. **Run it in MAME (`adam`) / ADAMEm to confirm.**
 
 ## Phase 2 — Portable core (`src/common`)
-- [ ] Verify the exact board path & rosette indices against sources (see [`docs/rules.md`](docs/rules.md)).
-- [ ] Board model + path tables; piece/game-state structs.
-- [ ] Dice (RNG + binary-tetrahedral roll), move generation/validation.
-- [ ] Rules: capture, rosette (extra roll + safety), exact bear-off, win.
-- [ ] Turn state machine; AI opponent (heuristic + lookahead).
+- [x] Verify the exact board path & rosette indices against sources (see [`docs/rules.md`](docs/rules.md)).
+- [x] Board model + path positions; piece/game-state structs (`ur_state`).
+- [x] Dice (RNG + binary-tetrahedral roll), move generation/validation.
+- [x] Rules: capture, rosette (extra roll + safety), exact bear-off, win.
+- [x] Host unit tests (`make test`) + core compiles on both toolchains (`make core-check`).
+- [ ] AI opponent (heuristic + short expectimax over the dice distribution).
 - [ ] Protocol codec (encode/decode) per [`docs/protocol.md`](docs/protocol.md).
-- [ ] Host unit tests covering all of the above (incl. protocol round-trip).
 
 ## Phase 3 — Atari single-player
 - [ ] Implement `plat_*` for Atari: board/piece/dice rendering, input, sound.
