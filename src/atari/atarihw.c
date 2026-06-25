@@ -9,10 +9,16 @@
 #define AUDCTL (*(volatile unsigned char *)0xD208)   /* audio control         */
 #define WSYNC  (*(volatile unsigned char *)0xD40A)   /* wait for horiz. sync  */
 
-/* OS colour shadow registers (copied to the hardware each vertical blank). */
-#define COLOR1 (*(volatile unsigned char *)0x02C5)   /* GR.0 text luminance   */
-#define COLOR2 (*(volatile unsigned char *)0x02C6)   /* GR.0 background        */
-#define COLOR4 (*(volatile unsigned char *)0x02C8)   /* border                 */
+/* OS colour shadow registers (copied to the hardware each vertical blank).
+ * Shared by the mode-2 text rows and the mode-4 board rows:
+ *   mode 2 text:  bg = COLOR2, text luminance = COLOR1
+ *   mode 4 board: 00->COLOR4, 01->COLOR0, 10->COLOR1, 11->COLOR2 (COLOR3 if inverse)
+ */
+#define COLOR0 (*(volatile unsigned char *)0x02C4)   /* light pieces ("01")     */
+#define COLOR1 (*(volatile unsigned char *)0x02C5)   /* dark pieces ("10") + text */
+#define COLOR2 (*(volatile unsigned char *)0x02C6)   /* text bg + cell lines ("11") */
+#define COLOR3 (*(volatile unsigned char *)0x02C7)   /* rosette ("11" inverse)  */
+#define COLOR4 (*(volatile unsigned char *)0x02C8)   /* board bg + border        */
 
 #define PURE_TONE  0xA0   /* distortion bits for a clean tone (OR in volume 0-15) */
 #define BUZZ_TONE  0x40   /* buzzy distortion (for capture)                       */
@@ -46,9 +52,11 @@ static void buzz(unsigned char pitch, unsigned char vol, unsigned int lines)
 
 void atari_setup_colors(void)
 {
-    COLOR2 = 0x92;   /* background: blue                */
-    COLOR1 = 0x0C;   /* text: bright (luminance)        */
-    COLOR4 = 0x00;   /* border: black                   */
+    COLOR0 = 0x0E;   /* white  -> Light pieces            */
+    COLOR1 = 0xCA;   /* green  -> Dark pieces + text      */
+    COLOR2 = 0x92;   /* blue   -> text bg + cell outlines */
+    COLOR3 = 0x28;   /* orange -> rosettes                */
+    COLOR4 = 0x00;   /* black  -> board bg + border       */
 }
 
 /* ---- custom character set ----------------------------------------------- *
@@ -57,14 +65,16 @@ void atari_setup_colors(void)
  * board are changed, so all normal text still uses the standard glyphs.
  * Glyph bytes are 8 rows, top first, MSB = leftmost pixel.
  *
- * Internal (screen) codes of the characters we redefine:
- *   '+' -> 0x0B  (empty board cell)   '*' -> 0x0A  (rosette)
- *   'O' -> 0x2F  (light piece)        'X' -> 0x38  (dark piece)
+ * Glyphs are ANTIC mode-4 encoded: 4 colour-pixels wide, 2 bits each
+ * (00=bg, 01=COLOR0, 10=COLOR1, 11=COLOR2/COLOR3-if-inverse), 8 rows tall.
+ * Internal (screen) codes of the characters we redefine (board rows only):
+ *   '+' -> 0x0B  empty cell  ("11" outline)   '*' -> 0x0A  rosette ("11", drawn inverse)
+ *   '#' -> 0x03  light piece ("01")           '@' -> 0x20  dark piece  ("10")
  */
-static const unsigned char g_tile[8]    = {0x00,0x7E,0x42,0x42,0x42,0x42,0x7E,0x00};
-static const unsigned char g_rosette[8] = {0x18,0x5A,0x3C,0xFF,0xFF,0x3C,0x5A,0x18};
-static const unsigned char g_light[8]   = {0x3C,0x7E,0xFF,0xFF,0xFF,0xFF,0x7E,0x3C};
-static const unsigned char g_dark[8]    = {0x18,0x3C,0x7E,0xFF,0xFF,0x7E,0x3C,0x18};
+static const unsigned char g_tile[8]    = {0xFF,0xC3,0xC3,0xC3,0xC3,0xFF,0x00,0x00};
+static const unsigned char g_rosette[8] = {0x3C,0xFF,0xFF,0xFF,0xFF,0x3C,0x00,0x00};
+static const unsigned char g_light[8]   = {0x14,0x55,0x55,0x55,0x55,0x14,0x00,0x00};
+static const unsigned char g_dark[8]    = {0x28,0xAA,0xAA,0xAA,0xAA,0x28,0x00,0x00};
 
 /* Over-allocated so we can align the active 1 KB to a $400 boundary at run time. */
 static unsigned char font_ram[1024 + 1024];
@@ -87,12 +97,24 @@ void atari_setup_charset(void)
     for (i = 0; i < 1024; i++)
         font[i] = rom[i];
 
-    put_glyph(font, 0x0B, g_tile);
-    put_glyph(font, 0x0A, g_rosette);
-    put_glyph(font, 0x2F, g_light);
-    put_glyph(font, 0x38, g_dark);
+    put_glyph(font, 0x0B, g_tile);     /* '+' */
+    put_glyph(font, 0x0A, g_rosette);  /* '*' */
+    put_glyph(font, 0x03, g_light);    /* '#' */
+    put_glyph(font, 0x20, g_dark);     /* '@' */
 
     *(volatile unsigned char *)0x02F4 = (unsigned char)(base >> 8);  /* CHBAS */
+}
+
+/* Switch the board's character rows to ANTIC mode 4 (multicolour) by patching the
+ * OS display list in place. Standard GR.0 DL: 3x$70 (blank), $42+addr (char row 0),
+ * then 23x$02 (char rows 1..23), $41+addr. Char row R lives at dl[5 + R], so we
+ * set the board rows (6..10) to $04. Text rows stay mode 2. */
+void atari_mode4_board(void)
+{
+    unsigned char *dl = *(unsigned char **)0x0230;   /* SDLSTL / SDLSTH */
+    unsigned char r;
+    for (r = 6; r <= 10; r++)
+        dl[5 + r] = 0x04;
 }
 
 /* ---- player-missile graphics (highlight cursor) ------------------------- *

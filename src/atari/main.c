@@ -23,8 +23,8 @@
 #define BOARD_X  8
 #define BOARD_Y  6
 
-#define LIGHT_CH 'O'
-#define DARK_CH  'X'
+#define LIGHT_CH '#'   /* board glyph: mode-4 light piece (white) */
+#define DARK_CH  '@'   /* board glyph: mode-4 dark piece (green)  */
 #define NO_ROLL  0xFF
 
 static ur_state game;
@@ -89,22 +89,29 @@ static void draw_all(unsigned char roll, const char *msg)
         }
 
     for (r = 0; r < 3; r++)
-        for (c = 1; c <= 8; c++)
-            if (grid[r][c] != ' ')
-                cputcxy(cellx(c), celly(r), grid[r][c]);   /* custom glyphs */
+        for (c = 1; c <= 8; c++) {
+            char ch = grid[r][c];
+            if (ch == ' ')
+                continue;
+            if (ch == '*')
+                revers(1);          /* rosette -> COLOR3 (orange) in mode 4 */
+            cputcxy(cellx(c), celly(r), ch);
+            if (ch == '*')
+                revers(0);
+        }
 
     gotoxy(0, 2);
-    cprintf("Turn: %s", game.turn ? "Dark (X)" : "Light (O)");
+    cprintf("Turn: %s", game.turn ? "Dark (green)" : "Light (white)");
     if (roll != NO_ROLL) {
         gotoxy(22, 2);
         cprintf("Roll: %u", roll);
     }
 
     gotoxy(0, 13);
-    cprintf("Light O  start:%u home:%u",
+    cprintf("Light  start:%u home:%u",
             count_at(0, UR_POS_START), ur_score(&game, 0));
     gotoxy(0, 14);
-    cprintf("Dark  X  start:%u home:%u",
+    cprintf("Dark   start:%u home:%u",
             count_at(1, UR_POS_START), ur_score(&game, 1));
 
     if (msg && msg[0])
@@ -334,6 +341,7 @@ int main(void)
 
     atari_setup_colors();
     atari_setup_charset();
+    atari_mode4_board();
     atari_pmg_init();
     ur_init(&game);
 

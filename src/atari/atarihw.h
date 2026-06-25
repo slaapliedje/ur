@@ -7,8 +7,9 @@
 #ifndef ATARIHW_H
 #define ATARIHW_H
 
-void atari_setup_colors(void);   /* set GR.0 background / text / border colours */
+void atari_setup_colors(void);   /* set the playfield colour registers          */
 void atari_setup_charset(void);  /* install a custom font: board tiles + pieces */
+void atari_mode4_board(void);    /* switch the board rows to ANTIC mode 4 (colour) */
 
 /* Player-missile graphics: a highlight box (player 0) over a board cell. */
 void atari_pmg_init(void);
