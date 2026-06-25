@@ -16,8 +16,8 @@
 *.prg
 *.bin
 
-# Vendored / fetched dependencies (fetch via build tooling)
-/lib/fujinet-lib/
+# Vendored / fetched dependencies (fetched/built via build tooling)
+/lib/
 /vendor/
 
 # Compiled Go game server
