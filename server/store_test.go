@@ -12,7 +12,8 @@ func TestCleanName(t *testing.T) {
 		{"abc", "ABC"},
 		{"Z  ", "Z"},
 		{"   ", ""},
-		{"A1B", "A B"}, // non-letter -> space (kept internally)
+		{"AB3Z", "AB3Z"}, // digits kept
+		{"A!B", "A B"},   // punctuation -> space (kept internally)
 	}
 	for _, tc := range tests {
 		if got := cleanName([]byte(tc.in)); got != tc.want {

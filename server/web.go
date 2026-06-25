@@ -57,15 +57,16 @@ func startHTTP(store *Store) {
 //	then N records  : name[3] (space-padded) + wins (uint16, little-endian)
 func compactTop(w http.ResponseWriter, store *Store) {
 	list := store.top(topN)
-	buf := make([]byte, 0, 1+len(list)*5)
+	buf := make([]byte, 0, 1+len(list)*(NameLen+2))
 	buf = append(buf, byte(len(list)))
 	for _, p := range list {
-		nm := fmt.Sprintf("%-3.3s", p.Name) // pad/truncate to exactly 3
+		nm := fmt.Sprintf("%-*.*s", NameLen, NameLen, p.Name) // pad/truncate to NameLen
+		buf = append(buf, []byte(nm)...)
 		wins := p.Wins
 		if wins > 0xFFFF {
 			wins = 0xFFFF
 		}
-		buf = append(buf, nm[0], nm[1], nm[2], byte(wins&0xFF), byte(wins>>8))
+		buf = append(buf, byte(wins&0xFF), byte(wins>>8))
 	}
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Header().Set("Content-Length", strconv.Itoa(len(buf)))

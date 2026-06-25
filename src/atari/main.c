@@ -57,7 +57,7 @@
 
 static ur_state game;
 
-static char     g_name[4] = "";  /* 3 initials + NUL; empty = not set yet  */
+static char     g_name[UR_NAME_LEN + 1] = "";  /* player name + NUL; empty = unset */
 static uint16_t g_wins    = 0;   /* games won vs the computer (persisted)  */
 static char     g_host[33] = UR_DEFAULT_HOST;  /* server host/IP (<=32, persisted) */
 static char     g_net_url[64];   /* built: N:TCP://<host>:1234/            */
@@ -395,7 +395,9 @@ static void show_result(const char *banner)
 
 /* ---- online mode (FujiNet N:TCP, server-authoritative) ------------------ */
 
-static bool read_state(ur_snapshot *snap)
+/* Poll for the next STATE. 1 = got one, 0 = disconnected/error, -1 = the player
+ * pressed a key (cancel back to the menu). */
+static int8_t read_state(ur_snapshot *snap)
 {
     uint8_t  buf[UR_STATE_MSG_LEN];
     uint16_t bw;
@@ -403,18 +405,19 @@ static bool read_state(ur_snapshot *snap)
     int16_t  n;
 
     for (;;) {
+        if (kbhit()) { cgetc(); return -1; }       /* let the player bail out */
         if (network_status(g_net_url, &bw, &conn, &err) != FN_ERR_OK)
-            return false;
+            return 0;
         if (bw >= UR_STATE_MSG_LEN)
             break;
         if (conn == 0)
-            return false;
+            return 0;
         atari_wait_frames(3);          /* ~20 polls/s: gentle on NetSIO */
     }
     n = network_read(g_net_url, buf, UR_STATE_MSG_LEN);
     if (n < (int16_t)UR_STATE_MSG_LEN)
-        return false;
-    return ur_proto_decode_state(buf, (uint8_t)n, snap);
+        return 0;
+    return ur_proto_decode_state(buf, (uint8_t)n, snap) ? 1 : 0;
 }
 
 static void show_seat(const ur_snapshot *snap)
@@ -426,7 +429,7 @@ static void show_seat(const ur_snapshot *snap)
 static void online_game(void)
 {
     ur_snapshot snap;
-    uint8_t cmd[6];             /* JOIN is 5 bytes (type, version, 3-char name) */
+    uint8_t cmd[2 + UR_NAME_LEN + 2];  /* JOIN is type+version+name */
     int8_t picked;
 
     if (network_init() != FN_ERR_OK) {
@@ -437,9 +440,20 @@ static void online_game(void)
     }
     network_write(g_net_url, cmd, ur_proto_join(cmd, g_name));
 
+    /* waiting screen until the first STATE arrives (opponent or server AI) */
+    clrscr();
+    cputsxy(0, 0, "The Royal Game of Ur");
+    center(2, "Connecting to");
+    center(3, g_host);
+    center(20, "Waiting for an opponent...");
+    center(21, "(a computer may join if no one does)");
+    center(23, "Press a key to cancel");
+
     for (;;) {
-        if (!read_state(&snap)) {
-            draw_all(NO_ROLL, "Disconnected. FIRE/key."); wait_action(); break;
+        int8_t rc = read_state(&snap);
+        if (rc <= 0) {                 /* 0 = disconnected, -1 = cancelled */
+            if (rc == 0) { draw_all(NO_ROLL, "Disconnected. FIRE/key."); wait_action(); }
+            break;
         }
         game = snap.state;
         if (snap.flags & UR_FLAG_CAPTURED)      sfx_capture();
@@ -472,8 +486,6 @@ static void online_game(void)
 }
 
 /* ---- persistent player profile (FujiNet AppKey) ------------------------- */
-
-static const char NAME_ALPH[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ ";   /* 27 chars */
 
 static char *url_append(char *d, const char *s)
 {
@@ -508,22 +520,27 @@ static bool profile_load(void)
 {
     uint8_t  buf[MAX_APPKEY_LEN + 2];
     uint16_t cnt = 0;
-    unsigned char i;
+    unsigned char i, n;
 
     fuji_set_appkey_details(UR_CREATOR_ID, UR_APP_ID, DEFAULT);
-    if (!fuji_read_appkey(UR_KEY_PROFILE, &cnt, buf) || cnt < 5)
+    if (!fuji_read_appkey(UR_KEY_PROFILE, &cnt, buf) || cnt < UR_NAME_LEN + 2)
         return false;
-    for (i = 0; i < 3; i++)
-        g_name[i] = (buf[i] >= 'A' && buf[i] <= 'Z') ? (char)buf[i] : ' ';
-    g_name[3] = 0;
-    if (g_name[0] == ' ' && g_name[1] == ' ' && g_name[2] == ' ')
-        g_name[0] = 0;                       /* all-blank == unset */
-    g_wins = (uint16_t)(buf[3] | ((uint16_t)buf[4] << 8));
-    if (cnt >= 6) {                          /* optional host string follows */
-        unsigned char hl = buf[5];
-        if (hl > 0 && hl <= 32 && (uint16_t)(6 + hl) <= cnt) {
+    /* layout: name[UR_NAME_LEN] (NUL-padded), wins (2), hostlen (1), host[] */
+    n = 0;
+    for (i = 0; i < UR_NAME_LEN; i++) {
+        char ch = (char)buf[i];
+        if (ch == 0) break;
+        if ((ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == ' ')
+            g_name[n++] = ch;
+    }
+    while (n > 0 && g_name[n - 1] == ' ') n--;   /* trim trailing spaces */
+    g_name[n] = 0;
+    g_wins = (uint16_t)(buf[UR_NAME_LEN] | ((uint16_t)buf[UR_NAME_LEN + 1] << 8));
+    if (cnt >= UR_NAME_LEN + 3) {                /* optional host string follows */
+        unsigned char hl = buf[UR_NAME_LEN + 2];
+        if (hl > 0 && hl <= 32 && (uint16_t)(UR_NAME_LEN + 3 + hl) <= cnt) {
             for (i = 0; i < hl; i++)
-                g_host[i] = (char)buf[6 + i];
+                g_host[i] = (char)buf[UR_NAME_LEN + 3 + i];
             g_host[hl] = 0;
         }
     }
@@ -533,20 +550,20 @@ static bool profile_load(void)
 /* Persist name + win count. Silently no-ops if no FujiNet is attached. */
 static void profile_save(void)
 {
-    uint8_t buf[40];
-    unsigned char hl = 0, i;
-    buf[0] = (uint8_t)(g_name[0] ? g_name[0] : ' ');
-    buf[1] = (uint8_t)(g_name[0] ? g_name[1] : ' ');
-    buf[2] = (uint8_t)(g_name[0] ? g_name[2] : ' ');
-    buf[3] = (uint8_t)(g_wins & 0xFF);
-    buf[4] = (uint8_t)(g_wins >> 8);
+    uint8_t buf[UR_NAME_LEN + 3 + 32];
+    unsigned char hl = 0, nl = 0, i;
+    while (g_name[nl] && nl < UR_NAME_LEN) nl++;
+    for (i = 0; i < UR_NAME_LEN; i++)        /* name, NUL-padded */
+        buf[i] = (i < nl) ? (uint8_t)g_name[i] : 0;
+    buf[UR_NAME_LEN]     = (uint8_t)(g_wins & 0xFF);
+    buf[UR_NAME_LEN + 1] = (uint8_t)(g_wins >> 8);
     while (g_host[hl] && hl < 32)            /* append the configured host */
         hl++;
-    buf[5] = hl;
+    buf[UR_NAME_LEN + 2] = hl;
     for (i = 0; i < hl; i++)
-        buf[6 + i] = (uint8_t)g_host[i];
+        buf[UR_NAME_LEN + 3 + i] = (uint8_t)g_host[i];
     fuji_set_appkey_details(UR_CREATOR_ID, UR_APP_ID, DEFAULT);
-    fuji_write_appkey(UR_KEY_PROFILE, (uint16_t)(6 + hl), buf);
+    fuji_write_appkey(UR_KEY_PROFILE, (uint16_t)(UR_NAME_LEN + 3 + hl), buf);
 }
 
 /* If the FujiNet lobby launched us, it left the chosen server's URL in its
@@ -582,64 +599,48 @@ static bool lobby_host_from_appkey(void)
     return true;
 }
 
-static void draw_initials(const unsigned char *idx, unsigned char slot)
-{
-    unsigned char i;
-    for (i = 0; i < 3; i++) {
-        if (i == slot) revers(1);
-        cputcxy((unsigned char)(18 + i * 2), 11, NAME_ALPH[idx[i]]);
-        if (i == slot) revers(0);
-    }
-}
-
-/* Arcade-style 3-initial entry on the joystick; saves to the appkey on finish. */
+/* Keyboard entry of the player name (up to UR_NAME_LEN chars: A-Z/0-9/space),
+ * saved to the profile appkey. Letters are upper-cased. */
 static void enter_name(void)
 {
-    unsigned char idx[3], slot, s, centered, i;
+    char tmp[UR_NAME_LEN + 1];
+    unsigned char len = 0, k;
     char c;
+
+    while (g_name[len] && len < UR_NAME_LEN) { tmp[len] = g_name[len]; len++; }
+    tmp[len] = 0;
 
     atari_text_mode();
     clrscr();
-    revers(1); cputsxy(9, 2, " ENTER YOUR INITIALS "); revers(0);
-    cputsxy(3, 6,  "Stick up/down: change letter");
-    cputsxy(3, 7,  "Stick left/right: move");
-    cputsxy(3, 8,  "FIRE: set (on the 3rd = done)");
-    cputsxy(3, 20, "(needs FujiNet to be remembered)");
-
-    for (i = 0; i < 3; i++) {
-        c = (g_name[0] && g_name[i] >= 'A' && g_name[i] <= 'Z') ? g_name[i] : 'A';
-        idx[i] = (unsigned char)(c - 'A');
-    }
-    slot = 0; centered = 1;
-    draw_initials(idx, slot);
-    while (atari_trig()) { }
+    revers(1); cputsxy(12, 2, " SET YOUR NAME "); revers(0);
+    cputsxy(2, 5,  "Type a name (letters/digits),");
+    cputsxy(2, 6,  "then press RETURN.  DELETE = back.");
+    cputsxy(2, 8,  "Up to 8 chars; shown on the");
+    cputsxy(2, 9,  "leaderboard. (needs FujiNet to save)");
+    cputsxy(2, 12, "Name:");
 
     for (;;) {
-        if (atari_trig()) {
-            while (atari_trig()) { }
-            if (slot == 2) break;
-            slot++;
-            draw_initials(idx, slot);
-            continue;
-        }
-        s = atari_stick();
-        if ((s & 0x0F) == 0x0F) {
-            centered = 1;
-        } else if (centered) {
-            if (!(s & 0x01))      idx[slot] = (unsigned char)((idx[slot] + 1)  % 27);  /* up   */
-            else if (!(s & 0x02)) idx[slot] = (unsigned char)((idx[slot] + 26) % 27);  /* down */
-            else if (!(s & 0x08)) { if (slot < 2) slot++; }                            /* right */
-            else if (!(s & 0x04)) { if (slot > 0) slot--; }                            /* left  */
-            draw_initials(idx, slot);
-            centered = 0;
+        gotoxy(2, 14);
+        cputs(tmp);
+        cputc('_');
+        for (k = len; k < UR_NAME_LEN + 2; k++)        /* clear leftovers */
+            cputc(' ');
+        c = cgetc();
+        if (c == 0x9B || c == '\n' || c == '\r')
+            break;
+        if ((c == 0x7E || c == 0x08) && len > 0) {
+            len--; tmp[len] = 0;
+        } else if (len < UR_NAME_LEN) {
+            if (c >= 'a' && c <= 'z') c = (char)(c - 32);   /* upper-case */
+            if ((c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == ' ') {
+                tmp[len++] = c; tmp[len] = 0;
+            }
         }
     }
 
-    for (i = 0; i < 3; i++)
-        g_name[i] = NAME_ALPH[idx[i]];
-    g_name[3] = 0;
-    if (g_name[0] == ' ' && g_name[1] == ' ' && g_name[2] == ' ')
-        g_name[0] = 0;
+    while (len > 0 && tmp[len - 1] == ' ') tmp[--len] = 0;   /* trim trailing */
+    for (k = 0; k <= len; k++)
+        g_name[k] = tmp[k];
     profile_save();
     atari_mode4_board();
 }
@@ -858,12 +859,12 @@ static void show_instructions(void)
  * 1 count byte then up to 10 records of name[3] + wins (uint16 LE). */
 static void show_leaderboard(void)
 {
-    uint8_t  buf[64];
+    uint8_t  buf[128];
     uint16_t bw;
     uint8_t  conn, err;
     int16_t  n = 0;
-    unsigned char count, i, base;
-    char name[4];
+    unsigned char count, i, j, base;
+    char name[UR_NAME_LEN + 1];
     uint16_t wins;
 
     atari_text_mode();
@@ -897,18 +898,17 @@ static void show_leaderboard(void)
         cputsxy(2, 4, "No games recorded yet.");
     } else {
         count = buf[0];
-        cputsxy(3, 2, "#   NAME   WINS");
+        cputsxy(3, 2, "#   NAME       WINS");
         for (i = 0; i < count; i++) {
-            base = (unsigned char)(1 + i * 5);
-            if ((int16_t)(base + 5) > n)
+            base = (unsigned char)(1 + i * (UR_NAME_LEN + 2));
+            if ((int16_t)(base + UR_NAME_LEN + 2) > n)
                 break;
-            name[0] = (char)buf[base];
-            name[1] = (char)buf[base + 1];
-            name[2] = (char)buf[base + 2];
-            name[3] = 0;
-            wins = (uint16_t)(buf[base + 3] | ((uint16_t)buf[base + 4] << 8));
+            for (j = 0; j < UR_NAME_LEN; j++)
+                name[j] = (char)buf[base + j];
+            name[UR_NAME_LEN] = 0;
+            wins = (uint16_t)(buf[base + UR_NAME_LEN] | ((uint16_t)buf[base + UR_NAME_LEN + 1] << 8));
             gotoxy(3, (unsigned char)(4 + i));
-            cprintf("%-2u  %s    %u", i + 1, name, wins);
+            cprintf("%-2u  %-8s   %u", i + 1, name, wins);
         }
     }
     cputsxy(2, 23, "FIRE or a key to return");

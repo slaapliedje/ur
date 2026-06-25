@@ -26,7 +26,7 @@ const (
 const (
 	ProtoVersion = 1
 	StateMsgLen  = 21
-	NameLen      = 3 // JOIN carries a 3-char player name (bytes 2..4)
+	NameLen      = 8 // JOIN carries an 8-char player name (bytes 2..9)
 )
 
 // encodeState builds the 21-byte STATE snapshot for a given seat.

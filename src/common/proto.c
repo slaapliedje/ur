@@ -15,7 +15,8 @@ uint8_t ur_proto_join(uint8_t *buf, const char *name)
         ch = (name && !ended) ? name[i] : '\0';
         if (ch == '\0')
             ended = true;                       /* don't read past the terminator */
-        buf[2 + i] = (ch >= 'A' && ch <= 'Z') ? (uint8_t)ch : (uint8_t)' ';
+        buf[2 + i] = ((ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == ' ')
+                     ? (uint8_t)ch : (uint8_t)' ';
     }
     return (uint8_t)(2 + UR_NAME_LEN);
 }

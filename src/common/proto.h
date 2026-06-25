@@ -15,10 +15,10 @@
 #include "ur.h"
 
 #define UR_PROTO_VERSION 1
-#define UR_NAME_LEN 3        /* player initials carried in JOIN (A-Z, space-padded) */
+#define UR_NAME_LEN 8        /* player name carried in JOIN (A-Z/0-9, space-padded) */
 
 /* Message type bytes (byte 0 of every message). */
-#define UR_MSG_JOIN   0x01   /* client->server: join (byte1=version, byte2..4 = name) */
+#define UR_MSG_JOIN   0x01   /* client->server: join (byte1=version, byte2.. = name) */
 #define UR_MSG_ROLL   0x02   /* client->server: request a roll                       */
 #define UR_MSG_MOVE   0x03   /* client->server: move a piece  (byte1 = piece index) */
 #define UR_MSG_STATE  0x81   /* server->client: full state snapshot                 */

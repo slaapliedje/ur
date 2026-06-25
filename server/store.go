@@ -36,9 +36,9 @@ func cleanName(b []byte) string {
 	out := make([]byte, 0, len(b))
 	for _, c := range b {
 		if c >= 'a' && c <= 'z' {
-			c -= 32
+			c -= 32 // uppercase
 		}
-		if c >= 'A' && c <= 'Z' {
+		if (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == ' ' {
 			out = append(out, c)
 		} else {
 			out = append(out, ' ')
