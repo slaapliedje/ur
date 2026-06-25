@@ -33,11 +33,11 @@ func main() {
 	startHTTP(store)
 	startLobby()
 
-	// If a second human doesn't join within UR_AI_WAIT seconds (default 6), seat
+	// If a second human doesn't join within UR_AI_WAIT seconds (default 60), seat
 	// the computer so a lone player still gets a game. UR_AI_WAIT=off disables it
 	// (always wait for two humans).
 	aiEnabled := true
-	aiWait := 6 * time.Second
+	aiWait := 60 * time.Second
 	if v := os.Getenv("UR_AI_WAIT"); v != "" {
 		if v == "off" {
 			aiEnabled = false

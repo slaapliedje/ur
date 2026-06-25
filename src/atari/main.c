@@ -438,35 +438,68 @@ static void show_seat(const ur_snapshot *snap)
     cprintf("You: %s", snap->seat ? "Dark (green)" : "Light (white)");
 }
 
-static void online_game(void)
+/* Wait for the first STATE, counting down to the server's AI fallback. Returns
+ * 1 = got a snapshot, 0 = disconnected, -1 = the player pressed a key (wants to
+ * play the computer locally rather than keep waiting). */
+static int8_t online_wait(ur_snapshot *snap)
+{
+    uint8_t  buf[UR_STATE_MSG_LEN];
+    uint16_t bw;
+    uint8_t  conn, err;
+    int16_t  n;
+    unsigned char secs = 60, ticks = 0;
+
+    gotoxy(10, 21); cprintf("computer joins in %2u", secs);
+    for (;;) {
+        if (kbhit()) { cgetc(); return -1; }
+        if (network_status(g_net_url, &bw, &conn, &err) != FN_ERR_OK)
+            return 0;
+        if (bw >= UR_STATE_MSG_LEN) {
+            n = network_read(g_net_url, buf, UR_STATE_MSG_LEN);
+            return (n >= (int16_t)UR_STATE_MSG_LEN &&
+                    ur_proto_decode_state(buf, (uint8_t)n, snap)) ? 1 : 0;
+        }
+        if (conn == 0)
+            return 0;
+        atari_wait_frames(6);                 /* ~0.1s per poll */
+        if (++ticks >= 10) {                  /* ~1 second elapsed */
+            ticks = 0;
+            if (secs) secs--;
+            gotoxy(10, 21); cprintf("computer joins in %2u", secs);
+        }
+    }
+}
+
+/* Returns true if the player chose to bail out and play the computer locally. */
+static bool online_game(void)
 {
     ur_snapshot snap;
     uint8_t cmd[2 + UR_NAME_LEN + 2];  /* JOIN is type+version+name */
-    int8_t picked;
+    int8_t picked, rc;
 
     if (network_init() != FN_ERR_OK) {
-        draw_all(NO_ROLL, "network_init failed. FIRE/key."); wait_action(); return;
+        draw_all(NO_ROLL, "network_init failed. FIRE/key."); wait_action(); return false;
     }
     if (network_open(g_net_url, OPEN_MODE_RW, 0) != FN_ERR_OK) {
-        draw_all(NO_ROLL, "connect failed. FIRE/key."); wait_action(); return;
+        draw_all(NO_ROLL, "connect failed. FIRE/key."); wait_action(); return false;
     }
     network_write(g_net_url, cmd, ur_proto_join(cmd, g_name));
 
-    /* waiting screen until the first STATE arrives (opponent or server AI) */
     clrscr();
     cputsxy(0, 0, "The Royal Game of Ur");
     center(2, "Connecting to");
     center(3, g_host);
     center(20, "Waiting for an opponent...");
-    center(21, "(a computer may join if no one does)");
-    center(23, "Press a key to cancel");
+    center(23, "or press a key to play the computer");
+
+    rc = online_wait(&snap);
+    if (rc == -1) { network_close(g_net_url); return true; }   /* play computer locally */
+    if (rc == 0) {
+        draw_all(NO_ROLL, "Disconnected. FIRE/key."); wait_action();
+        network_close(g_net_url); return false;
+    }
 
     for (;;) {
-        int8_t rc = read_state(&snap);
-        if (rc <= 0) {                 /* 0 = disconnected, -1 = cancelled */
-            if (rc == 0) { draw_all(NO_ROLL, "Disconnected. FIRE/key."); wait_action(); }
-            break;
-        }
         game = snap.state;
         if (snap.flags & UR_FLAG_CAPTURED)      sfx_capture();
         else if (snap.flags & UR_FLAG_SCORED)   sfx_score();
@@ -479,22 +512,23 @@ static void online_game(void)
         if (snap.state.turn != snap.seat) {
             draw_all(snap.phase == UR_PHASE_MOVE ? snap.roll : NO_ROLL, "Opponent's turn...");
             show_seat(&snap);
-            continue;                          /* loop reads the next STATE */
-        }
-        if (snap.phase == UR_PHASE_ROLL) {
+        } else if (snap.phase == UR_PHASE_ROLL) {
             draw_all(NO_ROLL, "Your turn - FIRE/key to roll");
             show_seat(&snap);
             wait_action();
             sfx_roll();
             network_write(g_net_url, cmd, ur_proto_roll(cmd));
-            continue;
+        } else {
+            picked = choose_move(snap.seat, snap.roll);
+            if (picked >= 0)
+                network_write(g_net_url, cmd, ur_proto_move(cmd, (unsigned char)picked));
         }
-        /* your turn, choose a move (shared cursor chooser) */
-        picked = choose_move(snap.seat, snap.roll);
-        if (picked >= 0)
-            network_write(g_net_url, cmd, ur_proto_move(cmd, (unsigned char)picked));
+        rc = read_state(&snap);
+        if (rc == -1) break;                  /* player quit to the menu */
+        if (rc == 0) { draw_all(NO_ROLL, "Disconnected. FIRE/key."); wait_action(); break; }
     }
     network_close(g_net_url);
+    return false;
 }
 
 /* ---- persistent player profile (FujiNet AppKey) ------------------------- */
@@ -942,12 +976,34 @@ static void show_leaderboard(void)
     atari_mode4_board();
 }
 
-int main(void)
+/* Run a local game to completion and show the result. ai1 = player 1 (Dark) is
+ * the computer; otherwise hot-seat. */
+static void play_local(bool ai1)
 {
-    bool ai[UR_NUM_PLAYERS];
-    char key;
     unsigned char player;
     bool over;
+
+    ur_init(&game);
+    for (;;) {
+        player = game.turn;
+        over = (player == 1 && ai1) ? computer_turn(player) : human_turn(player);
+        if (over)
+            break;
+    }
+    if (ai1) {
+        if (player == 0) {              /* you beat the computer: record it */
+            g_wins++;
+            profile_save();
+        }
+        show_result(player == 0 ? " YOU WIN! " : " YOU LOSE ");
+    } else {
+        show_result(player == 0 ? " LIGHT (WHITE) WINS! " : " DARK (GREEN) WINS! ");
+    }
+}
+
+int main(void)
+{
+    char key;
 
     seed_rng();
 
@@ -971,31 +1027,11 @@ int main(void)
         } while (key == '4' || key == '5' || key == '6' || key == '7');
 
         if (key == '3') {
-            online_game();      /* shows its own result, then back to the menu */
+            if (online_game())  /* bailed out of waiting -> play the computer */
+                play_local(true);
             continue;
         }
-
-        ai[0] = false;          /* you are Light */
-        ai[1] = (key == '2');   /* Dark is the computer in mode 2 */
-
-        ur_init(&game);
-        for (;;) {
-            player = game.turn;
-            over = ai[player] ? computer_turn(player) : human_turn(player);
-            if (over)
-                break;
-        }
-
-        /* `player` is the winner */
-        if (ai[1]) {
-            if (player == 0) {          /* you beat the computer: record it */
-                g_wins++;
-                profile_save();
-            }
-            show_result(player == 0 ? " YOU WIN! " : " YOU LOSE ");
-        } else {
-            show_result(player == 0 ? " LIGHT (WHITE) WINS! " : " DARK (GREEN) WINS! ");
-        }
+        play_local(key == '2'); /* 1 = hot-seat, 2 = vs computer */
     }
     return 0;                   /* not reached: the play-again loop never exits */
 }
