@@ -35,8 +35,7 @@
 #define LIGHT_CH '#'        /* mode-4 light piece glyph (white) */
 #define DARK_CH  '@'        /* mode-4 dark piece glyph (green)  */
 #define NO_ROLL  0xFF
-#define UR_NET_URL "N:TCP://localhost:1234/"
-#define UR_TOP_URL "N:HTTP://localhost:8080/top"   /* compact leaderboard (GET) */
+#define UR_DEFAULT_HOST "localhost"   /* server host; runtime-configurable (menu 7) */
 #define DIE_MARKED   '^'
 #define DIE_UNMARKED '_'
 
@@ -50,8 +49,11 @@
 
 static ur_state game;
 
-static char     g_name[4] = "";  /* 3 initials + NUL; empty = not set yet */
+static char     g_name[4] = "";  /* 3 initials + NUL; empty = not set yet  */
 static uint16_t g_wins    = 0;   /* games won vs the computer (persisted)  */
+static char     g_host[33] = UR_DEFAULT_HOST;  /* server host/IP (<=32, persisted) */
+static char     g_net_url[64];   /* built: N:TCP://<host>:1234/            */
+static char     g_top_url[64];   /* built: N:HTTP://<host>:8080/top        */
 
 static unsigned char cellx(unsigned char col) { return (unsigned char)(BOARD_X + col * 3); }
 static unsigned char celly(unsigned char row) { return (unsigned char)(BOARD_Y + (row - 1) * 2); }
@@ -393,7 +395,7 @@ static bool read_state(ur_snapshot *snap)
     int16_t  n;
 
     for (;;) {
-        if (network_status(UR_NET_URL, &bw, &conn, &err) != FN_ERR_OK)
+        if (network_status(g_net_url, &bw, &conn, &err) != FN_ERR_OK)
             return false;
         if (bw >= UR_STATE_MSG_LEN)
             break;
@@ -401,7 +403,7 @@ static bool read_state(ur_snapshot *snap)
             return false;
         atari_wait_frames(3);          /* ~20 polls/s: gentle on NetSIO */
     }
-    n = network_read(UR_NET_URL, buf, UR_STATE_MSG_LEN);
+    n = network_read(g_net_url, buf, UR_STATE_MSG_LEN);
     if (n < (int16_t)UR_STATE_MSG_LEN)
         return false;
     return ur_proto_decode_state(buf, (uint8_t)n, snap);
@@ -422,10 +424,10 @@ static void online_game(void)
     if (network_init() != FN_ERR_OK) {
         draw_all(NO_ROLL, "network_init failed. FIRE/key."); wait_action(); return;
     }
-    if (network_open(UR_NET_URL, OPEN_MODE_RW, 0) != FN_ERR_OK) {
+    if (network_open(g_net_url, OPEN_MODE_RW, 0) != FN_ERR_OK) {
         draw_all(NO_ROLL, "connect failed. FIRE/key."); wait_action(); return;
     }
-    network_write(UR_NET_URL, cmd, ur_proto_join(cmd, g_name));
+    network_write(g_net_url, cmd, ur_proto_join(cmd, g_name));
 
     for (;;) {
         if (!read_state(&snap)) {
@@ -450,20 +452,48 @@ static void online_game(void)
             show_seat(&snap);
             wait_action();
             sfx_roll();
-            network_write(UR_NET_URL, cmd, ur_proto_roll(cmd));
+            network_write(g_net_url, cmd, ur_proto_roll(cmd));
             continue;
         }
         /* your turn, choose a move (shared cursor chooser) */
         picked = choose_move(snap.seat, snap.roll);
         if (picked >= 0)
-            network_write(UR_NET_URL, cmd, ur_proto_move(cmd, (unsigned char)picked));
+            network_write(g_net_url, cmd, ur_proto_move(cmd, (unsigned char)picked));
     }
-    network_close(UR_NET_URL);
+    network_close(g_net_url);
 }
 
 /* ---- persistent player profile (FujiNet AppKey) ------------------------- */
 
 static const char NAME_ALPH[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ ";   /* 27 chars */
+
+static char *url_append(char *d, const char *s)
+{
+    while (*s) *d++ = *s++;
+    return d;
+}
+
+/* Build the N:TCP / N:HTTP device specs from the configured host. Ports fixed. */
+static void build_urls(void)
+{
+    char *p;
+    p = g_net_url;
+    p = url_append(p, "N:TCP://");
+    p = url_append(p, g_host);
+    p = url_append(p, ":1234/");
+    *p = 0;
+    p = g_top_url;
+    p = url_append(p, "N:HTTP://");
+    p = url_append(p, g_host);
+    p = url_append(p, ":8080/top");
+    *p = 0;
+}
+
+static bool is_host_char(char c)
+{
+    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+           (c >= '0' && c <= '9') || c == '.' || c == '-';
+}
 
 /* Load name + win count from our appkey. False if no FujiNet/SD (keeps defaults). */
 static bool profile_load(void)
@@ -481,20 +511,34 @@ static bool profile_load(void)
     if (g_name[0] == ' ' && g_name[1] == ' ' && g_name[2] == ' ')
         g_name[0] = 0;                       /* all-blank == unset */
     g_wins = (uint16_t)(buf[3] | ((uint16_t)buf[4] << 8));
+    if (cnt >= 6) {                          /* optional host string follows */
+        unsigned char hl = buf[5];
+        if (hl > 0 && hl <= 32 && (uint16_t)(6 + hl) <= cnt) {
+            for (i = 0; i < hl; i++)
+                g_host[i] = (char)buf[6 + i];
+            g_host[hl] = 0;
+        }
+    }
     return true;
 }
 
 /* Persist name + win count. Silently no-ops if no FujiNet is attached. */
 static void profile_save(void)
 {
-    uint8_t buf[5];
+    uint8_t buf[40];
+    unsigned char hl = 0, i;
     buf[0] = (uint8_t)(g_name[0] ? g_name[0] : ' ');
     buf[1] = (uint8_t)(g_name[0] ? g_name[1] : ' ');
     buf[2] = (uint8_t)(g_name[0] ? g_name[2] : ' ');
     buf[3] = (uint8_t)(g_wins & 0xFF);
     buf[4] = (uint8_t)(g_wins >> 8);
+    while (g_host[hl] && hl < 32)            /* append the configured host */
+        hl++;
+    buf[5] = hl;
+    for (i = 0; i < hl; i++)
+        buf[6 + i] = (uint8_t)g_host[i];
     fuji_set_appkey_details(UR_CREATOR_ID, UR_APP_ID, DEFAULT);
-    fuji_write_appkey(UR_KEY_PROFILE, 5, buf);
+    fuji_write_appkey(UR_KEY_PROFILE, (uint16_t)(6 + hl), buf);
 }
 
 static void draw_initials(const unsigned char *idx, unsigned char slot)
@@ -559,6 +603,54 @@ static void enter_name(void)
     atari_mode4_board();
 }
 
+/* Keyboard entry of the server host/IP. Rebuilds the N: URLs and saves it.
+ * Joystick is hopeless for a hostname, so this reads the keyboard. */
+static void enter_host(void)
+{
+    char tmp[33];
+    unsigned char len = 0, k;
+    char c;
+
+    while (g_host[len] && len < 32) { tmp[len] = g_host[len]; len++; }
+    tmp[len] = 0;
+
+    atari_text_mode();
+    clrscr();
+    revers(1); cputsxy(10, 2, " SET SERVER HOST "); revers(0);
+    cputsxy(2, 5,  "Type the host name or IP, then");
+    cputsxy(2, 6,  "press RETURN.  DELETE = back.");
+    cputsxy(2, 8,  "Ports are fixed: 1234 (game),");
+    cputsxy(2, 9,  "8080 (leaderboard).");
+    cputsxy(2, 12, "Host:");
+
+    for (;;) {
+        gotoxy(2, 14);
+        cputs(tmp);
+        cputc('_');
+        for (k = len; k < 34; k++)               /* clear leftovers after edits */
+            cputc(' ');
+        c = cgetc();
+        if (c == 0x9B || c == '\n' || c == '\r')
+            break;
+        if ((c == 0x7E || c == 0x08) && len > 0) {
+            len--; tmp[len] = 0;
+        } else if (len < 32 && is_host_char(c)) {
+            tmp[len++] = c; tmp[len] = 0;
+        }
+    }
+
+    if (len == 0) {                              /* empty -> back to default */
+        const char *d = UR_DEFAULT_HOST;
+        while (*d) tmp[len++] = *d++;
+        tmp[len] = 0;
+    }
+    for (k = 0; k <= len; k++)
+        g_host[k] = tmp[k];
+    build_urls();
+    profile_save();
+    atari_mode4_board();
+}
+
 /* Draw a horizontal run of `n` copies of `ch` at (x,y); `inv` selects the gold
  * (COLOR3) variant of a mode-4 glyph instead of lapis (COLOR2). */
 static void hrun(unsigned char x, unsigned char y, unsigned char n, char ch, bool inv)
@@ -580,6 +672,8 @@ static char title_screen(void)
     char key;
 
     clrscr();
+    gotoxy(0, 0);
+    cprintf("Server: %s", g_host);          /* where Online connects (menu 7) */
     revers(1);
     cputsxy(9, 1, " THE ROYAL GAME OF UR ");
     revers(0);
@@ -605,13 +699,13 @@ static char title_screen(void)
 
     hrun(6, 16, 28, '\\', false);             /* lower cuneiform frieze */
 
-    cputsxy(8, 19, "1) Two players (hot-seat)");
-    cputsxy(8, 20, "2) One player vs computer");
-    cputsxy(8, 21, "3) Online (FujiNet)");
-    cputsxy(8, 22, "4) How to play     5) Set name");
-    cputsxy(8, 23, "6) Leaderboard     Select 1-6:");
+    cputsxy(3, 19, "1) Two players");    cputsxy(22, 19, "2) vs Computer");
+    cputsxy(3, 20, "3) Online");         cputsxy(22, 20, "4) How to play");
+    cputsxy(3, 21, "5) Set name");       cputsxy(22, 21, "6) Leaderboard");
+    cputsxy(3, 22, "7) Set server host");
+    cputsxy(3, 23, "Select 1-7:");
 
-    do { key = cgetc(); } while (key < '1' || key > '6');
+    do { key = cgetc(); } while (key < '1' || key > '7');
     return key;
 }
 
@@ -734,7 +828,7 @@ static void show_leaderboard(void)
     revers(1); cputsxy(13, 0, " LEADERBOARD "); revers(0);
 
     if (network_init() != FN_ERR_OK ||
-        network_open(UR_TOP_URL, 4 /* HTTP GET */, 0) != FN_ERR_OK) {
+        network_open(g_top_url, 4 /* HTTP GET */, 0) != FN_ERR_OK) {
         cputsxy(2, 4, "Could not reach the server.");
         cputsxy(2, 6, "Needs FujiNet and the Ur server's");
         cputsxy(2, 7, "web port (8080) reachable.");
@@ -745,14 +839,14 @@ static void show_leaderboard(void)
     }
 
     for (i = 0; i < 100; i++) {                 /* wait briefly for the body */
-        if (network_status(UR_TOP_URL, &bw, &conn, &err) != FN_ERR_OK)
+        if (network_status(g_top_url, &bw, &conn, &err) != FN_ERR_OK)
             break;
-        if (bw > 0) { n = network_read(UR_TOP_URL, buf, sizeof(buf)); break; }
+        if (bw > 0) { n = network_read(g_top_url, buf, sizeof(buf)); break; }
         if (conn == 0)
             break;
         atari_wait_frames(3);
     }
-    network_close(UR_TOP_URL);
+    network_close(g_top_url);
 
     if (n < 1) {
         cputsxy(2, 4, "No reply from server.");
@@ -794,7 +888,8 @@ int main(void)
     atari_pmg_init();
     atari_quiet_sio();          /* no OS SIO "drive" drone during FujiNet polling */
 
-    profile_load();             /* name + win count from the FujiNet appkey, if any */
+    profile_load();             /* name/wins/host from the FujiNet appkey, if any */
+    build_urls();               /* N: URLs from the saved (or default) host */
 
     for (;;) {                  /* play again forever; never falls out to Memo Pad */
         do {
@@ -802,7 +897,8 @@ int main(void)
             if (key == '4')      show_instructions();
             else if (key == '5') enter_name();
             else if (key == '6') show_leaderboard();
-        } while (key == '4' || key == '5' || key == '6');
+            else if (key == '7') enter_host();
+        } while (key == '4' || key == '5' || key == '6' || key == '7');
 
         if (key == '3') {
             online_game();      /* shows its own result, then back to the menu */

@@ -59,11 +59,15 @@ it cheat-resistant.
 
 ## Pointing clients at your host
 
-The client's endpoints are compile-time constants in
-[`src/atari/main.c`](../src/atari/main.c): `UR_NET_URL` (`N:TCP://localhost:1234/`)
-and `UR_TOP_URL` (`N:HTTP://localhost:8080/top`). For a public build, change
-`localhost` to your host and rebuild. (Making these runtime-configurable is a
-future improvement.)
+The client host is **runtime-configurable** — one binary works against any server.
+On the title screen choose **`7) Set server host`** and type your host name or IP
+(stored in the player's FujiNet AppKey, shown as `Server:` at the top of the
+title). The client builds `N:TCP://<host>:1234/` (game) and
+`N:HTTP://<host>:8080/top` (leaderboard) from it. **Ports are fixed** at 1234/8080;
+if you host on different ports, change them in
+[`src/atari/main.c`](../src/atari/main.c) (`build_urls`). The default host is
+`localhost`, so an unconfigured client targets a server on the same machine
+(handy with FujiNet-PC).
 
 ## Registering with the FGS lobby
 
