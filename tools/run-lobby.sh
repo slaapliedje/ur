@@ -32,7 +32,12 @@ command -v atari800 >/dev/null 2>&1 || die "atari800 not found (needs -netsio, e
 [ -z "$CLIENT" ] || [ -f "$CLIENT" ] || die "client image not found: $CLIENT"
 
 mkdir -p "$RUNDIR/SD"
+# hsioindex=-1 disables high-speed SIO. With NetSIO, fast SIO makes the FujiNet
+# CONFIG boot handshake loop ("Unexpected command frame at state 2"); standard
+# speed boots reliably. It's FujiNet's shipped Atari default.
 cat > "$RUNDIR/fnconfig.ini" <<CFG
+[General]
+hsioindex=-1
 [NetSIO]
 enabled=1
 host=127.0.0.1
