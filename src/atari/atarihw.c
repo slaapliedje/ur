@@ -96,6 +96,11 @@ static const unsigned char g_dark_r[8]    = {0xA0,0x08,0x02,0x02,0x02,0x02,0x08,
 static const unsigned char g_die0[8]    = {0x18,0x24,0x24,0x42,0x42,0x81,0xFF,0x00}; /* pyramid outline */
 static const unsigned char g_die1[8]    = {0x18,0x24,0x24,0x5A,0x5A,0x81,0xFF,0x00}; /* pyramid + center pip */
 
+/* Title-screen decoration (mode 4): a solid block ("11" -> COLOR2 lapis, or
+ * COLOR3 gold when drawn inverse) and a cuneiform wedge/nail. */
+static const unsigned char g_solid[8]   = {0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF}; /* ']' */
+static const unsigned char g_wedge[8]   = {0x3C,0x3C,0xFF,0x3C,0x3C,0x3C,0x0C,0x00}; /* '\' cuneiform nail */
+
 /* Over-allocated so we can align the active 1 KB to a $400 boundary at run time. */
 static unsigned char font_ram[1024 + 1024];
 
@@ -123,6 +128,8 @@ void atari_setup_charset(void)
     put_glyph(font, 0x20, g_dark_l);    put_glyph(font, 0x3B, g_dark_r);    /* '@' '[' */
     put_glyph(font, 0x3F, g_die0);     /* '_' unmarked die */
     put_glyph(font, 0x3E, g_die1);     /* '^' marked die   */
+    put_glyph(font, 0x3D, g_solid);    /* ']' solid block (title art) */
+    put_glyph(font, 0x3C, g_wedge);    /* '\' cuneiform wedge         */
 
     *(volatile unsigned char *)0x02F4 = (unsigned char)(base >> 8);  /* CHBAS */
 }

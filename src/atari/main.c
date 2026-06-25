@@ -424,6 +424,57 @@ static void online_game(void)
     network_close(UR_NET_URL);
 }
 
+/* Draw a horizontal run of `n` copies of `ch` at (x,y); `inv` selects the gold
+ * (COLOR3) variant of a mode-4 glyph instead of lapis (COLOR2). */
+static void hrun(unsigned char x, unsigned char y, unsigned char n, char ch, bool inv)
+{
+    unsigned char i;
+    if (inv) revers(1);
+    gotoxy(x, y);
+    for (i = 0; i < n; i++)
+        cputc(ch);
+    if (inv) revers(0);
+}
+
+/* Sumerian title screen + mode select. Title/menu text live on the mode-2 rows;
+ * the ziggurat scene is drawn in the mode-4 colour band (rows 4..18). Returns the
+ * chosen mode key ('1'..'3'). The ']' glyph is a solid block, '\' a cuneiform
+ * wedge, '*'+'&' the rosette (drawn inverse = gold). */
+static char title_screen(void)
+{
+    char key;
+
+    clrscr();
+    revers(1);
+    cputsxy(9, 1, " THE ROYAL GAME OF UR ");
+    revers(0);
+    cputsxy(5, 2, "Ur - Mesopotamia - c.2600 BCE");
+
+    hrun(6, 5, 28, '\\', false);              /* upper cuneiform frieze (lapis) */
+
+    revers(1);                                /* rosette "sun" over the apex (gold) */
+    cputcxy(19, 7, '*'); cputcxy(20, 7, '&');
+    revers(0);
+
+    hrun(19,  8,  2, ']', true);              /* ziggurat: gold stepped tiers */
+    hrun(18,  9,  4, ']', true);
+    hrun(17, 10,  6, ']', true);
+    hrun(16, 11,  8, ']', true);
+    hrun(15, 12, 10, ']', true);
+    hrun(14, 13, 12, ']', true);
+    hrun( 8, 14, 24, ']', false);             /* lapis ground band */
+
+    hrun(6, 16, 28, '\\', false);             /* lower cuneiform frieze */
+
+    cputsxy(8, 20, "1) Two players (hot-seat)");
+    cputsxy(8, 21, "2) One player vs computer");
+    cputsxy(8, 22, "3) Online (FujiNet)");
+    cputsxy(8, 23, "Select 1-3:");
+
+    do { key = cgetc(); } while (key < '1' || key > '3');
+    return key;
+}
+
 int main(void)
 {
     bool ai[UR_NUM_PLAYERS];
@@ -431,23 +482,15 @@ int main(void)
 
     seed_rng();
 
-    clrscr();
-    cputsxy(0, 0, "The Royal Game of Ur");
-    cputsxy(0, 3, "1) Two players (hot-seat)");
-    cputsxy(0, 4, "2) One player vs computer");
-    cputsxy(0, 5, "3) Online (FujiNet)");
-    cputsxy(0, 7, "Select (1-3):");
-    do {
-        key = cgetc();
-    } while (key < '1' || key > '3');
-    ai[0] = false;              /* you are Light */
-    ai[1] = (key == '2');       /* Dark is the computer in mode 2 */
-
     atari_setup_colors();
     atari_setup_charset();
     atari_mode4_board();
     atari_pmg_init();
     atari_quiet_sio();          /* no OS SIO "drive" drone during FujiNet polling */
+
+    key = title_screen();
+    ai[0] = false;              /* you are Light */
+    ai[1] = (key == '2');       /* Dark is the computer in mode 2 */
 
     if (key == '3') {
         online_game();
