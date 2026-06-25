@@ -139,9 +139,22 @@ server through FujiNet-PC:
    show the echoed reply (`recv: HELLO UR`).
    - Change the endpoint in `src/atari/main.c` (`UR_NET_URL`) for a different host/port.
 
-**Full multiplayer (later).** Once the game server exists, run it locally, point the
-clients at it via `N:TCP://...`, and drive two emulator instances (e.g. two Altirra
-windows, or Altirra + VICE) to exercise a full cross-platform turn loop.
+**Online multiplayer (2 players).** The game has an "Online (FujiNet)" mode that
+plays against the Go game server in [`server/`](../server/CLAUDE.md).
+
+1. Build and run the server (needs Go — `pacman -S go`):
+   ```sh
+   cd server && go build -o ur-server . && ./ur-server   # listens on :1234
+   ```
+2. Run **FujiNet-PC** and an emulator that talks to it. Note: the native
+   **AltirraSDL has no FujiNet** — for networking use FujiNet-PC with the Windows
+   Altirra (via the `altirra` Wine wrapper) or `atari800`, or real FujiNet hardware.
+3. Boot `build/atari/ur.xex` in **two** instances; in each pick **3) Online**. They
+   connect to `N:TCP://localhost:1234/` (the `UR_NET_URL` define), the server seats
+   them as Light/Dark, and mediates the game.
+
+Without FujiNet attached, selecting "Online" simply shows "connect failed" — which
+still confirms the client's network path runs.
 
 ## Disk/image tooling
 

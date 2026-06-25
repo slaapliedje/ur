@@ -48,10 +48,13 @@ committable state.
       Apple ports reuse it instead of re-implementing.
 
 ## Phase 4 — Networking + game server
-- [ ] Finalize the wire protocol.
-- [ ] Game server (`server/`, Go) implementing rules + protocol, server-authoritative.
-- [ ] FGS Lobby registration; lobby-client launch flow.
-- [ ] Online 2-player on Atari (test with two emulator instances + FujiNet-PC).
+- [x] Wire protocol — `src/common/proto.{h,c}` + `docs/protocol.md`, host-tested.
+- [x] Game server — `server/` (Go), server-authoritative; rules + protocol + tests in CI.
+- [x] Online 2-player on Atari — "Online" mode (`online_game` over `N:TCP`); compiles
+      in CI. **End-to-end test needs FujiNet-PC + an emulator with FujiNet + two
+      instances** (AltirraSDL has no FujiNet; use Wine Altirra or atari800).
+- [ ] FGS Lobby registration; lobby-client launch flow (so games are discoverable
+      via fujinet.online instead of a direct address).
 
 ## Phase 5 — Coleco Adam port
 - [ ] Implement `plat_*` for Adam (TMS9928A video, SN76489 sound, AdamNet input).
