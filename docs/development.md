@@ -101,6 +101,26 @@ Then load the image in the matching emulator:
 - **C64:** `x64sc build/c64/ur.d64`.
 - **Apple II:** open `build/apple2/ur.po` in AppleWin/MAME.
 
+### Running the Atari build in Altirra (Wine)
+
+If Altirra runs under Wine, build + launch in one step:
+
+```sh
+make run-atari
+```
+
+It builds `build/atari/ur.xex`, finds Altirra in your Wine prefix, converts the
+path with `winepath -w`, and runs `wine <Altirra> <path>`. If Altirra lives
+somewhere non-standard (e.g. a portable unzip), point `ALTIRRA` at it:
+
+```sh
+ALTIRRA="$HOME/Altirra/Altirra64.exe" make run-atari
+# extra Altirra options:  ALTIRRA_OPTS="/ntsc" make run-atari
+```
+
+The script is [`tools/run-atari.sh`](../tools/run-atari.sh); it requires `wine`
+and `winepath` on your PATH.
+
 ### Network testing
 
 **N: TCP smoke test (Phase 1).** The Atari build does a TCP echo against a local

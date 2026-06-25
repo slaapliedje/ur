@@ -24,6 +24,10 @@ deps: $(ATARI_LIB) $(ADAM_LIB) $(EOSLIB) ## Fetch dependencies (fujinet-lib + eo
 	@echo "fujinet-lib $(FNLIB_VERSION) ready for: atari adam (+ eoslib for adam)."
 	@echo "(Other targets download their lib once they gain sources — see their makefiles/*.mk.)"
 
+run-atari: atari ## Build the Atari target and launch it in Altirra (via Wine)
+	tools/run-atari.sh
+.PHONY: run-atari
+
 core-check: | $(BUILD_DIR)/core-check ## Compile-check src/common on BOTH retro toolchains
 	@for f in $(wildcard $(COMMON_DIR)/*.c); do \
 	  b=$$(basename $$f .c); \
