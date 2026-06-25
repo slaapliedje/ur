@@ -24,6 +24,7 @@ func main() {
 		log.Fatalf("listen %s: %v", addr, err)
 	}
 	log.Printf("Ur server listening on %s", addr)
+	startLobby()
 
 	for {
 		var c [2]net.Conn
@@ -60,6 +61,8 @@ func broadcast(c [2]net.Conn, st *State, phase, roll, flags uint8) {
 func runGame(c [2]net.Conn) {
 	defer c[0].Close()
 	defer c[1].Close()
+	setPlayers(2)        // advertise the game as full while it runs
+	defer setPlayers(0)  // ...and free again when it ends
 
 	r := [2]*bufio.Reader{bufio.NewReader(c[0]), bufio.NewReader(c[1])}
 

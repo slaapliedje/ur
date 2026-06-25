@@ -15,7 +15,8 @@ moves, and broadcasts state to both clients.
 - `proto.go` — the wire protocol; **must stay byte-identical** to
   `src/common/proto.{h,c}` and `docs/protocol.md`.
 - `main.go` — the TCP server + game loop.
-- `ur_test.go` — rules + encoding tests (run in CI).
+- `lobby.go` — FGS Lobby registration (opt-in).
+- `*_test.go` — rules, encoding, and lobby-payload tests (run in CI).
 
 ## Build & run
 
@@ -37,10 +38,29 @@ Accepts two clients, assigns seats 0 (Light) and 1 (Dark), and runs the flow in
 `MOVE`; the server applies the rules (capture / rosette extra-roll / bear-off /
 win) and broadcasts a `STATE` snapshot to both after every change.
 
+## FGS Lobby registration (`lobby.go`)
+
+The server can advertise itself to the FujiNet lobby (`POST <lobby>/server` with a
+`GameServer` JSON, refreshed every 30s and on player-count changes). It is
+**opt-in** so local runs never touch the public lobby:
+
+```sh
+UR_LOBBY=1 \
+UR_SERVER_URL="tcp://your.host:1234/" \
+UR_APPKEY=<assigned> \
+UR_CLIENT_ATARI="tnfs://your.host/ur.xex" \
+./ur-server
+```
+
+Env: `UR_LOBBY` (enable), `UR_LOBBY_URL` (default `https://lobby.fujinet.online/server`),
+`UR_SERVER_NAME`, `UR_REGION`, `UR_SERVER_URL`, `UR_APPKEY`, `UR_CLIENT_ATARI`.
+
+**Still needed for real discoverability** (external/manual): an **appkey** assigned
+by the FujiNet project; the client binary (`ur.xex`) **hosted on a TNFS server** and
+listed in `clients[]`; and a per-platform **lobby client** app that lists games and
+launches ours (future — see [`src/net/CLAUDE.md`](../src/net/CLAUDE.md)).
+
 ## v1 limitations (future work)
 
 - One game at a time (then it loops to accept the next pair).
 - Minimal error handling; no reconnect/resume.
-- No FGS Lobby registration yet (so games are joined by direct address, not via
-  the `fujinet.online` lobby). Registering with the lobby is the next networking
-  milestone — see [`src/net/CLAUDE.md`](../src/net/CLAUDE.md).

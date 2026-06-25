@@ -53,8 +53,10 @@ committable state.
 - [x] Online 2-player on Atari — "Online" mode (`online_game` over `N:TCP`); compiles
       in CI. **End-to-end test needs FujiNet-PC + an emulator with FujiNet + two
       instances** (AltirraSDL has no FujiNet; use Wine Altirra or atari800).
-- [ ] FGS Lobby registration; lobby-client launch flow (so games are discoverable
-      via fujinet.online instead of a direct address).
+- [x] FGS Lobby registration in the server (`server/lobby.go`, opt-in via
+      `UR_LOBBY=1`; POSTs the `GameServer` JSON, heartbeat + player-count updates).
+- [ ] Real discoverability: an assigned appkey, the client binary hosted on TNFS,
+      and a per-platform lobby-client app that lists games and launches ours.
 
 ## Phase 5 — Coleco Adam port
 - [ ] Implement `plat_*` for Adam (TMS9928A video, SN76489 sound, AdamNet input).
