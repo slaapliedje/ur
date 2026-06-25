@@ -101,25 +101,31 @@ Then load the image in the matching emulator:
 - **C64:** `x64sc build/c64/ur.d64`.
 - **Apple II:** open `build/apple2/ur.po` in AppleWin/MAME.
 
-### Running the Atari build in Altirra (Wine)
+### Running the Atari build (`make run-atari`)
 
-If Altirra runs under Wine, build + launch in one step:
+Build + launch in one step:
 
 ```sh
 make run-atari
 ```
 
-It builds `build/atari/ur.xex`, finds Altirra in your Wine prefix, converts the
-path with `winepath -w`, and runs `wine <Altirra> <path>`. If Altirra lives
-somewhere non-standard (e.g. a portable unzip), point `ALTIRRA` at it:
+[`tools/run-atari.sh`](../tools/run-atari.sh) auto-detects the emulator:
+
+- **`altirra`** — the AUR Wine wrapper (default if present). Altirra is a Windows
+  app, so the script converts the path with `winepath -w` and passes it through.
+  Manual equivalent: `altirra "$(winepath -w build/atari/ur.xex)"`.
+- **`AltirraSDL`** — a native Linux build (no Wine). Force it with `ALTIRRA_SDL=1`.
+  Manual equivalent: `AltirraSDL build/atari/ur.xex`.
+- a standalone Windows Altirra `.exe` — set `ALTIRRA=/path/to/Altirra64.exe`.
 
 ```sh
-ALTIRRA="$HOME/Altirra/Altirra64.exe" make run-atari
-# extra Altirra options:  ALTIRRA_OPTS="/ntsc" make run-atari
+make run-atari                    # uses the `altirra` Wine wrapper
+ALTIRRA_SDL=1 make run-atari       # use the native AltirraSDL instead
+ALTIRRA_OPTS="/ntsc" make run-atari
 ```
 
-The script is [`tools/run-atari.sh`](../tools/run-atari.sh); it requires `wine`
-and `winepath` on your PATH.
+> The AUR `altirra` wrapper sets its own `WINEPREFIX=~/.altirra/wine` and runs
+> `wine /opt/altirra/Altirra64.exe "$@"`, so it just needs a Windows-style path.
 
 ### Network testing
 

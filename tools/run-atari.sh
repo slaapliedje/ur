@@ -1,52 +1,52 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-# Launch the Atari build (build/atari/ur.xex) in Altirra running under Wine.
+# Launch the Atari build (build/atari/ur.xex) in Altirra.
 #
 #   tools/run-atari.sh [path-to-xex]
 #
-# Altirra location:
-#   - set ALTIRRA to the full path of the .exe, OR
-#   - let this script find it under your Wine prefix / common folders.
-# Extra Altirra command-line options: set ALTIRRA_OPTS (e.g. "/ntsc").
+# Backends, in order of preference:
+#   1. $ALTIRRA set         -> wine "$ALTIRRA" <win-path>   (a standalone Altirra .exe)
+#   2. ALTIRRA_SDL=1        -> AltirraSDL <unix-path>        (force the native build)
+#   3. `altirra` on PATH    -> altirra <win-path>           (AUR Wine wrapper; default)
+#   4. `AltirraSDL` on PATH -> AltirraSDL <unix-path>        (native, no Wine)
+#   5. search the Wine prefix for Altirra*.exe
+#
+# The Wine backends need a Windows-style path, so we convert with `winepath -w`.
+# Extra Altirra command-line options: set ALTIRRA_OPTS.
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
 xex="${1:-$root/build/atari/ur.xex}"
 
-command -v wine     >/dev/null 2>&1 || { echo "error: 'wine' not found on PATH." >&2; exit 1; }
-command -v winepath >/dev/null 2>&1 || { echo "error: 'winepath' not found (part of Wine)." >&2; exit 1; }
+[ -f "$xex" ] || { echo "error: '$xex' not found — run 'make atari' first." >&2; exit 1; }
 
-if [ ! -f "$xex" ]; then
-    echo "error: '$xex' not found — build it first with 'make atari'." >&2
-    exit 1
-fi
-
-find_altirra() {
-    local pfx="${WINEPREFIX:-$HOME/.wine}" c
-    for c in \
-        "${ALTIRRA:-}" \
-        "$pfx/drive_c/Program Files/Altirra"*/Altirra64.exe \
-        "$pfx/drive_c/Program Files/Altirra"*/Altirra.exe \
-        "$pfx/drive_c/Program Files (x86)/Altirra"*/Altirra*.exe \
-        "$HOME/Altirra"*/Altirra*.exe \
-        "$HOME/Downloads/Altirra"*/Altirra*.exe \
-        "$HOME/Downloads/Altirra"*/*/Altirra*.exe ; do
-        [ -n "$c" ] && [ -f "$c" ] && { printf '%s\n' "$c"; return 0; }
-    done
-    # last resort: a bounded search of the Wine C: drive
-    find "$pfx/drive_c" -maxdepth 5 -iname 'Altirra*.exe' 2>/dev/null | head -n1
+need_wine() {
+    command -v wine     >/dev/null 2>&1 || { echo "error: 'wine' not on PATH." >&2; exit 1; }
+    command -v winepath >/dev/null 2>&1 || { echo "error: 'winepath' not on PATH." >&2; exit 1; }
 }
+to_win() { winepath -w "$1" 2>/dev/null; }   # 2>/dev/null hides wine's fixme noise
 
-altirra="$(find_altirra || true)"
-if [ -z "${altirra:-}" ] || [ ! -f "$altirra" ]; then
-    echo "error: could not locate Altirra. Point ALTIRRA at the executable, e.g.:" >&2
-    echo "  ALTIRRA=\"\$HOME/Altirra/Altirra64.exe\" make run-atari" >&2
-    exit 1
+run_native()   { echo "Launching native AltirraSDL: $xex"
+                 exec AltirraSDL ${ALTIRRA_OPTS:-} "$xex"; }
+run_wine_exe() { need_wine; local w; w="$(to_win "$xex")"
+                 echo "Launching (wine): $1"; echo "  -> $w"
+                 exec wine "$1" ${ALTIRRA_OPTS:-} "$w"; }
+run_wrapper()  { need_wine; local w; w="$(to_win "$xex")"   # `altirra` does the wine call itself
+                 echo "Launching (altirra wrapper) -> $w"
+                 exec altirra ${ALTIRRA_OPTS:-} "$w"; }
+
+if [ -n "${ALTIRRA:-}" ]; then
+    run_wine_exe "$ALTIRRA"
+elif [ "${ALTIRRA_SDL:-0}" = 1 ] && command -v AltirraSDL >/dev/null 2>&1; then
+    run_native
+elif command -v altirra >/dev/null 2>&1; then
+    run_wrapper
+elif command -v AltirraSDL >/dev/null 2>&1; then
+    run_native
+else
+    pfx="${WINEPREFIX:-$HOME/.wine}"
+    exe="$(find "$pfx/drive_c" -maxdepth 5 -iname 'Altirra*.exe' 2>/dev/null | head -n1 || true)"
+    [ -n "$exe" ] || { echo "error: no Altirra found. Set ALTIRRA=/path/to/Altirra64.exe" >&2; exit 1; }
+    run_wine_exe "$exe"
 fi
-
-winxex="$(winepath -w "$xex")"
-echo "Altirra : $altirra"
-echo "Booting : $xex"
-echo "       -> $winxex"
-exec wine "$altirra" ${ALTIRRA_OPTS:-} "$winxex"
