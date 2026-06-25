@@ -1,8 +1,9 @@
 # src/apple2 — Apple II platform layer (future target)
 
-> **Status: not started.** Placeholder. Begin this port only after the Atari build
-> is playable. The shared core in [`src/common`](../common/CLAUDE.md) should drop in
-> unchanged; only this platform layer (display, sound, input, net shim) is new work.
+> **Status: not started.** Placeholder. The Apple II is the **fourth/last** target —
+> begin this port after the Atari, Adam, and C64 ports. The shared core in
+> [`src/common`](../common/CLAUDE.md) should drop in unchanged; only this platform
+> layer (display, sound, input, net shim) is new work.
 
 Implements the `plat_*` interface for the Apple II family (II+, IIe, IIc, IIgs).
 

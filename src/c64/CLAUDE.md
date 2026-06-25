@@ -1,7 +1,7 @@
 # src/c64 — Commodore 64 platform layer (future target)
 
-> **Status: not started.** Placeholder. Begin this port after the Atari build is
-> playable (and typically after Apple II). The shared core in
+> **Status: not started.** Placeholder. The C64 is the **third** target — begin
+> this port after the Atari and Adam ports. The shared core in
 > [`src/common`](../common/CLAUDE.md) should drop in unchanged; only this platform
 > layer is new work.
 

@@ -4,9 +4,11 @@ A video-game implementation of the **Royal Game of Ur** — the ~4,600-year-old
 Mesopotamian board game — for retro 8-bit home computers, with cross-platform
 network multiplayer over [FujiNet](https://fujinet.online/).
 
-**Target platforms:** Atari 8-bit (400/800/XL/XE) first, then Apple II, Commodore
-64, and Coleco Adam. The first three are 6502-family (built with cc65); the Adam is
-Z80 (built with z88dk) — the shared game core compiles for both.
+**Target platforms (in build order):** Atari 8-bit (400/800/XL/XE) first, then
+Coleco Adam, Commodore 64, and Apple II. This deliberately inverts the usual
+historical priority (games once led with the Apple II and C64, often skipping the
+Atari and Adam). The 6502 machines (Atari, C64, Apple II) are built with cc65; the
+Z80-based Adam is built with z88dk — the shared game core compiles for both.
 
 ## Status
 

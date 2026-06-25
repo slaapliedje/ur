@@ -11,19 +11,23 @@ FujiNet**.
 ## Target platforms (build order)
 
 1. **Atari 8-bit** (400/800/XL/XE) — the primary, first target. *(6502)*
-2. **Apple II** — second target (port after Atari is playable). *(6502)*
+2. **Coleco Adam** — second target. *(**Z80**, not 6502 — different toolchain; see below)*
 3. **Commodore 64** — third target. *(6502 / 6510)*
-4. **Coleco Adam** — fourth target. *(**Z80**, not 6502 — different toolchain; see below)*
+4. **Apple II** — fourth target. *(6502)*
 
-Only the Atari build is active right now. The Apple II, C64, and Adam directories
+Only the Atari build is active right now. The Adam, C64, and Apple II directories
 exist so cross-platform concerns are designed in from day one, but contain no game
-code yet. (Build order after Atari is not fixed — the Adam is a strong early
-multiplayer companion since FujiNet/Adam is very mature and cross-play with Atari
-is already proven.)
+code yet.
 
-> **CPU split:** the first three targets are 6502-family; the **Coleco Adam is a
-> Zilog Z80**. This is the main reason the toolchain is not uniform — see
-> [Toolchain](#toolchain). The shared C core is designed to span both.
+This order deliberately inverts the usual historical priority: back in the day,
+games tended to target the Apple II and C64 first — and often skipped the Atari and
+Adam entirely. We lead with the frequently-overlooked Atari and Adam. It is also
+practical: FujiNet/Adam is very mature and Adam↔Atari cross-play is already proven,
+making the Adam a strong early multiplayer companion to the Atari.
+
+> **CPU split:** three of the four targets are 6502-family; the **Coleco Adam is a
+> Zilog Z80** (our second target). This is the main reason the toolchain is not
+> uniform — see [Toolchain](#toolchain). The shared C core is designed to span both.
 
 ## Architecture
 

@@ -1,8 +1,9 @@
 # src/adam — Coleco Adam platform layer (future target)
 
-> **Status: not started.** Placeholder. Begin this port after the Atari build is
-> playable. The shared core in [`src/common`](../common/CLAUDE.md) should drop in
-> unchanged; only this platform layer is new work.
+> **Status: not started.** Placeholder. The Adam is the **second** target — begin
+> this port once the Atari build is playable. The shared core in
+> [`src/common`](../common/CLAUDE.md) should drop in unchanged; only this platform
+> layer is new work.
 
 Implements the `plat_*` interface for the **Coleco Adam**.
 
