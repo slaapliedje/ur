@@ -134,10 +134,11 @@ static void draw_all(unsigned char roll, const char *msg)
         for (k = 0; k < n; k++) { cputcxy(36, (unsigned char)(18 - k), '@'); cputcxy(37, (unsigned char)(18 - k), '['); }
     }
 
-    /* Start markers: a coloured up-arrow beside each player's entry square (pos 1,
-     * at celly(4)=row 10). Pieces enter here and run up their side column. */
-    cputcxy(15, 10, '{');                       /* white: Light starts (left)  */
-    cputcxy(24, 10, '}');                       /* green: Dark starts (right)  */
+    /* Start markers: a coloured up-arrow in the cut-away notch directly below each
+     * player's entry square (pos 1 at celly(4)=row 10; the notch is row 12).
+     * Pieces enter at the diamond above and run up their side column. */
+    cputcxy(16, 12, '{'); cputcxy(17, 12, '|'); /* white: Light starts (left)  */
+    cputcxy(22, 12, '}'); cputcxy(23, 12, '~'); /* green: Dark starts (right)  */
 
     gotoxy(0, ROW_TURN);
     cprintf("Turn: %s", game.turn ? "Dark (green)" : "Light (white)");
