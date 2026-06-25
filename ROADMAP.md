@@ -40,10 +40,10 @@ committable state.
 - [x] Local hot-seat 2-player (roll, choose move, capture, rosette extra roll, win).
 - [x] Single-player vs AI — selectable from the Atari title menu (you are Light,
       computer plays Dark).
-- [x] Polish (first pass): POKEY sound effects (roll/move/capture/rosette/score/
-      win), GR.0 colours, inverse-video rosettes, title/menu screen.
-- [ ] Polish (more): player-missile-graphics pieces and/or a custom board charset
-      (best done with visual iteration in Altirra).
+- [x] Graphics + sound: POKEY effects; custom-charset drawn board; ANTIC mode-4
+      per-side colour (Light=white, Dark=green, rosette=orange, cells=blue); PMG
+      highlight cursor with joystick selection; title/menu screen.
+- [ ] Further polish (optional): graphical dice, move animation, full sprite pieces.
 - [ ] Lift the game loop into a shared controller behind `plat.h` so the Adam/C64/
       Apple ports reuse it instead of re-implementing.
 
