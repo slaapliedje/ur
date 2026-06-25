@@ -182,6 +182,13 @@ On a current toolchain, build FujiNet-PC with
 [`tools/patches/fujinet-pc-gcc16-glibc.patch`](../tools/patches/README.md). atari800
 windowing uses `-windowed -win-width N -win-height N` (override via `WIN_W`/`WIN_H`).
 
+**Testing the FujiNet lobby.** [`tools/run-lobby.sh`](../tools/run-lobby.sh) boots
+atari800 + FujiNet-PC into the **FujiNet CONFIG menu** (cold boot, no disk) so you
+can browse the public lobby — the registered "Royal Game of Ur" should appear and,
+when selected, download the client over TNFS and launch it. Pass a client image
+(`tools/run-lobby.sh path/to/app.xex`) to boot a specific app, e.g. a dedicated
+lobby client. See [`docs/hosting.md`](hosting.md) for the server side.
+
 ## Disk/image tooling
 
 Produced by the build (and bundled with `fujinet-build-tools` / the toolchains):
