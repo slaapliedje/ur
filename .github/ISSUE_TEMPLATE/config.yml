@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: FujiNet project
+    url: https://fujinet.online/
+    about: Docs and community for the FujiNet device used for multiplayer.

@@ -79,8 +79,9 @@ calls the platform, never the reverse. Keep `#ifdef PLATFORM` out of `common/`.
 - **Networking without hardware:**
   [FujiNet-PC](https://github.com/FujiNetWIFI/fujinet-pc) (emulated FujiNet)
 
-> `cc65` and the emulators are not assumed to be installed in this environment.
-> They are developer prerequisites, documented here so the build/run loop is clear.
+> `cc65`, `z88dk`, and the emulators are developer prerequisites (not assumed
+> installed). Full setup, the Docker dev image, and the build/run/test loop are in
+> [`docs/development.md`](docs/development.md).
 
 ## The game (Finkel ruleset, summary)
 
@@ -124,18 +125,39 @@ Details and the wire protocol: [`src/net/CLAUDE.md`](src/net/CLAUDE.md) and
 ```
 CLAUDE.md            ← you are here (master context)
 README.md            ← short human-facing intro
+LICENSE              ← GPLv3
+CONTRIBUTING.md      ← contributor guide
+ROADMAP.md           ← phased plan (scaffold → networked release)
+Makefile             ← top-level build (drives cc65 + z88dk)
+makefiles/           ← per-platform build fragments + host-test
+Dockerfile           ← dev image: cc65 + z88dk + host gcc
+.devcontainer/       ← VS Code dev container (uses Dockerfile)
+.editorconfig
+.github/             ← CI workflow (build.yml) + issue/PR templates
 docs/
+  development.md     ← tools, setup, build/run/test loop
   rules.md           ← full Finkel ruleset + path/rosette tables
   protocol.md        ← Ur wire-protocol spec (the cross-platform contract)
+  design.md          ← game design (modes, UX, AI, sound)
+  architecture.md    ← layering, data model, per-platform memory maps
 src/
-  common/CLAUDE.md   ← portable C core (rules, AI, state machine, protocol codec)
-  net/CLAUDE.md      ← 6502-side networking + FGS lobby/game-client glue
-  atari/CLAUDE.md    ← Atari 8-bit platform layer (primary target, 6502)
-  apple2/CLAUDE.md   ← Apple II platform layer (future, 6502)
-  c64/CLAUDE.md      ← Commodore 64 platform layer (future, 6502)
-  adam/CLAUDE.md     ← Coleco Adam platform layer (future, Z80 / z88dk)
-server/              ← modern game server (future); documented in src/net/CLAUDE.md
+  common/            ← portable C core (rules, AI, state machine, protocol codec)
+    CLAUDE.md
+    plat.h           ← the platform interface contract (core ↔ platform layers)
+  net/CLAUDE.md      ← networking (N: device / fujinet-lib) + FGS lobby/game client
+  atari/CLAUDE.md    ← Atari 8-bit platform layer (1st target, 6502)
+  adam/CLAUDE.md     ← Coleco Adam platform layer (2nd target, Z80 / z88dk)
+  c64/CLAUDE.md      ← Commodore 64 platform layer (3rd target, 6502)
+  apple2/CLAUDE.md   ← Apple II platform layer (4th target, 6502)
+tests/               ← host unit tests for src/common
+server/              ← modern game server (future); see src/net/CLAUDE.md
+lib/                 ← fetched deps (fujinet-lib); git-ignored
+build/               ← build output; git-ignored
 ```
+
+**New here?** Read this file, then [`docs/development.md`](docs/development.md) to set
+up tools, [`ROADMAP.md`](ROADMAP.md) for what's next, and
+[`docs/architecture.md`](docs/architecture.md) for the technical design.
 
 ## Coding conventions
 

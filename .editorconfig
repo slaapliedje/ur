@@ -1,0 +1,34 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+# Makefiles require real tabs
+[Makefile]
+indent_style = tab
+
+[makefiles/*]
+indent_style = tab
+
+[*.{mk,mak}]
+indent_style = tab
+
+# 6502 / Z80 assembly: column-sensitive, tabs are conventional
+[*.{s,asm,inc,a65,z80}]
+indent_style = tab
+
+# Go uses tabs (gofmt)
+[*.go]
+indent_style = tab
+
+[*.{yml,yaml,json}]
+indent_size = 2
+
+# Don't strip trailing whitespace in Markdown (two spaces = hard line break)
+[*.{md,markdown}]
+trim_trailing_whitespace = false

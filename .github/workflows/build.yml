@@ -1,0 +1,36 @@
+name: build
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Build the same dev image used locally (cc65 + z88dk). This step alone
+      # verifies both toolchains install correctly.
+      - name: Build dev image (cc65 + z88dk)
+        run: docker build -t ur-dev .
+
+      - name: Verify toolchains
+        run: |
+          docker run --rm ur-dev sh -c 'cc65 --version; cl65 --version || true'
+          docker run --rm ur-dev sh -c 'zcc 2>&1 | head -1 || true'
+
+      # The key portability gate: src/common must compile/run on the host C
+      # compiler (and, via the platform builds below, on BOTH retro toolchains).
+      - name: Host unit tests (src/common)
+        run: docker run --rm -v "$PWD":/src ur-dev make test
+
+      - name: Build all platforms
+        run: docker run --rm -v "$PWD":/src ur-dev make all
+
+      # TODO: once fujinet-lib is wired into real builds, add a cached
+      # `make deps` step and assert the produced .xex/.dsk/.prg/.po artifacts.

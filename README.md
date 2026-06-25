@@ -32,4 +32,5 @@ documentation and the directory skeleton.
 
 ## License
 
-TBD.
+[GNU General Public License v3.0](LICENSE) (GPLv3). New source files should carry
+an `SPDX-License-Identifier: GPL-3.0-or-later` header. See [CONTRIBUTING.md](CONTRIBUTING.md).
