@@ -20,12 +20,9 @@ include makefiles/host-test.mk
 
 all: atari adam c64 apple2 ## Build every platform
 
-FUJINET_LIB_REPO := https://github.com/FujiNetWIFI/fujinet-lib
-deps: $(LIB_DIR)/fujinet-lib ## Fetch dependencies (fujinet-lib) into lib/
-$(LIB_DIR)/fujinet-lib:
-	@mkdir -p $(LIB_DIR)
-	git clone --depth 1 $(FUJINET_LIB_REPO) $@
-	@echo "TODO: build per-target libs, e.g.: cd $@ && make TARGETS=\"atari c64 apple2 adam\" release"
+deps: $(ATARI_LIB) ## Fetch dependencies (pinned fujinet-lib release libraries)
+	@echo "fujinet-lib $(FNLIB_VERSION) ready for: atari."
+	@echo "(Other targets download their lib once they gain sources — see their makefiles/*.mk.)"
 
 clean: ## Remove build output
 	rm -rf $(BUILD_DIR)

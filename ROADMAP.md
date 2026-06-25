@@ -14,10 +14,12 @@ committable state.
 - [ ] Architecture/design docs reviewed and agreed.
 
 ## Phase 1 — Toolchain bring-up ("hello, FujiNet")
-- [ ] Minimal Atari `cc65` program that boots in Altirra (proves the toolchain + image loop).
-- [ ] Minimal program that opens an `N:` connection via `fujinet-lib` and talks to FujiNet-PC.
+- [x] Minimal Atari `cc65` program (`src/atari/main.c`) reading the FujiNet adapter
+      config via `fujinet-lib`; compiles + links in CI. **Run `build/atari/ur.xex` in
+      Altirra (with FujiNet-PC) to confirm it boots and reaches the device.**
+- [x] `make deps` / the atari target download the pinned `fujinet-lib` release library.
+- [ ] Extend to an `N:` TCP open/read against FujiNet-PC (toward the wire protocol).
 - [ ] Minimal Adam `z88dk` build that boots in MAME (`adam`) — proves the second toolchain.
-- [ ] Wire `make deps` to actually build the per-target `fujinet-lib` libraries.
 
 ## Phase 2 — Portable core (`src/common`)
 - [ ] Verify the exact board path & rosette indices against sources (see [`docs/rules.md`](docs/rules.md)).

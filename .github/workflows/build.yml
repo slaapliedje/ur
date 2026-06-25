@@ -12,7 +12,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # Build the same dev image used locally (cc65 + z88dk). This step alone
       # verifies both toolchains install correctly.
