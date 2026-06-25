@@ -39,6 +39,10 @@ func startHTTP(store *Store) {
 	mux.HandleFunc("/top", func(w http.ResponseWriter, r *http.Request) {
 		compactTop(w, store)
 	})
+	// Serve the Atari client binary for lobby downloads (UR_CLIENT_ATARI points here).
+	mux.HandleFunc("/ur.xex", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, envOr("UR_CLIENT_FILE", "/data/ur.xex"))
+	})
 	go func() {
 		log.Printf("leaderboard http listening on %s", addr)
 		if err := http.ListenAndServe(addr, mux); err != nil {
