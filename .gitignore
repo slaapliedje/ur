@@ -20,9 +20,12 @@
 /lib/
 /vendor/
 
-# Compiled Go game server
+# Compiled Go game server + its runtime data
 /server/server
+/server/ur-server
 /server/*.exe
+/server/ur-stats.json
+/server/*.tmp
 
 # Editor / OS cruft
 .DS_Store

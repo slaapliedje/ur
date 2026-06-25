@@ -42,7 +42,7 @@ message is its type.
 
 | Msg    | Byte | Bytes                          | Purpose                         |
 |--------|------|--------------------------------|---------------------------------|
-| `JOIN` | 0x01 | `[0]=0x01 [1]=version(1)`      | Join; server assigns a seat     |
+| `JOIN` | 0x01 | `[0]=0x01 [1]=version(1) [2..4]=name` | Join; `name` = 3 chars A-Z, space-padded (leaderboard) |
 | `ROLL` | 0x02 | `[0]=0x02`                     | Request a dice roll             |
 | `MOVE` | 0x03 | `[0]=0x03 [1]=piece index 0..6`| Move one of your pieces         |
 
@@ -74,6 +74,15 @@ from `turn`/`roll`/positions (`ur_legal_moves`); the server need not send them.
 3. Client (await-move) shows legal moves, sends `MOVE`. Server validates, applies
    (capture / rosette extra-roll / bear-off / win), advances turn, broadcasts `STATE`.
 4. The off-turn client polls (`network_read`) for `STATE` and renders.
+
+## Leaderboard (HTTP, out of band)
+
+Separate from the game wire protocol, the server also exposes the persistent
+leaderboard over HTTP (default `:8080`): `GET /` (HTML), `GET /leaderboard.json`
+(JSON), and `GET /top` — a compact body for 8-bit clients: one count byte, then up
+to ten records of `name[3]` + `wins` (uint16, little-endian). The Atari client's
+Leaderboard screen fetches `/top` over `N:HTTP`. Players are keyed by the name
+sent in `JOIN`. See [`docs/hosting.md`](hosting.md).
 
 ## Open questions
 

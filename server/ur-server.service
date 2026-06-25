@@ -1,0 +1,29 @@
+# systemd unit for the Ur game server. Install:
+#   sudo cp ur-server /usr/local/bin/ && sudo useradd -r -s /usr/sbin/nologin ur
+#   sudo cp ur-server.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now ur-server
+[Unit]
+Description=Royal Game of Ur game server (FujiNet)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=/usr/local/bin/ur-server
+User=ur
+Group=ur
+StateDirectory=ur
+WorkingDirectory=/var/lib/ur
+Environment=UR_ADDR=:1234
+Environment=UR_HTTP_ADDR=:8080
+Environment=UR_DATA=/var/lib/ur/ur-stats.json
+# --- optional: register with the public FGS lobby (needs a public UR_SERVER_URL
+#     and an appkey 1-255 assigned by the FujiNet project) ---
+# Environment=UR_LOBBY=1
+# Environment=UR_SERVER_NAME=my-ur
+# Environment=UR_SERVER_URL=tcp://your.public.host:1234/
+# Environment=UR_APPKEY=42
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
