@@ -55,9 +55,9 @@ No container required if you install the toolchains directly:
   which renamed the C-stack zeropage symbol `sp` → `c_sp`. The last cc65 *release*
   is 2.19 (2020), which predates that, so linking the FujiNet `N:`/fuji code
   against it fails with `Unresolved external 'c_sp'`. Two ways to fix it:
-  - **Keep cc65 2.19 and enable the shim** (simplest): build with `CSP_COMPAT=1`
-    (e.g. `CSP_COMPAT=1 make run-atari`). It assembles `src/atari/csp_compat.s`,
-    aliasing `c_sp` to the 2.19 runtime's `sp`. Leave it OFF on current cc65.
+  - **Keep cc65 2.19 — handled automatically.** The build checks the cc65 runtime
+    and, on 2.19, assembles `src/atari/csp_compat.s` (aliasing `c_sp` to its `sp`),
+    so `make atari` / `make run-atari` just work. Override with `CSP_COMPAT=0` or `=1`.
   - **Or build current cc65 from source** (what CI uses):
     `git clone https://github.com/cc65/cc65 && cd cc65 && make && sudo make install PREFIX=/usr/local`.
     Note: the last *release* is 2.19 and the AUR `cc65-git` is pinned to an even
