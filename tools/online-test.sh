@@ -29,13 +29,11 @@ command -v atari800 >/dev/null 2>&1 || die "atari800 not found (install it; need
 [ -x "$FUJINET_BIN" ] || die "FujiNet-PC not found at '$FUJINET_BIN' (build it, or set FUJINET_BIN)"
 [ -f "$XEX" ] || die "no '$XEX' — build it first:  CSP_COMPAT=1 make atari   (cc65 <= 2.19)  or  make atari"
 
-if [ ! -x "$SERVER_BIN" ]; then
-    if command -v go >/dev/null 2>&1; then
-        echo "building game server..."
-        ( cd "$repo/server" && go build -o ur-server . ) || die "server build failed"
-    else
-        die "no server binary and Go is not installed. Install Go (pacman -S go), then: (cd server && go build -o ur-server .)"
-    fi
+if command -v go >/dev/null 2>&1; then
+    echo "building game server..."
+    ( cd "$repo/server" && go build -o ur-server . ) || die "server build failed"
+elif [ ! -x "$SERVER_BIN" ]; then
+    die "no server binary and Go is not installed. Install Go (pacman -S go), then: (cd server && go build -o ur-server .)"
 fi
 
 pids=()

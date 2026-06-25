@@ -42,19 +42,18 @@ func main() {
 	}
 }
 
-// readByte returns the next byte from r, or ok=false on error.
-func readByte(r *bufio.Reader) (uint8, bool) {
-	b, err := r.ReadByte()
-	if err != nil {
-		return 0, false
-	}
-	return b, true
+// readByte returns the next byte from r (and any error, for logging).
+func readByte(r *bufio.Reader) (uint8, error) {
+	return r.ReadByte()
 }
 
 func broadcast(c [2]net.Conn, st *State, phase, roll, flags uint8) {
 	w := st.winner()
+	log.Printf("broadcast STATE: turn=%d phase=%d roll=%d winner=%d flags=0x%02x", st.Turn, phase, roll, w, flags)
 	for seat := 0; seat < 2; seat++ {
-		_, _ = c[seat].Write(encodeState(uint8(seat), phase, roll, w, flags, st))
+		if _, err := c[seat].Write(encodeState(uint8(seat), phase, roll, w, flags, st)); err != nil {
+			log.Printf("  write to player %d failed: %v", seat, err)
+		}
 	}
 }
 
@@ -66,10 +65,18 @@ func runGame(c [2]net.Conn) {
 
 	r := [2]*bufio.Reader{bufio.NewReader(c[0]), bufio.NewReader(c[1])}
 
-	// Expect a JOIN from each client (type byte, then version). Tolerant.
+	// Expect a JOIN from each client (type byte, then version).
 	for i := 0; i < 2; i++ {
-		if t, ok := readByte(r[i]); ok && t == MsgJoin {
-			readByte(r[i]) // version
+		t, err := readByte(r[i])
+		if err != nil {
+			log.Printf("player %d: failed to read JOIN: %v", i, err)
+			return
+		}
+		if t == MsgJoin {
+			v, _ := readByte(r[i]) // version
+			log.Printf("player %d JOIN (version %d)", i, v)
+		} else {
+			log.Printf("player %d: unexpected first byte 0x%02x (expected JOIN)", i, t)
 		}
 	}
 
@@ -82,11 +89,12 @@ func runGame(c [2]net.Conn) {
 
 	for {
 		cur := st.Turn
-		t, ok := readByte(r[cur])
-		if !ok {
-			log.Printf("player %d disconnected", cur)
+		t, err := readByte(r[cur])
+		if err != nil {
+			log.Printf("player %d disconnected: %v", cur, err)
 			return
 		}
+		log.Printf("recv from player %d: cmd 0x%02x (phase=%d roll=%d)", cur, t, phase, roll)
 
 		switch t {
 		case MsgRoll:
@@ -105,8 +113,9 @@ func runGame(c [2]net.Conn) {
 			broadcast(c, st, phase, roll, flags)
 
 		case MsgMove:
-			pi, ok := readByte(r[cur])
-			if !ok {
+			pi, err := readByte(r[cur])
+			if err != nil {
+				log.Printf("player %d disconnected (reading move): %v", cur, err)
 				return
 			}
 			if phase != PhaseMove {
