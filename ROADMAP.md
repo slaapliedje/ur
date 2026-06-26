@@ -55,8 +55,11 @@ committable state.
       instances** (AltirraSDL has no FujiNet; use Wine Altirra or atari800).
 - [x] FGS Lobby registration in the server (`server/lobby.go`, opt-in via
       `UR_LOBBY=1`; POSTs the `GameServer` JSON, heartbeat + player-count updates).
-- [ ] Real discoverability: an assigned appkey, the client binary hosted on TNFS,
-      and a per-platform lobby-client app that lists games and launches ours.
+- [ ] Real discoverability: the server now advertises + serves **all four**
+      platform clients (`atari`/`adam`/`c64`/`apple2` in `clients[]`, opt-in per
+      `UR_CLIENT_<PLAT>`; one shared `UR_APPKEY`). Remaining (external): host the
+      client binaries at the advertised URLs, and the per-platform lobby-client app
+      that lists games and launches ours.
 
 ## Phase 5 — Coleco Adam port
 - [ ] Implement `plat_*` for Adam (TMS9928A video, SN76489 sound, AdamNet input).

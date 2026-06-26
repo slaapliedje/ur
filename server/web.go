@@ -39,10 +39,20 @@ func startHTTP(store *Store) {
 	mux.HandleFunc("/top", func(w http.ResponseWriter, r *http.Request) {
 		compactTop(w, store)
 	})
-	// Serve the Atari client binary for lobby downloads (UR_CLIENT_ATARI points here).
-	mux.HandleFunc("/ur.xex", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, envOr("UR_CLIENT_FILE", "/data/ur.xex"))
-	})
+	// Serve each platform's client binary for lobby downloads. Point the matching
+	// UR_CLIENT_<PLAT> (lobby.go) at these URLs; override the served file per
+	// platform with UR_CLIENT_<PLAT>_FILE. UR_CLIENT_FILE keeps serving the Atari
+	// .xex for back-compat.
+	for _, c := range []struct{ path, env, def string }{
+		{"/ur.xex", "UR_CLIENT_FILE", "/data/ur.xex"},              // atari
+		{"/ur.ddp", "UR_CLIENT_ADAM_FILE", "/data/ur.ddp"},         // adam (data pack)
+		{"/ur.prg", "UR_CLIENT_C64_FILE", "/data/ur.prg"},          // c64
+		{"/ur.system", "UR_CLIENT_APPLE2_FILE", "/data/ur.system"}, // apple2 (ProDOS SYSTEM)
+	} {
+		mux.HandleFunc(c.path, func(w http.ResponseWriter, r *http.Request) {
+			http.ServeFile(w, r, envOr(c.env, c.def))
+		})
+	}
 	go func() {
 		log.Printf("leaderboard http listening on %s", addr)
 		if err := http.ListenAndServe(addr, mux); err != nil {

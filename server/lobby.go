@@ -60,11 +60,20 @@ func lobbyPayload(cur int, online bool) GameServer {
 	if online {
 		status = "online"
 	}
-	// Only advertise a client whose download URL is set — the lobby validates
-	// clients[].url as a real URL, so an empty entry would reject the whole POST.
+	// One game = one appkey (above); the platforms differ only by their client
+	// download URL. Advertise each whose UR_CLIENT_<PLAT> is set — the lobby
+	// validates clients[].url as a real URL, so an empty entry would reject the
+	// whole POST. Platform ids match fujinet-lib's names.
 	clients := []GameClient{}
-	if u := os.Getenv("UR_CLIENT_ATARI"); u != "" {
-		clients = append(clients, GameClient{Platform: "atari", Url: u})
+	for _, c := range []GameClient{
+		{Platform: "atari", Url: os.Getenv("UR_CLIENT_ATARI")},
+		{Platform: "adam", Url: os.Getenv("UR_CLIENT_ADAM")},
+		{Platform: "c64", Url: os.Getenv("UR_CLIENT_C64")},
+		{Platform: "apple2", Url: os.Getenv("UR_CLIENT_APPLE2")},
+	} {
+		if c.Url != "" {
+			clients = append(clients, c)
+		}
 	}
 	return GameServer{
 		Game:       "Royal Game of Ur",

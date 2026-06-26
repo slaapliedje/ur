@@ -42,3 +42,28 @@ func TestLobbyOffline(t *testing.T) {
 		t.Fatal("expected offline status")
 	}
 }
+
+// Each platform with a UR_CLIENT_<PLAT> URL set is advertised; unset ones are
+// skipped (an empty url would make the lobby reject the whole POST).
+func TestLobbyClients(t *testing.T) {
+	t.Setenv("UR_CLIENT_ATARI", "tnfs://h/ur.xex")
+	t.Setenv("UR_CLIENT_C64", "tnfs://h/ur.prg")
+	t.Setenv("UR_CLIENT_APPLE2", "tnfs://h/ur.system")
+	// UR_CLIENT_ADAM deliberately unset -> not advertised.
+
+	got := map[string]string{}
+	for _, c := range lobbyPayload(0, true).Clients {
+		if c.Url == "" {
+			t.Fatalf("advertised %s with empty url", c.Platform)
+		}
+		got[c.Platform] = c.Url
+	}
+	for _, p := range []string{"atari", "c64", "apple2"} {
+		if got[p] == "" {
+			t.Fatalf("missing client for %s: %v", p, got)
+		}
+	}
+	if _, ok := got["adam"]; ok {
+		t.Fatalf("adam should not be advertised (no url set): %v", got)
+	}
+}
