@@ -35,6 +35,18 @@ jobs:
       - name: Build all platforms
         run: docker run --rm -v "$PWD":/src ur-dev make all
 
+      # The C64/Apple II default builds are local-only; also compile their FujiNet
+      # online variants (link fujinet-lib + the network code path) so they can't rot.
+      - name: Build C64 FujiNet online variant
+        run: docker run --rm -v "$PWD":/src ur-dev make c64 ONLINE=1
+
+      - name: Build Apple II FujiNet online variant
+        run: docker run --rm -v "$PWD":/src ur-dev make apple2 ONLINE=1
+
+      # The Apple II also has a double-hi-res colour board (enhanced //e).
+      - name: Build Apple II double-hi-res variant
+        run: docker run --rm -v "$PWD":/src ur-dev make apple2 DHGR=1
+
       # TODO: once fujinet-lib is wired into real builds, add a cached
       # `make deps` step and assert the produced .xex/.dsk/.prg/.po artifacts.
 

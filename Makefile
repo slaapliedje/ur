@@ -20,9 +20,8 @@ include makefiles/host-test.mk
 
 all: atari adam c64 apple2 ## Build every platform
 
-deps: $(ATARI_LIB) $(ADAM_LIB) $(EOSLIB) ## Fetch dependencies (fujinet-lib + eoslib for adam)
-	@echo "fujinet-lib $(FNLIB_VERSION) ready for: atari adam (+ eoslib for adam)."
-	@echo "(Other targets download their lib once they gain sources — see their makefiles/*.mk.)"
+deps: $(ATARI_LIB) $(ADAM_LIB) $(EOSLIB) $(C64_LIB) $(APPLE2_LIB) ## Fetch dependencies (fujinet-lib + eoslib for adam)
+	@echo "fujinet-lib $(FNLIB_VERSION) ready for: atari adam c64 apple2 (+ eoslib for adam)."
 
 run-atari: atari ## Build the Atari target and launch it in Altirra (via Wine)
 	tools/run-atari.sh

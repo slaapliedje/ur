@@ -9,6 +9,9 @@
 ;   ___bzero <- __bzero   the appkey code calls the internal bzero (C `__bzero`); the
 ;                         2.19 runtime exports it as C `_bzero` (asm `__bzero`). Same
 ;                         (ptr, n) contract, so aliasing is safe.
+;   ___oserror <- __oserror  the C64 IEC open (fuji_cbm_open.s) reads the OS-error
+;                         variable as C `__oserror`; the 2.18 runtime exports it as
+;                         C `_oserror` (asm `__oserror`). Same byte, so alias it.
 ;
 ; Only needed / safe with OLD cc65; the Makefile auto-enables it (CSP_COMPAT) when
 ; the runtime lacks c_sp. With a current cc65 leave it OFF to avoid a clash.
@@ -22,3 +25,8 @@ c_sp = sp
         .export ___bzero
 
 ___bzero = __bzero
+
+        .import __oserror
+        .export ___oserror
+
+___oserror = __oserror
