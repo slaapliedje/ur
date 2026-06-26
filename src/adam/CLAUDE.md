@@ -1,9 +1,11 @@
 # src/adam — Coleco Adam platform layer (future target)
 
-> **Status: not started.** Placeholder. The Adam is the **second** target — begin
-> this port once the Atari build is playable. The shared core in
-> [`src/common`](../common/CLAUDE.md) should drop in unchanged; only this platform
-> layer is new work.
+> **Status: local-play bring-up.** `src/adam/main.c` reuses the shared core and
+> renders a text board via z88dk's console (conio), with hot-seat and vs-AI local
+> play. `make adam` → `build/adam/ur.ddp` (run in MAME `adam` / ADAMEm). Next:
+> FujiNet online (fujinet-adam, same wire protocol as the Atari), SN76489 sound
+> (`psg.h`), and TMS9928A colour/sprite polish. The shared core drops in unchanged;
+> only this platform layer is new.
 
 Implements the `plat_*` interface for the **Coleco Adam**.
 

@@ -33,12 +33,24 @@ $(ADAM_LIB):
 	cd $(ADAM_FNLIB_DIR) && unzip -o -q fujinet-lib.zip
 	@test -f $(ADAM_LIB) || { echo "ERROR: $(ADAM_LIB) missing after unzip"; exit 1; }
 
-# Clone + build eoslib (z88dk) -> eos.lib. Z88DK_SHARE only satisfies eoslib's
-# Makefile guard; derive it from ZCCCFG so it works wherever z88dk is installed.
+# eoslib's Makefile needs Z88DK_SHARE (the dir holding lib/config). Use ZCCCFG
+# when it's set (CI / per-user installs), otherwise find the system z88dk (e.g.
+# a distro install at /usr/share/z88dk, where ZCCCFG is unset and zcc uses a
+# built-in default).
+Z88DK_SHARE := $(if $(ZCCCFG),$(patsubst %/lib/config,%,$(ZCCCFG)),$(patsubst %/lib/config/coleco.cfg,%,$(firstword $(wildcard /usr/share/z88dk/lib/config/coleco.cfg /usr/local/share/z88dk/lib/config/coleco.cfg /usr/lib/z88dk/lib/config/coleco.cfg))))
+
+# zcc needs ZCCCFG to find the coleco target config. Set it (and export to all
+# recipes) only when the environment hasn't already, so CI/per-user installs win.
+ifeq ($(strip $(ZCCCFG)),)
+ZCCCFG := $(Z88DK_SHARE)/lib/config
+endif
+export ZCCCFG
+
+# Clone + build eoslib (z88dk) -> eos.lib.
 $(EOSLIB):
 	@mkdir -p $(LIB_DIR)
 	[ -d $(EOSLIB_SRC) ] || git clone --depth 1 $(EOSLIB_REPO) $(EOSLIB_SRC)
-	$(MAKE) -C $(EOSLIB_SRC) Z88DK_SHARE="$${ZCCCFG%/lib/config}"
+	$(MAKE) -C $(EOSLIB_SRC) Z88DK_SHARE="$(Z88DK_SHARE)"
 	@test -f $(EOSLIB) || { echo "ERROR: $(EOSLIB) missing after build"; exit 1; }
 
 $(ADAM_OUT):
