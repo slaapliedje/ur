@@ -17,7 +17,7 @@ EOSLIB      := $(EOSLIB_SRC)/eos.lib
 EOSLIB_REPO := https://github.com/tschak909/eoslib.git
 
 # z88dk's -l takes the library filename WITH the .lib extension (unlike gcc/cc65).
-ADAM_FLAGS  := +coleco -subtype=adam -I$(ADAM_FNLIB_DIR) $(COMMON_INC)
+ADAM_FLAGS  := +coleco -subtype=adam -I$(ADAM_FNLIB_DIR) -I$(SRC_DIR)/adam $(COMMON_INC)
 
 .PHONY: adam
 adam: $(ADAM_LIB) $(EOSLIB) | $(ADAM_OUT) ## Build the Coleco Adam target (z88dk)
