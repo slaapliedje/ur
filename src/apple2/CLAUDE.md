@@ -1,9 +1,73 @@
-# src/apple2 — Apple II platform layer (future target)
+# src/apple2 — Apple II platform layer (fourth target)
 
-> **Status: not started.** Placeholder. The Apple II is the **fourth/last** target —
-> begin this port after the Atari, Adam, and C64 ports. The shared core in
-> [`src/common`](../common/CLAUDE.md) should drop in unchanged; only this platform
-> layer (display, sound, input, net shim) is new work.
+> **Status: local play + colour board (LO-RES default, DOUBLE-HI-RES via `DHGR=1`)
+> + speaker sound + FujiNet online (`ONLINE=1`).** `src/apple2/main.c`
+> reuses the shared core unchanged and draws the board in **lo-res graphics (GR)**:
+> the Apple II's hi-res mode has only 6 position-dependent artifact colours (no
+> brown/gold), but lo-res gives **16 solid colours**, so the board uses the same
+> lapis/gold/cream palette as the C64/Adam. Traditional **horizontal 3×8** layout
+> on a lapis field, **gold (orange) rosette tiles**, grey lane tiles, and **two-tone
+> tokens** (white body + dark pip = Light, the inverse = Dark). **MIXED mode** keeps
+> 4 text lines at the bottom for the turn / roll / move panel; the title menu and win
+> screen use plain text mode. GR lives in [`gr.c`](gr.c)/[`gr.h`](gr.h). Hot-seat +
+> vs-AI; `cgetc`/`kbhit` native. Sound is the **1-bit speaker**
+> (`src/apple2/sound.c`, $C030). `make apple2` → `build/apple2/ur.system` (+ `ur.po`
+> with AppleCommander).
+>
+> **Verified in MAME** (`apple2ee`, the enhanced //e, booting ProDOS 8): menu, the
+> colour board, two-tone tokens, and a vs-AI turn all render and respond to the
+> keyboard. cc65 Apple II programs run **under an OS**, so it boots from a **ProDOS**
+> disk — see the run recipe below.
+>
+> **GR gotchas (learned the hard way):**
+> - GR shares text page 1 ($0400-$07FF). **conio corrupts the GR rows** (its lazy
+>   init / scrolling), so the panel text is poked directly (`gr_text`), not via conio
+>   — conio is used only in text mode (menu/win).
+> - `gr_bar` must compute the row address **once per text row** (not per block via
+>   `gr_plot`); the naive per-block fill takes ~1s for the whole screen (a multiply
+>   in the address calc × 1600 blocks) and you'll screenshot half-drawn frames.
+> - Lo-res colour **8 ("brown")** renders as a dark **olive-green** in MAME's RGB
+>   palette (browner on real NTSC composite); it's the canonical Apple II brown and
+>   reads clearly as the dark side, so we keep it.
+>
+> **Double-hi-res — playable build (`make apple2 DHGR=1`).** A 140×192, 16-colour
+> board, verified in MAME `apple2ee` on real ProDOS: deep **lapis field**, gold
+> (orange) rosette tiles, grey lanes, **round two-tone tokens** (a tapered disc:
+> white body + olive pip = Light, the inverse = Dark) on black cells, with the tiles
+> **black-bordered** to hide DHGR's edge fringing, plus a clean narrow 80-col panel.
+> How it fits together:
+> - **Page 2 (`$4000-$5FFF`)** + a custom SYSTEM config
+>   ([`apple2-dhgr.cfg`](apple2-dhgr.cfg): startup `$2000`, code pinned `$6000`,
+>   `$4000-$5FFF` page-2 hole) → keeps the clean `UR.SYSTEM` boot (no BASIC.SYSTEM;
+>   the BRUN route dies with "NO BUFFERS AVAILABLE"). Needs the **enhanced //e**.
+> - Aux writes use **RAMWRT** (reroutes all `$0200-$BFFF`, would corrupt the C
+>   stack), so the aux half of each fill — and the panel's aux text — is asm
+>   ([`dhgr_blit.s`](dhgr_blit.s): self-modifying stores, registers/ZP/hardware-stack
+>   only); the main half is plain C. Mode + fills + page-2 text in [`dhgr.{c,h}`](dhgr.c).
+> - Solid colour = a 4-bit nibble repeated; bytes cycle every 4 groups (28 px), so a
+>   fill writes a phased 4-byte pattern (nibble→colour read off a 16-band calibration).
+> - **Panel**: page-2 mixed-mode text is 80-col, so each line is written narrow —
+>   even chars to aux, odd to main — for normal (not doubled) text.
+> - **Speed**: `dh_fill` blits a whole aux rectangle in one call — RAMWRT toggled
+>   ONCE (not per scanline) and each row base from a precomputed 192-entry table
+>   (`rlo`/`rhi`, built in `dhgr_on`), so no per-scanline JSR or multiply; the main
+>   half is C using the same table. (Aux self-modify must precede RAMWRT-on, or the
+>   patch goes to aux — `dh_fill` uses the `ptr1` ZP pointer instead, since ZP is
+>   exempt from RAMWRT.) The field is also filled once per game (`board_field`);
+>   and `draw_board` keeps a **dirty-cell cache** (`prev_grid` in `main.c`, reset by
+>   `board_field`): it rebuilds the cell grid from game state each call and repaints
+>   only cells whose glyph changed, so a typical turn redraws ~1-2 cells (move source
+>   + dest) instead of all 22 — and the repeated draws within a turn (roll prompt,
+>   move list, result message) repaint nothing. Only the first paint is the full
+>   board. Shared with lo-res, but DHGR is the big beneficiary.
+> - `main.c` routes the renderer through `BOARD_ON/OFF` + `panel_*` + `draw_tile/
+>   draw_token` macros (`#ifdef UR_DHGR`), sharing all board/turn logic with lo-res.
+>   `apple2.mk` `DHGR=1` switches to `apple2enh` + `apple2-dhgr.cfg` + `-DUR_DHGR`
+>   and adds `dhgr.{c,s}`; the default build is still lo-res.
+>
+> **Run:** `make apple2-bootdisk DHGR=1 PRODOS_DISK="…/prodos402.dsk"` then
+> `mame apple2ee -flop1 build/apple2/ur-dhgr.dsk`. **Polish left:** "brown" is olive
+> (DHGR has no true brown). FujiNet online uses the lo-res board (DHGR+ONLINE overflow).
 
 Implements the `plat_*` interface for the Apple II family (II+, IIe, IIc, IIgs).
 
@@ -19,20 +83,55 @@ Implements the `plat_*` interface for the Apple II family (II+, IIe, IIc, IIgs).
 - **Sound:** 1-bit speaker (toggle-timed); effects require CPU cycle counting.
 - **Input:** keyboard; paddles/joystick.
 
-## FujiNet
+## FujiNet online (`make apple2 ONLINE=1`)
 
-FujiNet attaches via the **SmartPort** bus on the Apple II. Use `fujinet-lib`
-(apple2 / apple2enh target); the `N:` device API is the same as on Atari.
+FujiNet attaches via the **SmartPort** bus, but the `N:` API + Ur wire protocol are
+identical to the Atari/Adam/C64, so `online_game()` is a direct port: `network_init`
+→ `network_open(N:TCP://host:1234/, RW)` → `ur_proto_join(name)`, then the
+server-authoritative loop (render each STATE snapshot, send ROLL/MOVE, poll via
+`read_state`). Plus the shared AppKey **profile** (creator `0x5552`='UR'), **lobby
+host pickup** (creator `0x0001`, appkey 6), and a `/top` **leaderboard** over `N:HTTP`.
 
-## Build & run (target)
+- `make apple2 ONLINE=1` → `apple2.mk` downloads `fujinet-apple2-<ver>.lib`, adds
+  `-DUR_ONLINE`, and links the **c_sp shim** (`src/atari/csp_compat.s`) on old cc65.
+  Online uses the **lo-res** board (connect/wait screens are plain text; the game
+  uses the colour board). Frame pacing is a busy loop (no Apple II jiffy clock).
+- **DHGR and ONLINE don't fit together** — fujinet-lib (~8K) + the DHGR code overflow
+  the `$6000` code region, so `apple2.mk` errors on `DHGR=1 ONLINE=1`. Online =
+  lo-res board; DHGR = local only.
+- **Tested** (`mame apple2ee`, no FujiNet): builds, boots to the lobby menu, local
+  play renders, and Online fails the connection **gracefully** ("NETWORK INIT
+  FAILED" — `network_init` finds no SmartPort FujiNet). Full cross-play needs
+  **FujiNet + the Ur server**, same bar as the other ports. Build a boot disk with
+  `make apple2-bootdisk ONLINE=1 PRODOS_DISK=...`.
 
-- `cc65 -t apple2` or `-t apple2enh` (enhanced IIe), `ld65`, then package into a
-  `.dsk` or `.po` image (e.g. AppleCommander).
-- Run/test in **AppleWin**, **MAME**, or **Virtual ][**; network test with FujiNet-PC
-  or real hardware.
+## Build & run
 
-## When you start this port
+- **Build:** `make apple2` (`makefiles/apple2.mk`) runs
+  `cl65 -t apple2 -C apple2-system.cfg`, then **strips the 58-byte (`$3A`) EXEHDR**
+  cc65 prepends → `build/apple2/ur.system` (the bare ProDOS SYSTEM image whose first
+  byte is the `$2000` entry — `LDX #$FF / TXS / ...`). ProDOS loads SYSTEM files at
+  `$2000` and JMPs there, so the EXEHDR (meant for `$1FC6`) must not be in the file —
+  forgetting this loads the header at `$2000` and BRKs immediately. With an
+  **AppleCommander** jar present (`AC=` / a jar in `lib/` or `tools/`; from
+  https://github.com/AppleCommander/AppleCommander/releases, needs `java`) it also
+  writes `build/apple2/ur.po` with the program as `UR.SYSTEM`.
+- **Make a bootable disk:** AppleCommander's blank `-pro140` disk has only a
+  placeholder boot block (no ProDOS kernel). To get a self-booting disk, copy a real
+  ProDOS disk (which supplies `PRODOS` + a real boot block) and drop our `UR.SYSTEM`
+  in as the only `.SYSTEM` launcher — `tools/apple2-bootdisk.sh` does exactly that:
+  `make apple2-bootdisk PRODOS_DISK="/path/to/ProDOS.dsk"` → `build/apple2/ur-boot.<ext>`.
+  (Keep the source's extension — AppleCommander reads sector order from it; a ProDOS
+  fs in DOS order is `.dsk`/`.do`, not `.po`.)
+- **Run:** `mame apple2ee -flop1 build/apple2/ur-boot.dsk` — **the *enhanced* //e**
+  (`apple2ee`, 65C02): ProDOS 8 v2.x refuses to boot on the plain `apple2e`. Also
+  runs in AppleWin / on real hardware.
+- **Network test:** FujiNet-PC or real hardware (SmartPort), once the online path lands.
 
-1. Confirm the `plat_*` interface still fits (it should — it was designed to).
-2. Implement display/input/sound for the Apple II here only.
-3. Reuse the exact same networking protocol and codec — no protocol changes.
+## Notes for continuing this port
+
+1. The `plat_*` interface fit unchanged — the shared core dropped straight in.
+2. Display/input/sound live here only; keep `src/common` pure.
+3. For a colour board, move to hi-res/double-hi-res (mind artifact colour + the
+   7-pixel byte alignment); the text board is the bring-up baseline.
+4. Reuse the exact same networking protocol + codec for online — no protocol changes.
