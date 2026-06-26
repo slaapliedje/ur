@@ -64,12 +64,51 @@ committable state.
 - [ ] **Adam ↔ Atari cross-play.**
 
 ## Phase 6 — Commodore 64 port
-- [ ] Implement `plat_*` for C64 (VIC-II sprites, SID sound).
+- [x] Local play (colour conio board, hot-seat + vs-AI) — builds `ur.prg`, runs in VICE.
+- [x] SID sound (roll/capture/rosette/score/win) — verified via VICE audio capture.
+- [x] Custom charset: round disc tokens + shaped (8-point) rosettes + lane dots, on
+      a vertical board. Kept as the `make c64 CHARSET=1` fallback build.
+- [x] **VIC-II multicolor sprite tokens (the colour showcase)** — genuine two-tone
+      pieces (bone body + brown pip for Light, the inverse for Dark, like a real
+      Ur set) on the traditional **horizontal 3×8 board**. A raster-interrupt
+      **sprite multiplexer** (`src/c64/mux.s`) reuses the 8 hardware sprites across
+      the 3 rows (8 × 3 = 24 token slots; a row holds ≤ 8 pieces). This is the
+      default `make c64` build. **Verified in VICE; raster timing wants a real-
+      hardware check** (band separation is a generous 56 lines, so margins are wide).
+- [x] **FujiNet online** (`make c64 ONLINE=1`) — links the c64 `fujinet-lib`, same
+      `N:TCP` wire protocol + server as the Atari/Adam: lobby/profile menu (set
+      name/host, leaderboard), appkey profile + lobby host pickup. Online builds use
+      the ROM charset (board cells as colour tiles) since fujinet-lib fills VIC bank
+      0; the multicolor sprite tokens remain. **Builds + boots + fails the network
+      gracefully in VICE; full cross-play needs FujiNet(-PC) + the Ur server.**
 
 ## Phase 7 — Apple II port
-- [ ] Implement `plat_*` for Apple II (hi-res, speaker sound, SmartPort FujiNet).
+- [x] Local play (monochrome 40-col conio text board: O=Light / X=Dark, inverse
+      rosettes; hot-seat + vs-AI) + **1-bit speaker** sound (`src/apple2/sound.c`).
+      `make apple2` → `ur.system` (ProDOS SYSTEM image) + `ur.po`; `make apple2-bootdisk
+      PRODOS_DISK=...` (`tools/apple2-bootdisk.sh`) makes a self-booting disk.
+      **Verified in MAME `apple2ee` booting ProDOS 8** — menu, board, vs-AI turn, and
+      keyboard all work. (cc65 apple2 programs run under an OS; needs the *enhanced* //e.)
+- [x] **Lo-res colour board** (default; `src/apple2/gr.{c,h}`): 16-colour GR,
+      horizontal 3×8, lapis field + gold rosette tiles + grey lanes + two-tone tokens;
+      MIXED mode with a 4-line text panel. Verified in MAME `apple2ee`.
+- [x] **Double-hi-res colour board** (`make apple2 DHGR=1`; `src/apple2/dhgr.{c,h}`
+      + `dhgr_blit.s` + `apple2-dhgr.cfg`): 140×192, 16 colours, page-2 bitmap via a
+      RAMWRT asm aux-blit, clean SYSTEM boot, black-bordered cells (low fringing),
+      narrow 80-col page-2 text panel. Playable + verified in MAME `apple2ee`.
+      *(Round disc tokens; asm rectangle blit + row table for fast fills; dirty-cell
+      redraw repaints only changed cells per turn; polish left: "brown" is olive.)*
+- [x] **FujiNet online** (`make apple2 ONLINE=1`): links the apple2 `fujinet-lib`,
+      same `N:TCP` wire protocol + server as the other ports (over the SmartPort bus);
+      lobby/profile menu, appkey profile + lobby host pickup, leaderboard. Uses the
+      lo-res board (DHGR+ONLINE don't fit). Builds + boots + fails the network
+      gracefully in MAME; full cross-play needs FujiNet + the Ur server.
+- [ ] Richer speaker sound (optional polish).
+- [ ] FujiNet online over **SmartPort** (apple2 `fujinet-lib`; same wire protocol).
 
 ## Phase 8 — Polish & release
+- [ ] **Visual parity across platforms** — one shared look, each to its machine's
+      strengths (see [`docs/future-enhancements.md`](docs/future-enhancements.md)).
 - [ ] Asset pipeline (charsets, sprites/PM shapes, palettes, SFX/music).
 - [ ] Sound/music per chip; animation polish; AI difficulty levels.
 - [ ] Packaging: `.atr` / `.dsk` / `.ddp` / `.d64` / `.po`; GitHub Releases.

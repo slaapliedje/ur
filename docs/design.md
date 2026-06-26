@@ -50,6 +50,15 @@ Per-platform rendering (uses each machine's strengths; details in
 
 **DECIDE:** exact layout, color scheme, and piece art per platform.
 
+**Visual parity goal.** All four builds should read as the *same* game — a shared
+"lapis + gold, physical board, gold rosettes, round two-tone tokens" language —
+each realized to its machine's strengths rather than a lowest common denominator
+(the FujiNet 5 Card Stud Atari look is the bar). The current builds each lead in a
+different area (e.g. the Adam has a physical cell board but flat-colour rosettes;
+the Atari has shaped rosettes but diamond cells), so the work is to back-fill each
+one's weaker side. The vision + concrete cross-pollination TODOs live in
+[`future-enhancements.md`](future-enhancements.md).
+
 ## Feedback & animation
 
 - Dice **roll** animation, **move** animation along the path, **capture** (piece

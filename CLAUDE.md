@@ -15,9 +15,14 @@ FujiNet**.
 3. **Commodore 64** — third target. *(6502 / 6510)*
 4. **Apple II** — fourth target. *(6502)*
 
-Only the Atari build is active right now. The Adam, C64, and Apple II directories
-exist so cross-platform concerns are designed in from day one, but contain no game
-code yet.
+All four targets now have a working platform layer with local play **and FujiNet
+online**: **Atari** (charset board + PMG cursor + POKEY), **Adam** (colour board +
+sprite tokens + SN76489), **C64** (multicolor sprite-token showcase + SID), and
+**Apple II** (lo-res *and* double-hi-res 16-colour boards + 1-bit speaker). Every
+target speaks the same `N:TCP` wire protocol to the Go server. The Atari and Adam
+online paths are the most exercised end-to-end; the C64/Apple II online builds are
+verified to boot + fail-gracefully without FujiNet (full cross-play needs FujiNet +
+the server). See each `src/<platform>/CLAUDE.md` and [`ROADMAP.md`](ROADMAP.md).
 
 This order deliberately inverts the usual historical priority: back in the day,
 games tended to target the Apple II and C64 first — and often skipped the Atari and
