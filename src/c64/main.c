@@ -1024,6 +1024,22 @@ static void play_local(bool ai1)
     cgetc();
 }
 
+/* Title decoration: a board-motif band (gold rosette flowers + beveled lapis tiles)
+ * under the title. Multicolor mode is safe on the menu — all menu/HUD text uses
+ * colours < 8, which stay hi-res. (No-op on the online ROM-charset build.) */
+static void title_banner(void)
+{
+#if CUSTOM_CHARSET && !defined(UR_CHARSET)
+    unsigned char x;
+    *(unsigned char *)0xD022 = C_LBLUE;
+    *(unsigned char *)0xD023 = C_BLACK;
+    *(unsigned char *)0xD016 |= 0x10;            /* MC char mode for the band */
+    for (x = 2; x <= 36; x += 2)
+        if (x & 2) put_glyph(x, 3, G_LANE, CRAM_LANE);   /* beveled lapis tile */
+        else       put_glyph(x, 3, G_ROSE, CRAM_ROSE);   /* gold rosette flower */
+#endif
+}
+
 int main(void)
 {
     unsigned char key;
@@ -1048,6 +1064,7 @@ int main(void)
 
     for (;;) {
         clrscr();
+        title_banner();          /* gold-rosette + lapis-tile board motif (row 3) */
         textcolor(COL_TITLE); cputsxy(0, 0, "The Royal Game of Ur");
         textcolor(COL_LABEL); cputsxy(0, 1, "Commodore 64");
 #ifdef UR_ONLINE
