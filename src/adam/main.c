@@ -134,13 +134,45 @@ static unsigned char celly(unsigned char row) { return (unsigned char)(2 + (row 
 #define COL_ROSE    LIGHTBLUE   /* rosette cell accent (distinct, calm) */
 #define COL_LABEL   WHITE
 
-/* Paint one 16x16 board cell (2x2 chars) with background colour bg. */
-static void fill_cell(unsigned char col, unsigned char row, unsigned char bg)
+/* ---- carved board cells (Graphics II custom patterns) -------------------- *
+ * The Adam is already in Mode II (a 256x192 bitmap), so each 16x16 board cell can
+ * be a real carved shape instead of a flat colour block: a raised grey lane tile
+ * (black bottom/right shadow) and a rounded GOLD rosette (a shaped flower — closing
+ * the Adam's one stated visual gap). Each cell is 4 custom 8x8 patterns (TL,TR,BL,
+ * BR) written straight to the pattern + colour tables. The name table is the
+ * standard mangled-mode ramp, so the pattern slot for screen (x,y) is
+ * (y%8)*32 + x in screen-third y/8. */
+#define LANE_COLOR ((VDP_INK_BLACK << 4) | VDP_INK_GRAY)            /* shadow on grey */
+#define ROSE_COLOR ((VDP_INK_DARK_YELLOW << 4) | VDP_INK_DARK_BLUE) /* gold on lapis  */
+
+static const unsigned char g_lane_cell[32] = {   /* raised grey tile (BR shadow) */
+    0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,   /* TL: face                         */
+    0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,   /* TR: right-edge shadow            */
+    0x00,0x00,0x00,0x00,0x00,0x00,0x00,0xFF,   /* BL: bottom-edge shadow           */
+    0x01,0x01,0x01,0x01,0x01,0x01,0x01,0xFF    /* BR: bottom + right shadow        */
+};
+static const unsigned char g_rose_cell[32] = {   /* rounded gold rosette + pip     */
+    0x07,0x1F,0x3F,0x7F,0xFF,0xFF,0xFE,0xFC,   /* TL */
+    0xE0,0xF8,0xFC,0xFE,0xFF,0xFF,0x7F,0x3F,   /* TR */
+    0xFC,0xFE,0xFF,0xFF,0x7F,0x3F,0x1F,0x07,   /* BL */
+    0x3F,0x7F,0xFF,0xFF,0xFE,0xFC,0xF8,0xE0    /* BR */
+};
+
+/* Draw a carved 16x16 cell (2x2 custom chars) at board (col,row). */
+static void carve_cell(unsigned char col, unsigned char row,
+                       const unsigned char *q, unsigned char color)
 {
     unsigned char x = cellx(col), y = celly(row);
-    textbackground(bg);
-    gotoxy(x, y);     cputs("  ");
-    gotoxy(x, y + 1); cputs("  ");
+    unsigned int  place = (y < 8) ? place_1 : (y < 16) ? place_2 : place_3;
+    int c = (int)((unsigned int)(y & 7) * 32 + x);
+    vdp_set_char_form(c,      (void *)(q +  0), place);   /* TL */
+    vdp_set_char_form(c + 1,  (void *)(q +  8), place);   /* TR */
+    vdp_set_char_form(c + 32, (void *)(q + 16), place);   /* BL */
+    vdp_set_char_form(c + 33, (void *)(q + 24), place);   /* BR */
+    vdp_set_char_color(c,      color, place);
+    vdp_set_char_color(c + 1,  color, place);
+    vdp_set_char_color(c + 32, color, place);
+    vdp_set_char_color(c + 33, color, place);
 }
 
 /*
@@ -238,8 +270,12 @@ static void draw_board(unsigned char roll, const char *msg)
      * cut-away corners (mid rows, side columns) are simply not drawn. */
     for (row = 1; row <= 8; row++)
         for (col = 0; col < 3; col++)
-            if (col == 1 || row <= 4 || row >= 7)
-                fill_cell(col, row, is_rosette_cell(row, col) ? COL_ROSE : COL_CELL);
+            if (col == 1 || row <= 4 || row >= 7) {
+                if (is_rosette_cell(row, col))
+                    carve_cell(col, row, g_rose_cell, ROSE_COLOR);
+                else
+                    carve_cell(col, row, g_lane_cell, LANE_COLOR);
+            }
 
     place_pieces();
 
