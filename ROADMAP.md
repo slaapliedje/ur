@@ -75,6 +75,10 @@ committable state.
 - [x] **ColecoVision cartridge** (`make coleco` → `build/coleco/ur.rom`): the same
       Adam layer with controller (keypad + FIRE) input, online/EOS/AdamNet stripped;
       fits the CV's 1 KB RAM. Verified in MAME (`coleco`).
+- [x] **Controller input on the Adam too** — `get_key()` polls the ColecoVision
+      controller (`joystick(3)`: keypad digits + FIRE) *and* the keyboard
+      (non-blocking EOS poll) each loop, so the Adam is playable with a joystick,
+      sidestepping the laggy emulated EOS keyboard. Verified in MAME (`adam`).
 - [ ] **Adam ↔ Atari cross-play** end-to-end (needs FujiNet + the server, real hw).
 
 ## Phase 6 — Commodore 64 port
@@ -124,7 +128,16 @@ committable state.
 - [ ] **Visual parity across platforms** — one shared look, each to its machine's
       strengths (see [`docs/future-enhancements.md`](docs/future-enhancements.md)).
 - [ ] Asset pipeline (charsets, sprites/PM shapes, palettes, SFX/music).
-- [ ] Sound/music per chip; animation polish; AI difficulty levels.
+- [x] **Title music — the Hurrian Hymn** (h.6, Ugarit c.1400 BCE, the oldest
+      notated melody; Dumbrill/Levy reconstruction). One shared melody table
+      (`src/common/music.{h,c}`: MIDI notes + eighth-note durations) with a per-
+      platform player mapping it to each chip — POKEY (Atari), SID (C64), SN76489
+      (Adam/ColecoVision), 1-bit speaker (Apple II). Plays once on the title/menu,
+      skippable by any key/FIRE. **Verified by capturing emulator audio and
+      extracting the pitch sequence** on Atari/C64/ColecoVision (exact melody, right
+      octave + tempo ~110bpm); Adam shares the CV code; Apple II plays via the
+      speaker (clean pitch capture inconclusive in-harness — verify on real hw).
+- [ ] More sound/music per chip (in-game underscore?); animation polish; AI levels.
 - [ ] Packaging: `.atr` / `.dsk` / `.ddp` / `.d64` / `.po`; GitHub Releases.
 - [ ] Distribution (itch.io / AtariAge / FujiNet game listing).
 

@@ -14,6 +14,7 @@
 
 #include "ur.h"
 #include "sound.h"
+#include "music.h"          /* the Hurrian Hymn melody data (shared) */
 
 #define SN_PORT 0xFF
 
@@ -104,4 +105,41 @@ void sfx_for_result(const ur_move_result *r)
     else if (r->scored)   sfx_score();
     else if (r->rosette)  sfx_rosette();
     else                  sfx_move();
+}
+
+/* ---- title music: the Hurrian Hymn -------------------------------------- *
+ * SN76489 tone period for each scale note the hymn uses, indexed by
+ * (midi - music_note_lo) over B4..A5. The chip divides its 3.579545MHz clock by
+ * 32*n, so n = 111860 / Hz (this is the true octave; the sfx N_* constants above
+ * use 2x that and so sound an octave low — fine for blips, wrong for a melody).
+ * Shared by the Adam and the ColecoVision. */
+static const unsigned int hymn_sn[11] = {
+    226, 214, 202, 190, 180, 170, 160, 151, 143, 135, 127  /* B4 C5 .. A5 */
+};
+
+/* Fine-grained music delay (~10ms per unit). The sfx hold() is far too coarse for
+ * melody — under the z88dk classic compiler (sccz80, unoptimised volatile loop) one
+ * hold() unit is ~290ms, so a whole note vocabulary needs a finer base. */
+static void mdelay(unsigned int units)
+{
+    volatile unsigned int i;
+    unsigned int j;
+    for (j = 0; j < units; j++)
+        for (i = 0; i < 240u; i++) { /* spin */ }
+}
+
+/* ~10ms music units per eighth-note -> ~280ms eighth (~110bpm). */
+#define ADAM_MUS_EIGHTH 28u
+
+/* Play one melody note (MIDI number, or MUSIC_REST) for `eighths` eighth-note
+ * ticks (1/2/4) on tone channel 0, with a short note-off gap so repeated pitches
+ * articulate. The melody loop + the input poll live in main.c. */
+void adam_music_note(unsigned char midi, unsigned char eighths)
+{
+    unsigned int units = (unsigned int)eighths * ADAM_MUS_EIGHTH;
+    if (midi == MUSIC_REST) { snd_silence(); mdelay(units); return; }
+    sn_tone(0, hymn_sn[midi - music_note_lo], 3);    /* tone on, mid volume */
+    mdelay(units - 6u);
+    sn_tone(0, hymn_sn[midi - music_note_lo], 15);   /* tone off (articulation) */
+    mdelay(6u);
 }

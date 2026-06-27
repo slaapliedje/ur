@@ -17,6 +17,7 @@
 #include "ur.h"
 #include "proto.h"
 #include "atarihw.h"
+#include "music.h"             /* the Hurrian Hymn title theme (shared melody) */
 #include "fujinet-network.h"
 #include "fujinet-fuji.h"      /* fuji_*_appkey: persistent profile on the FujiNet SD */
 
@@ -858,6 +859,26 @@ static void hrun(unsigned char x, unsigned char y, unsigned char n, char ch, boo
     if (inv) revers(0);
 }
 
+/* Title music: the Hurrian Hymn, played once at boot. Pollable — returns the
+ * moment a key or FIRE is pressed (a pending key is left in the buffer for the
+ * menu's cgetc to read), so the player can skip straight to selecting a mode.
+ * delay_lines() runs a bit slower than one scanline/iter, so ~2500 reads ≈ an
+ * eighth-note at ~105bpm (a stately pace for the oldest written tune). */
+#define MUSIC_TICK_LINES 2500u
+static bool g_played_music = false;
+static void play_hymn(void)
+{
+    uint16_t i;
+    if (g_played_music) return;       /* only on the first title (not every return) */
+    g_played_music = true;
+    atari_music_note(MUSIC_REST, 1);  /* silence POKEY ch1 before the first note */
+    for (i = 0; i < ur_hymn_len; i++) {
+        if (kbhit() || atari_trig()) return;         /* skip; key left for the menu */
+        atari_music_note(ur_hymn[i].note,
+                         (unsigned int)ur_hymn[i].dur * MUSIC_TICK_LINES);
+    }
+}
+
 /* Sumerian title screen + mode select. Title/menu text live on the mode-2 rows;
  * the ziggurat scene is drawn in the mode-4 colour band (rows 4..18). Returns the
  * chosen mode key ('1'..'3'). The ']' glyph is a solid block, '\' a cuneiform
@@ -904,6 +925,7 @@ static char title_screen(void)
     /* Lapis gradient sky (DLI) + pulse the gold (COLOR3 = ziggurat + sun) while
      * waiting for a key, so the title shimmers. Restore everything on the way out. */
     atari_title_sky_on();
+    play_hymn();                              /* the Hurrian Hymn (once, skippable) */
     {
         unsigned char lum = 2, up = 1;
         for (;;) {

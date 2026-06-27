@@ -22,6 +22,7 @@
 #include "ur.h"
 #include "gr.h"
 #include "sound.h"
+#include "music.h"          /* the Hurrian Hymn title theme (shared melody)       */
 #ifdef UR_DHGR
 #include "dhgr.h"
 #endif
@@ -694,6 +695,21 @@ static void play_local(bool ai1)
     cgetc();
 }
 
+/* Title music: the Hurrian Hymn, played once at boot. Skippable — returns as soon
+ * as a key is waiting (left for the menu's cgetc), so the player can go straight to
+ * a mode. (apple2_music_note scales eighth-ticks to a ~110bpm tempo.) */
+static bool g_played_music = false;
+static void play_hymn(void)
+{
+    uint16_t i;
+    if (g_played_music) return;       /* only on the first title (not every return) */
+    g_played_music = true;
+    for (i = 0; i < ur_hymn_len; i++) {
+        if (kbhit()) return;          /* skip; key left for the menu */
+        apple2_music_note(ur_hymn[i].note, ur_hymn[i].dur);
+    }
+}
+
 int main(void)
 {
     unsigned char key;
@@ -726,6 +742,8 @@ int main(void)
         cputsxy(0, 5, "2) ONE PLAYER VS COMPUTER");
         cputsxy(0, 7, "SELECT (1-2):");
 #endif
+
+        play_hymn();              /* the Hurrian Hymn (once at boot, skippable) */
 
         /* Seed the RNG from how long the player takes to choose. */
         while (!kbhit()) g_seed++;

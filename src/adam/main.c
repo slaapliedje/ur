@@ -19,6 +19,7 @@
 #include "ur.h"
 #include "proto.h"          /* shared wire-protocol codec (cross-platform) */
 #include "sound.h"          /* SN76489 sound effects                              */
+#include "music.h"          /* the Hurrian Hymn title theme (shared melody)       */
 #ifndef UR_COLECO           /* ColecoVision: no AdamNet/EOS/FujiNet (cartridge)   */
 #include "fujinet-network.h"/* FujiNet N: device: network_init/open/read/write/... */
 #include "fujinet-fuji.h"   /* fuji_*_appkey: persistent profile + lobby handoff   */
@@ -31,32 +32,35 @@
 #define NO_ROLL  0xFF
 
 /*
- * Keyboard input on the Adam.
+ * Input on the Adam: keyboard AND ColecoVision controller, polled together.
  *
  * z88dk's `coleco` conio has NO real keyboard: getk() is a stub that always
- * returns 0 ("the Colecovision doesn't have a keyboard"), so cgetc()/kbhit()
- * never see a keypress. The Adam *does* have a keyboard, reached through EOS on
- * the AdamNet bus via tschak909's eoslib (which we link).
+ * returns 0 ("the Colecovision doesn't have a keyboard"). The Adam *does* have a
+ * keyboard, reached through EOS on the AdamNet bus via tschak909's eoslib. The
+ * plain eos_read_keyboard() BLOCKS until a key arrives -- which would freeze out
+ * the controller -- so get_key() instead drives the async non-blocking pair
+ * (eos_start_read_keyboard + a raw-flag poll; see kbd_poll) and reads the
+ * controller every loop, returning whichever fires first. A keyboard tap is
+ * debounced with settle(): in MAME the EOS read is level-triggered and the game
+ * loop outpaces a press, so without it one physical tap satisfies several reads
+ * and blows through prompts (the UI therefore says "press").
  *
- * eos_read_keyboard() (verified on MAME) BLOCKS while the keyboard buffer is
- * empty and returns the next key while one is available -- and it keeps
- * returning the same key for as long as it is physically held. The game loop
- * runs far faster than a keypress, so without care a single press would satisfy
- * several get_key() calls and blow through prompts. The async non-blocking pair
- * (start/end) exists but races on AdamNet read latency. So we keep it simple:
- * after reading a key we busy-wait (settle) long enough that a normal tap is
- * released before the next read, turning one physical press into one get_key().
- * Holding a key longer than the settle will repeat -- so the UI says "press".
+ * The controller is the SNAPPY path. The Adam and ColecoVision share the same
+ * controller ports, read via z88dk's joystick() (= coleco_joypad). joystick(which)
+ * returns the keypad ASCII ('1'-'9','0','*','#') in the high byte and the MOVE_*
+ * bits in the low byte (which=3 = player-1 keypad+stick); we map keypad digits to
+ * the same menu/move-number input the keyboard uses, and FIRE to roll/confirm. The
+ * emulated EOS keyboard is laggy under MAME (AdamNet latency), so the joystick
+ * sidesteps it entirely -- and the same read also drives the ColecoVision build.
+ * (Verified in MAME's `adam` driver: controller keypad -> host numpad, FIRE ->
+ * Left Ctrl; both menu select and in-game roll/move work via the controller.)
  */
-#ifndef UR_COLECO
-extern unsigned char eos_read_keyboard(void);
-#else
-/* ColecoVision controller. joystick(which) (z88dk, = coleco_joypad) returns the
- * keypad ASCII ('1'-'9','0','*','#') in the high byte and the joystick MOVE_* bits
- * in the low byte (which=3 = player-1 keypad+stick). We map the keypad digits onto
- * the same menu/move-number input the keyboard build uses, and FIRE to roll. */
 #include <games.h>
 #define CV_FIRE (MOVE_FIRE | MOVE_FIRE2)   /* 0x10 | 0x20 */
+#ifndef UR_COLECO
+#include <arch/z80.h>       /* AsmCall + Z80_registers: raw-flag non-blocking kbd poll */
+extern unsigned char eos_read_keyboard(void);       /* blocking read (text entry)      */
+extern unsigned char eos_start_read_keyboard(void); /* kick off a background read      */
 #endif
 
 /* Busy-wait ~0.4s on a 3.58MHz Z80 so a tap releases before the next read
@@ -102,18 +106,76 @@ static unsigned char get_key(void)
     }
 }
 #else
+/* Non-blocking keyboard poll. eos_read_keyboard() BLOCKS, which would freeze out
+ * the joystick, so we drive the async pair by hand: eos_start_read_keyboard() kicks
+ * off a background read (above the loop), then this checks the AdamNet result via
+ * the 0xFC4B EOS entry — honouring the CARRY flag (read finished) and ZERO flag (no
+ * error -> A holds the key) that the eos_end_read_keyboard() wrapper throws away.
+ * Returns the key, or 0 when nothing has arrived yet (NAK auto-reissues the read). */
+static unsigned char kbd_poll(void)
+{
+    Z80_registers r;
+    AsmCall(0xFC4B, &r, REGS_ALL, REGS_ALL);        /* eos_end_read_keyboard, raw flags */
+    if ((r.Bytes.F & 0x01) && (r.Bytes.F & 0x40))   /* C: finished, Z: no error          */
+        return r.Bytes.A;                           /* -> the key just read              */
+    return 0;                                        /* still pending / NAK               */
+}
+
+/* Adam: poll BOTH the joystick and the keyboard, returning whichever fires first. */
 static unsigned char get_key(void)
 {
-    unsigned char k;
-    do {
-        k = eos_read_keyboard();            /* blocks until a key is available */
+    unsigned int r;
+    unsigned char kp, k;
+
+    /* Debounce: wait for any held controller button to release (one tap = one key). */
+    do { r = joystick(3); g_seed += 0x9E37u; }
+    while ((r >> 8) || (r & CV_FIRE));
+
+    eos_start_read_keyboard();                       /* begin a background keyboard read */
+    for (;;) {
+        /* Controller — snappy hardware read (same path as the ColecoVision). */
+        r = joystick(3);
         g_seed += 0x9E37u;
-    } while (k < 0x20 || k >= 0x7F);
-    g_seed = (uint16_t)(g_seed * 31u + k);
-    settle();                               /* let the tap release (debounce) */
-    return k;
+        kp = (unsigned char)(r >> 8);
+        if (kp >= '1' && kp <= '9') { g_seed = (uint16_t)(g_seed * 31u + kp); return kp; }
+        if (r & CV_FIRE)            { g_seed = (uint16_t)(g_seed * 31u + 1);  return '\r'; }
+
+        /* Keyboard — non-blocking AdamNet poll; accept printable keys only. */
+        k = kbd_poll();
+        if (k >= 0x20 && k < 0x7F) {
+            g_seed = (uint16_t)(g_seed * 31u + k);
+            settle();                               /* let the tap release (debounce) */
+            return k;
+        }
+    }
 }
 #endif
+
+/* Title music: the Hurrian Hymn, played once at boot. Skippable — the controller
+ * (any keypad digit or FIRE), and on the Adam the keyboard too, ends it early so
+ * the player can go straight to the menu. Drives SN76489 channel 0 (sfx-free on
+ * the menu). Shared by the Adam and ColecoVision builds. */
+static bool g_played_music = false;
+static void play_hymn(void)
+{
+    uint16_t i;
+    unsigned int r;
+    if (g_played_music) return;       /* only on the first menu (not every return) */
+    g_played_music = true;
+    snd_silence();                     /* kill any boot-state PSG drone on other channels */
+#ifndef UR_COLECO
+    eos_start_read_keyboard();         /* begin a background keyboard read (skip) */
+#endif
+    for (i = 0; i < ur_hymn_len; i++) {
+        r = joystick(3);
+        if ((r >> 8) || (r & CV_FIRE)) break;        /* controller skip */
+#ifndef UR_COLECO
+        if (kbd_poll() >= 0x20) break;               /* keyboard skip (Adam) */
+#endif
+        adam_music_note(ur_hymn[i].note, ur_hymn[i].dur);
+    }
+    snd_silence();
+}
 
 /* Roll the dice, seeding the core RNG from accumulated key entropy on first use
  * (by now the player has pressed at least the menu key and a roll key). */
@@ -741,6 +803,7 @@ int main(void)
     bool over;
 
     bordercolor(COL_BG);            /* lapis border around the screen */
+    snd_silence();                  /* kill the SN76489 power-on drone at boot */
 
 #if UR_SNDTEST  /* one-off: play every SFX in sequence (verify the SN76489) */
     textbackground(COL_BG); clrscr();
@@ -792,6 +855,8 @@ int main(void)
         textcolor(COL_LABEL);
         gotoxy(0, 22); cputs("Rules by Dr Irving Finkel,");
         gotoxy(0, 23); cputs("British Museum - with thanks.");
+
+        play_hymn();                /* the Hurrian Hymn (once at boot, skippable) */
 
         /* Read the menu choice (get_key waits for one fresh press and folds it
          * + its timing into the RNG seed; the RNG is seeded at the first roll). */

@@ -155,6 +155,8 @@ src/
   common/            ← portable C core (rules, AI, state machine, protocol codec)
     CLAUDE.md
     plat.h           ← the platform interface contract (core ↔ platform layers)
+    music.{h,c}      ← shared title-music melody (the Hurrian Hymn); per-chip players
+
   net/CLAUDE.md      ← networking (N: device / fujinet-lib) + FGS lobby/game client
   atari/CLAUDE.md    ← Atari 8-bit platform layer (1st target, 6502)
   adam/CLAUDE.md     ← Coleco Adam platform layer (2nd target, Z80 / z88dk)

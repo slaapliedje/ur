@@ -125,11 +125,30 @@ on the AdamNet bus, via tschak909's **eoslib** (already linked for `eos.lib`):
 - `eos_keyboard_status()` returns a constant `0x80` in MAME — **not** a usable
   key-pending flag.
 - `eos_start_read_keyboard()` / `eos_end_read_keyboard()` are a *non-blocking*
-  pair (end returns the key, or `13` = NAK and auto-reissues) but race on AdamNet
-  read latency, so we don't use them for input.
+  pair. We **do** use them now (see **Controller input** below): `get_key()` kicks
+  off a background read with `eos_start_read_keyboard()`, then polls EOS entry
+  `0xFC4B` directly, honouring the **carry** flag (read finished) and **zero** flag
+  (no error → `A` = the key) that the `eos_end_read_keyboard()` wrapper discards.
+  This lets get_key() read the joystick in the same loop instead of blocking. The
+  read still races on AdamNet latency, so the keyboard is laggy under MAME (which
+  is exactly why the controller is the better path there).
 
-All verified empirically by driving MAME under X11 (xdotool + ImageMagick
-`import`) and reading the screen back.
+## Controller input on the Adam (joystick + keypad)
+
+The Adam ships with **ColecoVision-style controllers** on the same ports the CV
+uses, so the Adam reads them the same way the cartridge build does — via z88dk's
+`joystick(3)` (= `coleco_joypad`): **keypad ASCII** (`'1'`-`'9'`,`*`,`#`) in the
+high byte, joystick `MOVE_*` bits (FIRE) in the low byte. `get_key()` polls **both**
+the controller (snappy, hardware ports) and the keyboard (non-blocking, see above)
+each loop and returns whichever fires first, so the game is fully playable with a
+controller — sidestepping the laggy emulated EOS keyboard. Keypad digits drive the
+same menu/move selection the keyboard does; FIRE returns RETURN for "press a key"
+/ roll prompts. Text entry (set name/host) keeps the blocking `eos_read_keyboard()`.
+
+**Verified in MAME's `adam` driver** (controller keypad → host numeric keypad,
+FIRE → Left Ctrl): KP-digit menu select, FIRE roll, and KP-digit in-game move all
+work via the controller. All verified empirically by driving MAME under X11
+(xdotool + ImageMagick `import`) and reading the screen back.
 
 Implements the `plat_*` interface for the **Coleco Adam**.
 
@@ -160,9 +179,9 @@ differ. The `make coleco` target (in `makefiles/adam.mk`) builds with `+coleco`
   **instantly** (a cartridge — no ~60 s data-pack load like the Adam). Verified in
   MAME: menu + keypad selection + the carved board + a vs-AI turn.
 
-*Future:* offer the controller on the **Adam** too (it has CV controllers), as an
-alternative to the keyboard — tricky because `eos_read_keyboard()` blocks, so it
-would need a non-blocking poll of both keyboard and joystick.
+*(The Adam build also offers the controller as an alternative to the keyboard —
+see **Controller input on the Adam** above. The same `joystick(3)` read drives
+both the Adam and the ColecoVision; the Adam additionally polls the keyboard.)*
 
 ## ⚠️ This is a Z80 machine, not 6502
 

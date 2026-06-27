@@ -2,6 +2,7 @@
 /* Atari colour + POKEY sound helpers. See atarihw.h. */
 
 #include "atarihw.h"
+#include "music.h"          /* the Hurrian Hymn melody data (shared) */
 
 /* POKEY audio registers (channel 1). */
 #define AUDF1  (*(volatile unsigned char *)0xD200)   /* frequency (divisor)   */
@@ -392,4 +393,27 @@ void sfx_win(void)
     tone(96,  8, 700);
     tone(72,  8, 700);
     tone(60,  8, 1200);
+}
+
+/* ---- title music: the Hurrian Hymn -------------------------------------- *
+ * POKEY AUDF divisor for each scale note the hymn uses, indexed by
+ * (midi - music_note_lo) over B4..A5. AUDF is a divisor (lower = higher pitch);
+ * values computed from f = 63921 / (2*(AUDF+1)) for the equal-tempered pitches. */
+static const unsigned char hymn_pokey[11] = {
+    64, 60, 57, 53, 50, 47, 45, 42, 40, 37, 35   /* B4 C5 C#5 D5 D#5 E5 F5 F#5 G5 G#5 A5 */
+};
+
+/* Play one melody note (or a rest if MUSIC_REST) for `lines` scanlines, ending
+ * with a short note-off gap so repeated pitches articulate. The melody loop +
+ * input polling live in main.c (which has conio/joystick). */
+void atari_music_note(unsigned char midi, unsigned int lines)
+{
+    unsigned int gap = (lines > 1200u) ? 400u : (lines >> 2);
+    if (midi == MUSIC_REST) { AUDC1 = 0; delay_lines(lines); return; }
+    AUDCTL = 0;
+    AUDF1  = hymn_pokey[midi - music_note_lo];
+    AUDC1  = (unsigned char)(PURE_TONE | 8);     /* clean tone, mid volume */
+    delay_lines(lines - gap);
+    AUDC1  = 0;                                   /* note off (articulation gap) */
+    delay_lines(gap);
 }

@@ -43,6 +43,12 @@ Z80-based Coleco Adam via `z88dk`/SDCC. This is where the actual rules of Ur liv
   bytes defined in [`docs/protocol.md`](../../docs/protocol.md). Only serialization
   lives here; the actual send/receive (FujiNet transport) is in
   [`src/net`](../net/CLAUDE.md).
+- **Title music** (`music.{h,c}`) — the **Hurrian Hymn** as platform-neutral data:
+  `ur_hymn[]` is a list of `{note, dur}` steps (`note` = absolute MIDI number or
+  `MUSIC_REST`; `dur` in eighth-note ticks). Each platform owns a tiny `play_hymn()`
+  that maps the MIDI number to its sound chip and sets the tempo — the core never
+  touches hardware. `ur_hymn_len` is a literal (sccz80 rejects `sizeof` in a
+  file-scope const initializer), so keep it in sync with the array.
 
 ## The platform interface (the boundary)
 

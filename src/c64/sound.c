@@ -10,6 +10,7 @@
 
 #include "ur.h"
 #include "sound.h"
+#include "music.h"          /* the Hurrian Hymn melody data (shared) */
 
 #define SIDR(off) (*(volatile unsigned char *)(0xD400u + (off)))
 
@@ -90,4 +91,39 @@ void sfx_for_result(const ur_move_result *r)
     else if (r->scored)   sfx_score();
     else if (r->rosette)  sfx_rosette();
     else                  sfx_move();
+}
+
+/* ---- title music: the Hurrian Hymn -------------------------------------- *
+ * SID frequency value (Fn = Hz / 0.0596, PAL) for each scale note the hymn uses,
+ * indexed by (midi - music_note_lo) over B4..A5. A mellow triangle voice. */
+static const unsigned int hymn_sid[11] = {
+    8286, 8779, 9301, 9854, 10440, 11062, 11719, 12416, 13154, 13937, 14765
+};
+
+/* Fine-grained music delay (~6ms per unit on a ~1MHz 6510) — the sfx hold() is far
+ * too coarse (~220ms/unit) to articulate melody notes. */
+static void mdelay(unsigned int units)
+{
+    volatile unsigned int i;
+    unsigned int j;
+    for (j = 0; j < units; j++)
+        for (i = 0; i < 70u; i++) { /* spin */ }
+}
+
+/* ~6ms music units per eighth-note -> ~280ms eighth (~110bpm). (45 units measured
+ * ~360ms in VICE; 35 scales that to ~280ms to match the Atari's tempo.) */
+#define MUS_EIGHTH_UNITS 35u
+
+/* Play one melody note (MIDI number, or MUSIC_REST) for `eighths` eighth-note
+ * ticks (1/2/4). Gates off a hair early so repeated pitches articulate. The
+ * melody loop + the input poll live in main.c. */
+void c64_music_note(unsigned char midi, unsigned char eighths)
+{
+    unsigned int units = (unsigned int)eighths * MUS_EIGHTH_UNITS;
+    if (midi == MUSIC_REST) { SIDR(0x04) = 0; mdelay(units); return; }
+    sid_init();
+    sid_voice(hymn_sid[midi - music_note_lo], WAVE_TRI | 0x01);   /* gate on */
+    mdelay(units - 6u);                                          /* note body */
+    SIDR(0x04) = WAVE_TRI;                                       /* gate off  */
+    mdelay(6u);                                                  /* ~articulation */
 }

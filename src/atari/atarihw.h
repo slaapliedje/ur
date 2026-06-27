@@ -37,4 +37,7 @@ void sfx_rosette(void);
 void sfx_score(void);
 void sfx_win(void);
 
+/* Play one Hurrian-Hymn note (MIDI number, or MUSIC_REST) for `lines` scanlines. */
+void atari_music_note(unsigned char midi, unsigned int lines);
+
 #endif /* ATARIHW_H */

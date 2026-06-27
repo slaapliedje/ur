@@ -21,4 +21,7 @@ void sfx_win(void);
 void sfx_for_result(const ur_move_result *r);
 void snd_silence(void);
 
+/* Play one Hurrian-Hymn note (MIDI number, or MUSIC_REST) for `eighths` ticks. */
+void apple2_music_note(unsigned char midi, unsigned char eighths);
+
 #endif /* UR_APPLE2_SOUND_H */

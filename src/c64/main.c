@@ -37,6 +37,7 @@
 
 #include "ur.h"
 #include "sound.h"          /* SID sound effects                                 */
+#include "music.h"          /* the Hurrian Hymn title theme (shared melody)       */
 #ifdef UR_ONLINE
 #include "proto.h"          /* the cross-platform wire protocol (same as Atari)  */
 #include "fujinet-network.h"
@@ -1069,6 +1070,23 @@ static void title_sprites(void)
 #endif
 }
 
+/* Title music: the Hurrian Hymn, played once at boot. Skippable — returns the
+ * moment a key is waiting (left in the buffer for the menu's cgetc), so the player
+ * can go straight to a mode. (c64_music_note scales eighth-ticks to a ~110bpm
+ * tempo internally — a stately pace for the oldest written melody.) */
+static bool g_played_music = false;
+static void play_hymn(void)
+{
+    uint16_t i;
+    if (g_played_music) return;       /* only on the first title (not every return) */
+    g_played_music = true;
+    for (i = 0; i < ur_hymn_len; i++) {
+        if (kbhit()) return;          /* skip; key left for the menu */
+        c64_music_note(ur_hymn[i].note, ur_hymn[i].dur);
+    }
+    snd_silence();
+}
+
 int main(void)
 {
     unsigned char key;
@@ -1117,6 +1135,8 @@ int main(void)
         textcolor(COL_LABEL);
         cputsxy(0, 22, "Rules deciphered by Dr Irving Finkel,");
         cputsxy(0, 23, "British Museum - with thanks.");
+
+        play_hymn();              /* the Hurrian Hymn (once at boot, skippable) */
 
         /* Seed the RNG from how long the player takes to choose. */
         while (!kbhit()) g_seed++;

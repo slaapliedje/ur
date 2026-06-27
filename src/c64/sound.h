@@ -19,4 +19,7 @@ void sfx_win(void);
 void sfx_for_result(const ur_move_result *r);
 void snd_silence(void);
 
+/* Play one Hurrian-Hymn note (MIDI number, or MUSIC_REST) for `holdunits`. */
+void c64_music_note(unsigned char midi, unsigned char holdunits);
+
 #endif /* UR_C64_SOUND_H */

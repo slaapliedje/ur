@@ -10,6 +10,7 @@
  */
 #include <stdint.h>
 #include "sound.h"
+#include "music.h"          /* the Hurrian Hymn melody data (shared) */
 
 #define SPKR (*(volatile unsigned char *)0xC030)
 
@@ -77,4 +78,36 @@ void sfx_for_result(const ur_move_result *r)
     else if (r->scored)    sfx_score();
     else if (r->rosette)   sfx_rosette();
     else                   sfx_move();
+}
+
+/* ---- title music: the Hurrian Hymn -------------------------------------- *
+ * The 1-bit speaker has no pitch register; pitch is the toggle delay (smaller =
+ * higher) and duration is the toggle count. Per scale note (B4..A5, indexed by
+ * midi - music_note_lo): hymn_pitch = the delay, hymn_tpe = half-cycles per
+ * eighth-note (higher notes need more toggles for the same wall-clock time).
+ * Values are computed from a ~9-cycle inner loop; if the constant is off the whole
+ * tune just transposes by a fixed ratio (intervals are preserved), so it stays
+ * recognizable. */
+static const unsigned char hymn_pitch[11] = {
+    115, 109, 103, 97, 91, 86, 81, 77, 72, 68, 65        /* B4 C5 .. A5 */
+};
+static const unsigned int hymn_tpe[11] = {
+    277, 292, 309, 328, 350, 370, 393, 413, 442, 468, 490
+};
+
+/* Play one melody note (MIDI number, or MUSIC_REST) for `eighths` eighth-note
+ * ticks (1/2/4), with a short gap so repeated pitches articulate. The melody loop
+ * + the input poll live in main.c. */
+void apple2_music_note(unsigned char midi, unsigned char eighths)
+{
+    unsigned char e;
+    if (midi == MUSIC_REST) {
+        for (e = 0; e < eighths; e++) { rest(9000); rest(9000); }  /* ~silence */
+        return;
+    }
+    {
+        unsigned char idx = (unsigned char)(midi - music_note_lo);
+        tone(hymn_pitch[idx], (unsigned int)(hymn_tpe[idx] * eighths));
+    }
+    rest(1800);                 /* brief note-off gap (articulation) */
 }
