@@ -266,13 +266,16 @@ static void sfx_for_result(const ur_move_result *r)
     else                  sfx_move();
 }
 
-/* Wait for the player to acknowledge: a fresh trigger press or any key. */
+/* Wait for the player to acknowledge: a fresh trigger press or any key. Paces on
+ * the per-frame heartbeat so the music keeps playing (and rosettes glint) while
+ * we wait. */
 static void wait_action(void)
 {
-    while (atari_trig()) { }
+    while (atari_trig()) atari_wait_frames(1);   /* drain a held trigger */
     for (;;) {
         if (kbhit()) { cgetc(); return; }
         if (atari_trig()) return;
+        atari_wait_frames(1);
     }
 }
 
@@ -362,6 +365,7 @@ static int8_t choose_move(unsigned char player, unsigned char roll)
             show_option(player, srcs, nsrc, sel, roll);
             centered = 0;
         }
+        atari_wait_frames(1);                 /* pace the poll + pump the music */
     }
 
     pos = srcs[sel];
@@ -883,12 +887,11 @@ static void hrun(unsigned char x, unsigned char y, unsigned char n, char ch, boo
     if (inv) revers(0);
 }
 
-/* Idle one display frame while keeping the Hurrian Hymn playing: advance the
- * 3-voice POKEY player one tick, then wait a frame. The title menu loops on this
- * so the tune plays (and loops) under the menu instead of blocking before it. */
+/* Idle one display frame on the title. atari_wait_frames() is the per-frame
+ * heartbeat that pumps the Hurrian Hymn, so the tune plays (and loops) under the
+ * menu instead of blocking before it. */
 static void title_idle(void)
 {
-    music_tick();
     atari_wait_frames(1);
 }
 
@@ -939,7 +942,6 @@ static char title_screen(void)
     cputsxy(3, 20, "2) One player vs computer");
     cputsxy(3, 21, "4) How to play");
     cputsxy(3, 23, "Keypad 1/2/4  -or-  stick/FIRE");
-    music_start();                            /* the Hurrian Hymn loops under the menu */
     {
         unsigned char sel = 1;                /* 0 = two players, 1 = vs computer */
         unsigned char s;
@@ -960,7 +962,6 @@ static char title_screen(void)
         while (atari_trig()) { }
         while (kbhit()) { }                   /* drain the held key before play */
     }
-    music_stop();
     return key;
 #else
     cputsxy(3, 19, "1) Two players");    cputsxy(22, 19, "2) vs Computer");
@@ -972,7 +973,6 @@ static char title_screen(void)
     /* Lapis gradient sky (DLI) + pulse the gold (COLOR3 = ziggurat + sun) while
      * waiting for a key, so the title shimmers. Restore everything on the way out. */
     atari_title_sky_on();
-    music_start();                            /* the Hurrian Hymn loops under the menu */
     {
         unsigned char lum = 2, up = 1, sh = 0;
         for (;;) {
@@ -982,10 +982,9 @@ static char title_screen(void)
                 if (up) { lum += 2; if (lum >= 14) up = 0; }
                 else    { lum -= 2; if (lum <= 2)  up = 1; }
             }
-            title_idle();                     /* tick the music + wait one frame */
+            title_idle();                     /* one frame; music pumps in the heartbeat */
         }
     }
-    music_stop();
     atari_title_sky_off();
     atari_setup_colors();
     return key;
@@ -1203,6 +1202,7 @@ int main(void)
     atari_mode4_board();
     atari_pmg_init();
     atari_quiet_sio();          /* no OS SIO "drive" drone during FujiNet polling */
+    music_start();              /* the Hurrian Hymn plays throughout (OPTION toggles it) */
 
 #ifndef UR_A5200
     profile_load();             /* name/wins/host from the FujiNet appkey, if any */

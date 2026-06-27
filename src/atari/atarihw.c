@@ -15,6 +15,8 @@
 #define AUDC2  (*(volatile unsigned char *)0xE803)
 #define AUDF3  (*(volatile unsigned char *)0xE804)
 #define AUDC3  (*(volatile unsigned char *)0xE805)
+#define AUDF4  (*(volatile unsigned char *)0xE806)   /* channel 4: sound effects */
+#define AUDC4  (*(volatile unsigned char *)0xE807)
 #define AUDCTL (*(volatile unsigned char *)0xE808)
 #define COLOR0 (*(volatile unsigned char *)0x000C)   /* COLPF0 shadow */
 #define COLOR1 (*(volatile unsigned char *)0x000D)   /* COLPF1        */
@@ -28,6 +30,8 @@
 #define AUDC2  (*(volatile unsigned char *)0xD203)
 #define AUDF3  (*(volatile unsigned char *)0xD204)
 #define AUDC3  (*(volatile unsigned char *)0xD205)
+#define AUDF4  (*(volatile unsigned char *)0xD206)   /* channel 4: sound effects */
+#define AUDC4  (*(volatile unsigned char *)0xD207)
 #define AUDCTL (*(volatile unsigned char *)0xD208)   /* audio control         */
 /* OS colour shadow registers (copied to the hardware each vertical blank).
  * Shared by the mode-2 text rows and the mode-4 board rows:
@@ -54,31 +58,50 @@
 #define PURE_TONE  0xA0   /* distortion bits for a clean tone (OR in volume 0-15) */
 #define BUZZ_TONE  0x40   /* buzzy distortion (for capture)                       */
 
-/* Busy-wait `lines` scanlines via WSYNC. The volatile store is never optimised
+/* ---- music + in-game shimmer state (players/steppers defined further down) -
+ * Declared up here so the per-frame driver (delay_lines / atari_wait_frames) can
+ * pump the music + animate the gold while the game waits, without forward fuss.
+ * The Hymn plays on POKEY voices 1-3; sound effects use voice 4, so they coexist. */
+static unsigned char m_playing;   /* music engine running                 */
+static unsigned char m_step;      /* index into ur_hymn[]                 */
+static unsigned char m_steprow;   /* eighth-rows done in current step     */
+static unsigned char m_rowframe;  /* frames left in the current row       */
+static unsigned char m_grow;      /* global row counter (bass cadence)    */
+static unsigned char m_envcnt;    /* frame counter for the decay ramp     */
+static unsigned char v_audf[3], v_vol[3];
+static unsigned char g_shimmer;   /* in-game gold (rosette/cursor) shimmer on */
+static unsigned char sh_lum, sh_up, sh_cnt;   /* shimmer pulse state      */
+
+static void shimmer_step(void);   /* pulse COLOR3 (gold) one frame, if enabled */
+static void music_toggle_poll(void); /* OPTION key toggles the music (A8)      */
+
+/* Busy-wait `lines` scanlines via WSYNC, pumping the music ~once per frame so the
+ * Hymn keeps playing through a sound effect. The volatile store is never optimised
  * away, so this gives a reliable, audible duration. ~15700 scanlines ~= 1 second. */
 static void delay_lines(unsigned int lines)
 {
-    unsigned int i;
-    for (i = 0; i < lines; i++)
+    unsigned int i, next = 0;
+    for (i = 0; i < lines; i++) {
+        if (i == next) { music_tick(); next += 262u; }   /* one music frame */
         WSYNC = 0;
+    }
 }
 
+/* Sound effects play on POKEY voice 4, leaving voices 1-3 for the Hymn. */
 static void tone(unsigned char pitch, unsigned char vol, unsigned int lines)
 {
-    AUDCTL = 0;
-    AUDF1  = pitch;
-    AUDC1  = (unsigned char)(PURE_TONE | (vol & 0x0F));
+    AUDF4  = pitch;
+    AUDC4  = (unsigned char)(PURE_TONE | (vol & 0x0F));
     delay_lines(lines);
-    AUDC1  = 0;
+    AUDC4  = 0;
 }
 
 static void buzz(unsigned char pitch, unsigned char vol, unsigned int lines)
 {
-    AUDCTL = 0;
-    AUDF1  = pitch;
-    AUDC1  = (unsigned char)(BUZZ_TONE | (vol & 0x0F));
+    AUDF4  = pitch;
+    AUDC4  = (unsigned char)(BUZZ_TONE | (vol & 0x0F));
     delay_lines(lines);
-    AUDC1  = 0;
+    AUDC4  = 0;
 }
 
 /* SOUNDR ($41): the OS makes the "disk drive" I/O sound during SIO when this is
@@ -320,6 +343,7 @@ void atari_board_dli_on(void)
     for (i = 4; i <= 17; i++)
         dl[5 + i] |= 0x80;                          /* DLI bit on each board-band row */
     *(volatile unsigned char *)0xD40E = 0xC0;       /* NMIEN: DLI + VBI               */
+    atari_board_shimmer(1);                         /* gold rosettes/cursor glint during play */
 #endif
 }
 
@@ -328,6 +352,7 @@ void atari_board_dli_off(void)
 #ifndef UR_A5200
     unsigned char *dl = *(unsigned char **)0x0230;
     unsigned char i;
+    atari_board_shimmer(0);                         /* steady gold off the board */
     *(volatile unsigned char *)0xD40E = 0x40;       /* NMIEN: VBI only (DLI off) */
     for (i = 4; i <= 17; i++)
         dl[5 + i] &= 0x7F;                          /* clear DLI bits           */
@@ -463,12 +488,21 @@ unsigned char atari_stick(void) { return STICK0_R; }
 unsigned char atari_trig(void)  { return (unsigned char)(STRIG0_R == 0); }
 #endif /* !UR_A5200 (input is in a5200scr.c) */
 
-/* Busy-wait roughly `frames` display frames (~262 scanlines each, NTSC). */
+/* Busy-wait roughly `frames` display frames (~262 scanlines each, NTSC). This is
+ * the game's per-frame heartbeat: each frame it advances the music one tick, steps
+ * the in-game gold shimmer, and polls the music-toggle key — so the Hymn plays
+ * (and the rosettes glint) smoothly while the game animates or waits for input. */
 void atari_wait_frames(unsigned char frames)
 {
-    unsigned int i, lines = (unsigned int)frames * 262u;
-    for (i = 0; i < lines; i++)
-        WSYNC = 0;
+    unsigned char f;
+    unsigned int i;
+    for (f = 0; f < frames; f++) {
+        music_tick();
+        shimmer_step();
+        music_toggle_poll();
+        for (i = 0; i < 262u; i++)
+            WSYNC = 0;
+    }
 }
 
 /* Lower AUDF1 = higher pitch (it's a divisor). Durations in scanlines. */
@@ -510,13 +544,7 @@ static const unsigned char hymn_pokey[11] = {
 #define ATT_BASS      9   /*                bass    */
 #define BASS_AUDF   129   /* B3 drone (B4 divisor 64 -> octave below 2*64+1) */
 
-static unsigned char m_playing;
-static unsigned char m_step;      /* index into ur_hymn[]              */
-static unsigned char m_steprow;   /* eighth-rows done in current step  */
-static unsigned char m_rowframe;  /* frames left in the current row    */
-static unsigned char m_grow;      /* global row counter (bass cadence) */
-static unsigned char m_envcnt;    /* frame counter for the decay ramp  */
-static unsigned char v_audf[3], v_vol[3];
+/* (player + shimmer state declared near the top of the file) */
 
 void music_start(void)
 {
@@ -573,4 +601,44 @@ void music_tick(void)
     AUDF1 = v_audf[0]; AUDC1 = (unsigned char)(PURE_TONE | v_vol[0]);
     AUDF2 = v_audf[1]; AUDC2 = (unsigned char)(PURE_TONE | v_vol[1]);
     AUDF3 = v_audf[2]; AUDC3 = (unsigned char)(PURE_TONE | v_vol[2]);
+}
+
+/* ---- in-game gold shimmer (rosettes + cursor share COLOR3) --------------- *
+ * While the board is up (gated by g_shimmer, set with the board DLI) the gold
+ * COLOR3 breathes a slow luminance pulse, so the rosettes and move cursor glint
+ * like worked metal. Cheap: one register write every few frames off the heartbeat
+ * (the per-tile flame idea from Ultima V, applied to the whole COLOR3 plane). */
+void atari_board_shimmer(unsigned char on)
+{
+    g_shimmer = on;
+    if (!on) COLOR3 = 0x1A;        /* restore steady gold */
+    else { sh_lum = 10; sh_up = 1; sh_cnt = 0; }
+}
+
+static void shimmer_step(void)
+{
+    if (!g_shimmer)
+        return;
+    if (++sh_cnt < 6)              /* slow the pulse to ~10 Hz */
+        return;
+    sh_cnt = 0;
+    if (sh_up) { sh_lum += 2; if (sh_lum >= 14) sh_up = 0; }
+    else       { sh_lum -= 2; if (sh_lum <= 8)  sh_up = 1; }
+    COLOR3 = (unsigned char)(0x10 | sh_lum);   /* gold hue, pulsing luminance */
+}
+
+/* OPTION key (A8) toggles the music on/off, edge-detected so one press flips it
+ * once. CONSOL bit 2 reads 0 while OPTION is held. (The 5200 has no console keys
+ * on this path; its toggle can ride the keypad later.) */
+static void music_toggle_poll(void)
+{
+#ifndef UR_A5200
+    static unsigned char prev;
+    unsigned char now = (unsigned char)(*(volatile unsigned char *)0xD01F & 0x04);
+    if (!now && prev) {            /* freshly pressed */
+        if (m_playing) music_stop();
+        else           music_start();
+    }
+    prev = now;
+#endif
 }
