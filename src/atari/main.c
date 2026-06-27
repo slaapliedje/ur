@@ -35,6 +35,8 @@
 #define PIP_L    '('        /* cream pip dot (l/r halves) shown under a Dark disc */
 #define PIP_R    ')'
 #define CURSOR_CH '\''      /* move cursor: gold pointer left of the selected cell */
+#define ANIM_STEP 6         /* frames per cell while a piece glides (~0.1s/cell) */
+#define ANIM_FLY  3         /* frames per cell for a captured piece flying back (faster) */
 #define NO_ROLL  0xFF
 #define UR_DEFAULT_HOST "localhost"   /* server host; runtime-configurable (menu 7) */
 #define DIE_MARKED   '^'
@@ -346,6 +348,44 @@ static int8_t choose_move(unsigned char player, unsigned char roll)
     return (int8_t)pieces[0];
 }
 
+/* Which PMG player covers a board column for a given player's colour. */
+static unsigned char slot_for(unsigned char player, unsigned char col)
+{
+    if (col == 1) return (unsigned char)(player ? 3 : 2);   /* shared middle */
+    return (unsigned char)(player ? 1 : 0);                 /* private column */
+}
+
+/* Glide `player`'s token disc along the path from position `from` to `to` (either
+ * direction), one cell per ~`frames` display frames.  On-board cells draw the
+ * disc; an off-board step (entering, bearing off, or captured back to the tray)
+ * clears it.  Only this disc's 4 PM bytes move, so the other pieces are left in
+ * place; draw_all settles the board afterwards. */
+static void anim_glide(unsigned char player, unsigned char from, unsigned char to,
+                       unsigned char frames)
+{
+    int p, dir;
+    unsigned char rr, cc, ps = 0xFF, py = 0;   /* prev slot/y of the moving disc */
+
+    if (pos_to_cell(player, from, &rr, &cc)) { ps = slot_for(player, cc); py = celly(rr); }
+    dir = (to >= from) ? 1 : -1;
+    for (p = (int)from + dir; ; p += dir) {
+        if (dir > 0 ? (p > (int)to) : (p < (int)to))
+            break;
+        if (p >= 1 && p <= 14) {                /* on-board: move the disc here */
+            unsigned char ns, ny;
+            pos_to_cell(player, (unsigned char)p, &rr, &cc);
+            ns = slot_for(player, cc); ny = celly(rr);
+            if (ps != 0xFF) atari_pmg_token_clear(ps, py);
+            atari_pmg_token(ns, cellx(cc), ny);
+            ps = ns; py = ny;
+        } else if (ps != 0xFF) {                /* stepped off the board */
+            atari_pmg_token_clear(ps, py);
+            ps = 0xFF;
+        }
+        atari_wait_frames(frames);
+    }
+}
+
 static bool human_turn(unsigned char player)
 {
     unsigned char roll;
@@ -365,8 +405,16 @@ static bool human_turn(unsigned char player)
         return false;
     }
 
+    {
+        unsigned char src = game.piece[player][(unsigned char)picked];
+        cursor_hide();                            /* the cursor isn't part of the move */
+        anim_glide(player, src, (unsigned char)(src + roll), ANIM_STEP);  /* slide to dest */
+    }
     ur_apply_move(&game, player, (unsigned char)picked, roll, &res);
     sfx_for_result(&res);
+    if (res.captured)                             /* knock the victim back to its tray */
+        anim_glide((unsigned char)(1 - player),
+                   game.piece[player][(unsigned char)picked], 0, ANIM_FLY);
     highlight_dest(player, game.piece[player][(unsigned char)picked]);
 
     if (res.won)
@@ -402,8 +450,12 @@ static bool computer_turn(unsigned char player)
     pick = ur_ai_pick(&game, player, roll);
     pos  = game.piece[player][(unsigned char)pick];
     dest = (unsigned char)(pos + roll);
+    cursor_hide();
+    anim_glide(player, pos, dest, ANIM_STEP);            /* slide the piece to its dest */
     ur_apply_move(&game, player, (unsigned char)pick, roll, &res);
     sfx_for_result(&res);
+    if (res.captured)                            /* knock the victim back to its tray */
+        anim_glide((unsigned char)(1 - player), dest, 0, ANIM_FLY);
     highlight_dest(player, game.piece[player][(unsigned char)pick]);
 
     draw_all(roll, "Computer moved - FIRE/key.");

@@ -355,6 +355,16 @@ void atari_pmg_token(unsigned char slot, unsigned char char_x, unsigned char cha
         pm_pl[slot][off + k] = tok_disc[k];
 }
 
+/* Clear one token disc (the 4 PM bytes at char_y) without touching the other
+ * pieces in that player strip — used by the glide / fly-back animation. */
+void atari_pmg_token_clear(unsigned char slot, unsigned char char_y)
+{
+    unsigned char off = (unsigned char)(PM_VTOP + char_y * 4);
+    unsigned char k;
+    for (k = 0; k < 4; k++)
+        pm_pl[slot][off + k] = 0;
+}
+
 /* ---- joystick input (port 1, OS shadow registers) ----------------------- */
 #define STICK0_R (*(volatile unsigned char *)0x0278)
 #define STRIG0_R (*(volatile unsigned char *)0x0284)

@@ -22,6 +22,7 @@ void atari_board_dli_off(void);  /* tear down the board DLI (flat lapis field ag
 void atari_pmg_init(void);
 void atari_pmg_tokens_clear(void);  /* clear/hide all four player strips */
 void atari_pmg_token(unsigned char slot, unsigned char char_x, unsigned char char_y);
+void atari_pmg_token_clear(unsigned char slot, unsigned char char_y);  /* one disc */
 
 /* Joystick port 1 (via OS shadow registers). */
 unsigned char atari_stick(void);   /* raw STICK0: bit0 up,1 down,2 left,3 right (0=pressed) */
