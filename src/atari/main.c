@@ -984,6 +984,7 @@ static void play_local(bool ai1)
     bool over;
 
     ur_init(&game);
+    atari_board_dli_on();               /* living-lapis board sheen during play */
     for (;;) {
         player = game.turn;
         over = (player == 1 && ai1) ? computer_turn(player) : human_turn(player);
@@ -999,6 +1000,7 @@ static void play_local(bool ai1)
     } else {
         show_result(player == 0 ? " LIGHT (WHITE) WINS! " : " DARK (GREEN) WINS! ");
     }
+    atari_board_dli_off();              /* flat field back for the menu/title */
 }
 
 int main(void)

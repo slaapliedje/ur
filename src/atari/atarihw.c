@@ -221,6 +221,45 @@ void atari_title_sky_off(void)
     COLOR4 = BOARD_FIELD;                           /* restore the lapis board field */
 }
 
+/* ---- in-game board sheen (display list interrupt) ----------------------- *
+ * The "living lapis tablet": the same DLI engine, but during play it grades the
+ * board FIELD (COLBK, the "00" pixels) down the board band — deep-blue shaded
+ * top/bottom edges easing through a brighter lapis in the middle, so the board
+ * reads as a raised tablet catching light.  Every shade stays darker than the
+ * tile faces (COLOR2 = 0x94), so the carved tiles keep popping; the tiles, gold
+ * rosettes, pieces, and text (COLOR0/1/2/3) are all untouched.  This is the
+ * Atari's signature: per-scanline colour the flat 5-register board can't have.
+ * Mirrors atari_title_sky_on (14 flagged rows == dli_len, so idx self-wraps).   */
+void atari_board_dli_on(void)
+{
+    static const unsigned char grad[14] = {
+        0x82, 0x90, 0x92, 0x92, 0x92, 0x92,   /* dark-blue edge -> luminous lapis */
+        0x92, 0x92, 0x92, 0x92, 0x92, 0x92,   /* uniform body (no mid-band stripe)*/
+        0x90, 0x82                            /* -> deep lapis -> dark-blue edge  */
+    };
+    unsigned char *dl = *(unsigned char **)0x0230;
+    unsigned char i;
+
+    for (i = 0; i < 14; i++)
+        dli_table[i] = grad[i];
+    dli_len = 14;
+    *(volatile unsigned char *)0x0200 = (unsigned char)((unsigned int)dli_handler & 0xFF);
+    *(volatile unsigned char *)0x0201 = (unsigned char)((unsigned int)dli_handler >> 8);
+    for (i = 4; i <= 17; i++)
+        dl[5 + i] |= 0x80;                          /* DLI bit on each board-band row */
+    *(volatile unsigned char *)0xD40E = 0xC0;       /* NMIEN: DLI + VBI               */
+}
+
+void atari_board_dli_off(void)
+{
+    unsigned char *dl = *(unsigned char **)0x0230;
+    unsigned char i;
+    *(volatile unsigned char *)0xD40E = 0x40;       /* NMIEN: VBI only (DLI off) */
+    for (i = 4; i <= 17; i++)
+        dl[5 + i] &= 0x7F;                          /* clear DLI bits           */
+    COLOR4 = BOARD_FIELD;                           /* flat lapis field again    */
+}
+
 /* ---- player-missile graphics (highlight cursor) ------------------------- *
  * One player (P0), double-line resolution, used as a hollow box drawn around a
  * board cell. Additive over the playfield, so it can't disturb the drawn board.

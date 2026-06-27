@@ -14,6 +14,8 @@ void atari_mode4_board(void);    /* switch the board rows to ANTIC mode 4 (colou
 void atari_text_mode(void);      /* revert the board rows to mode-2 text (full-screen text) */
 void atari_title_sky_on(void);   /* DLI: lapis gradient behind the title board band */
 void atari_title_sky_off(void);  /* tear down the title DLI (restore plain background) */
+void atari_board_dli_on(void);   /* DLI: in-game lapis sheen down the board field   */
+void atari_board_dli_off(void);  /* tear down the board DLI (flat lapis field again) */
 
 /* Player-missile graphics: a highlight box (player 0) over a board cell. */
 void atari_pmg_init(void);
