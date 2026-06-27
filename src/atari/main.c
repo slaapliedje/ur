@@ -883,24 +883,13 @@ static void hrun(unsigned char x, unsigned char y, unsigned char n, char ch, boo
     if (inv) revers(0);
 }
 
-/* Title music: the Hurrian Hymn, played once at boot. Pollable — returns the
- * moment a key or FIRE is pressed (a pending key is left in the buffer for the
- * menu's cgetc to read), so the player can skip straight to selecting a mode.
- * delay_lines() runs a bit slower than one scanline/iter, so ~2500 reads ≈ an
- * eighth-note at ~105bpm (a stately pace for the oldest written tune). */
-#define MUSIC_TICK_LINES 2500u
-static bool g_played_music = false;
-static void play_hymn(void)
+/* Idle one display frame while keeping the Hurrian Hymn playing: advance the
+ * 3-voice POKEY player one tick, then wait a frame. The title menu loops on this
+ * so the tune plays (and loops) under the menu instead of blocking before it. */
+static void title_idle(void)
 {
-    uint16_t i;
-    if (g_played_music) return;       /* only on the first title (not every return) */
-    g_played_music = true;
-    atari_music_note(MUSIC_REST, 1);  /* silence POKEY ch1 before the first note */
-    for (i = 0; i < ur_hymn_len; i++) {
-        if (kbhit() || atari_trig()) return;         /* skip; key left for the menu */
-        atari_music_note(ur_hymn[i].note,
-                         (unsigned int)ur_hymn[i].dur * MUSIC_TICK_LINES);
-    }
+    music_tick();
+    atari_wait_frames(1);
 }
 
 /* Sumerian title screen + mode select. Title/menu text live on the mode-2 rows;
@@ -950,7 +939,7 @@ static char title_screen(void)
     cputsxy(3, 20, "2) One player vs computer");
     cputsxy(3, 21, "4) How to play");
     cputsxy(3, 23, "Keypad 1/2/4  -or-  stick/FIRE");
-    play_hymn();                              /* the Hurrian Hymn (once, skippable) */
+    music_start();                            /* the Hurrian Hymn loops under the menu */
     {
         unsigned char sel = 1;                /* 0 = two players, 1 = vs computer */
         unsigned char s;
@@ -966,11 +955,12 @@ static char title_screen(void)
             if (!(s & 0x01)) sel = 0;         /* up   -> two players */
             if (!(s & 0x02)) sel = 1;         /* down -> vs computer */
             if (atari_trig()) { key = (char)(sel == 0 ? '1' : '2'); break; }
-            atari_wait_frames(4);
+            title_idle();                     /* keep the music going while waiting */
         }
         while (atari_trig()) { }
         while (kbhit()) { }                   /* drain the held key before play */
     }
+    music_stop();
     return key;
 #else
     cputsxy(3, 19, "1) Two players");    cputsxy(22, 19, "2) vs Computer");
@@ -982,17 +972,20 @@ static char title_screen(void)
     /* Lapis gradient sky (DLI) + pulse the gold (COLOR3 = ziggurat + sun) while
      * waiting for a key, so the title shimmers. Restore everything on the way out. */
     atari_title_sky_on();
-    play_hymn();                              /* the Hurrian Hymn (once, skippable) */
+    music_start();                            /* the Hurrian Hymn loops under the menu */
     {
-        unsigned char lum = 2, up = 1;
+        unsigned char lum = 2, up = 1, sh = 0;
         for (;;) {
             if (kbhit()) { key = cgetc(); if (key >= '1' && key <= '7') break; }
-            *(volatile unsigned char *)0x02C7 = (unsigned char)(0x10 | lum); /* gold hue, pulsing */
-            if (up) { lum += 2; if (lum >= 14) up = 0; }
-            else    { lum -= 2; if (lum <= 2)  up = 1; }
-            atari_wait_frames(4);
+            if ((++sh & 7) == 0) {            /* pulse the gold ~every 8 frames */
+                *(volatile unsigned char *)0x02C7 = (unsigned char)(0x10 | lum);
+                if (up) { lum += 2; if (lum >= 14) up = 0; }
+                else    { lum -= 2; if (lum <= 2)  up = 1; }
+            }
+            title_idle();                     /* tick the music + wait one frame */
         }
     }
+    music_stop();
     atari_title_sky_off();
     atari_setup_colors();
     return key;

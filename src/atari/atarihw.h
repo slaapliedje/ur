@@ -41,7 +41,10 @@ void sfx_rosette(void);
 void sfx_score(void);
 void sfx_win(void);
 
-/* Play one Hurrian-Hymn note (MIDI number, or MUSIC_REST) for `lines` scanlines. */
-void atari_music_note(unsigned char midi, unsigned int lines);
+/* Hurrian-Hymn 3-voice POKEY player: start playback, advance one frame (call once
+ * per display frame from a wait loop — non-blocking), and stop/silence. */
+void music_start(void);
+void music_tick(void);
+void music_stop(void);
 
 #endif /* ATARIHW_H */

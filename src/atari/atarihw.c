@@ -11,6 +11,10 @@
 #ifdef UR_A5200
 #define AUDF1  (*(volatile unsigned char *)0xE800)
 #define AUDC1  (*(volatile unsigned char *)0xE801)
+#define AUDF2  (*(volatile unsigned char *)0xE802)   /* voices 2-3: the Hymn harmony+bass */
+#define AUDC2  (*(volatile unsigned char *)0xE803)
+#define AUDF3  (*(volatile unsigned char *)0xE804)
+#define AUDC3  (*(volatile unsigned char *)0xE805)
 #define AUDCTL (*(volatile unsigned char *)0xE808)
 #define COLOR0 (*(volatile unsigned char *)0x000C)   /* COLPF0 shadow */
 #define COLOR1 (*(volatile unsigned char *)0x000D)   /* COLPF1        */
@@ -20,6 +24,10 @@
 #else
 #define AUDF1  (*(volatile unsigned char *)0xD200)   /* frequency (divisor)   */
 #define AUDC1  (*(volatile unsigned char *)0xD201)   /* distortion + volume   */
+#define AUDF2  (*(volatile unsigned char *)0xD202)   /* voices 2-3: the Hymn harmony+bass */
+#define AUDC2  (*(volatile unsigned char *)0xD203)
+#define AUDF3  (*(volatile unsigned char *)0xD204)
+#define AUDC3  (*(volatile unsigned char *)0xD205)
 #define AUDCTL (*(volatile unsigned char *)0xD208)   /* audio control         */
 /* OS colour shadow registers (copied to the hardware each vertical blank).
  * Shared by the mode-2 text rows and the mode-4 board rows:
@@ -477,25 +485,92 @@ void sfx_win(void)
     tone(60,  8, 1200);
 }
 
-/* ---- title music: the Hurrian Hymn -------------------------------------- *
- * POKEY AUDF divisor for each scale note the hymn uses, indexed by
- * (midi - music_note_lo) over B4..A5. AUDF is a divisor (lower = higher pitch);
- * values computed from f = 63921 / (2*(AUDF+1)) for the equal-tempered pitches. */
+/* ---- title music: the Hurrian Hymn, 3-voice POKEY player ----------------- *
+ * A small frame-tick player (music_start / music_tick / music_stop): one tick
+ * per display frame advances three POKEY voices and writes their registers. The
+ * caller ticks it once per frame from a wait loop (the title menu), so it is
+ * non-blocking and loops the tune under the menu. Voices, after the QuickMusic
+ * shape borrowed from Ultima V (channel 4 is left free for SFX):
+ *   v0 melody  — ur_hymn, full volume
+ *   v1 harmony — the melody an octave below (AUDF≈2*x+1), softer: a second lyre
+ *   v2 bass    — a low B drone (the tonic), re-plucked slowly, grounding the key
+ * Each note is a pluck: attack to a set volume, then a gentle linear decay, so
+ * the chip "breathes" like a lyre instead of the old flat single tone.
+ *
+ * POKEY AUDF divisor for each scale note, indexed by (midi - music_note_lo) over
+ * B4..A5 (lower divisor = higher pitch; f = 63921 / (2*(AUDF+1))). */
 static const unsigned char hymn_pokey[11] = {
     64, 60, 57, 53, 50, 47, 45, 42, 40, 37, 35   /* B4 C5 C#5 D5 D#5 E5 F5 F#5 G5 G#5 A5 */
 };
 
-/* Play one melody note (or a rest if MUSIC_REST) for `lines` scanlines, ending
- * with a short note-off gap so repeated pitches articulate. The melody loop +
- * input polling live in main.c (which has conio/joystick). */
-void atari_music_note(unsigned char midi, unsigned int lines)
+#define ROW_FRAMES   13   /* frames per eighth-note row (tempo) */
+#define ENV_DECAY     6   /* frames between each volume-- (pluck decay rate) */
+#define ATT_MEL      13   /* attack volume: melody  */
+#define ATT_HARM      7   /*                harmony */
+#define ATT_BASS      9   /*                bass    */
+#define BASS_AUDF   129   /* B3 drone (B4 divisor 64 -> octave below 2*64+1) */
+
+static unsigned char m_playing;
+static unsigned char m_step;      /* index into ur_hymn[]              */
+static unsigned char m_steprow;   /* eighth-rows done in current step  */
+static unsigned char m_rowframe;  /* frames left in the current row    */
+static unsigned char m_grow;      /* global row counter (bass cadence) */
+static unsigned char m_envcnt;    /* frame counter for the decay ramp  */
+static unsigned char v_audf[3], v_vol[3];
+
+void music_start(void)
 {
-    unsigned int gap = (lines > 1200u) ? 400u : (lines >> 2);
-    if (midi == MUSIC_REST) { AUDC1 = 0; delay_lines(lines); return; }
     AUDCTL = 0;
-    AUDF1  = hymn_pokey[midi - music_note_lo];
-    AUDC1  = (unsigned char)(PURE_TONE | 8);     /* clean tone, mid volume */
-    delay_lines(lines - gap);
-    AUDC1  = 0;                                   /* note off (articulation gap) */
-    delay_lines(gap);
+    m_step = m_steprow = m_grow = m_envcnt = 0;
+    m_rowframe = 0;                 /* 0 -> first tick processes row 0 immediately */
+    v_vol[0] = v_vol[1] = v_vol[2] = 0;
+    v_audf[0] = v_audf[1] = v_audf[2] = 0;
+    m_playing = 1;
+}
+
+void music_stop(void)
+{
+    m_playing = 0;
+    AUDC1 = AUDC2 = AUDC3 = 0;      /* silence the three music voices */
+}
+
+void music_tick(void)
+{
+    if (!m_playing)
+        return;
+
+    if (++m_envcnt >= ENV_DECAY) {  /* pluck decay: ease every voice toward silence */
+        m_envcnt = 0;
+        if (v_vol[0]) v_vol[0]--;
+        if (v_vol[1]) v_vol[1]--;
+        if (v_vol[2]) v_vol[2]--;
+    }
+
+    if (m_rowframe == 0) {          /* start of an eighth-note row */
+        if (m_steprow == 0) {       /* a new note -> (re)pluck melody + harmony */
+            unsigned char note = ur_hymn[m_step].note;
+            if (note == MUSIC_REST) {
+                v_vol[0] = v_vol[1] = 0;
+            } else {
+                unsigned char a = hymn_pokey[note - music_note_lo];
+                v_audf[0] = a;                              v_vol[0] = ATT_MEL;
+                v_audf[1] = (unsigned char)(a + a + 1);     v_vol[1] = ATT_HARM; /* 8ve below */
+            }
+        }
+        if ((m_grow & 3) == 0) {    /* re-pluck the drone every half-note */
+            v_audf[2] = BASS_AUDF;
+            v_vol[2]  = ATT_BASS;
+        }
+        m_grow++;
+        if (++m_steprow >= ur_hymn[m_step].dur) {
+            m_steprow = 0;
+            if (++m_step >= (unsigned char)ur_hymn_len) { m_step = 0; m_grow = 0; }
+        }
+        m_rowframe = ROW_FRAMES;
+    }
+    m_rowframe--;
+
+    AUDF1 = v_audf[0]; AUDC1 = (unsigned char)(PURE_TONE | v_vol[0]);
+    AUDF2 = v_audf[1]; AUDC2 = (unsigned char)(PURE_TONE | v_vol[1]);
+    AUDF3 = v_audf[2]; AUDC3 = (unsigned char)(PURE_TONE | v_vol[2]);
 }
