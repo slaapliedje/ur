@@ -201,6 +201,7 @@ static void draw_all(unsigned char roll, const char *msg)
     cputcxy(16, 12, '{'); cputcxy(17, 12, '|'); /* white: Light starts (left)  */
     cputcxy(22, 12, '}'); cputcxy(23, 12, '~'); /* green: Dark starts (right)  */
 
+    atari_board_tint(game.turn);     /* frame the board in the active player's hue */
     gotoxy(0, ROW_TURN);
     cprintf("Turn: %s", game.turn ? "Dark (green)" : "Light (white)");
     if (roll != NO_ROLL) {

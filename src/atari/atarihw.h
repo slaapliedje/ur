@@ -19,6 +19,7 @@ void atari_title_sky_on(void);   /* DLI: lapis gradient behind the title board b
 void atari_title_sky_off(void);  /* tear down the title DLI (restore plain background) */
 void atari_board_dli_on(void);   /* DLI: in-game lapis sheen down the board field   */
 void atari_board_dli_off(void);  /* tear down the board DLI (flat lapis field again) */
+void atari_board_tint(unsigned char player);  /* tint the board frame to whose turn it is */
 
 /* Player-missile graphics: round two-tone token discs (4 players, one per board
  * colour-column). Off-board trays + the move cursor stay charset (main.c). */

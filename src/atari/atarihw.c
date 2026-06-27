@@ -229,7 +229,8 @@ void atari_text_mode(void)
  * ziggurat. dli.s reads dli_table/dli_len; we flag rows 4..17 in the display
  * list (one DLI each, 14 == dli_len so the index wraps once per frame).        */
 extern void dli_handler(void);      /* asm, src/atari/dli.s */
-unsigned char dli_table[16];        /* COLBK per board-band row (_dli_table)      */
+unsigned char dli_table[16];        /* COLBK (field) per board-band row (_dli_table) */
+unsigned char dli_table2[16];       /* COLPF2 (tile face) per board-band row         */
 unsigned char dli_len;              /* number of gradient entries (_dli_len)      */
 
 void atari_title_sky_on(void)
@@ -247,8 +248,10 @@ void atari_title_sky_on(void)
     unsigned char *dl = *(unsigned char **)0x0230;
     unsigned char i;
 
-    for (i = 0; i < 14; i++)
-        dli_table[i] = grad[i];
+    for (i = 0; i < 14; i++) {
+        dli_table[i]  = grad[i];
+        dli_table2[i] = 0x94;                        /* tile faces unchanged on the title */
+    }
     dli_len = 14;
     *(volatile unsigned char *)0x0200 = (unsigned char)((unsigned int)dli_handler & 0xFF);
     *(volatile unsigned char *)0x0201 = (unsigned char)((unsigned int)dli_handler >> 8);
@@ -287,11 +290,22 @@ void atari_board_dli_on(void)
         0x92, 0x92, 0x92, 0x92, 0x92, 0x92,   /* uniform body (no mid-band stripe)*/
         0x90, 0x82                            /* -> deep lapis -> dark-blue edge  */
     };
+    /* Tile faces (COLPF2) catch a soft highlight through the board's vertical
+     * centre and dim toward the framed edges — the carved lapis reads as a raised
+     * tablet lit from the front. Stays brighter than the field grad above, so the
+     * white bevel + carve relief keep popping. (The "4½-colour" trick.) */
+    static const unsigned char face[14] = {
+        0x96, 0x96, 0x98, 0x98, 0x9A, 0x9A,
+        0x9A, 0x9A, 0x9A, 0x9A, 0x98, 0x98,
+        0x96, 0x96
+    };
     unsigned char *dl = *(unsigned char **)0x0230;
     unsigned char i;
 
-    for (i = 0; i < 14; i++)
-        dli_table[i] = grad[i];
+    for (i = 0; i < 14; i++) {
+        dli_table[i]  = grad[i];
+        dli_table2[i] = face[i];
+    }
     dli_len = 14;
     *(volatile unsigned char *)0x0200 = (unsigned char)((unsigned int)dli_handler & 0xFF);
     *(volatile unsigned char *)0x0201 = (unsigned char)((unsigned int)dli_handler >> 8);
@@ -310,6 +324,23 @@ void atari_board_dli_off(void)
     for (i = 4; i <= 17; i++)
         dl[5 + i] &= 0x7F;                          /* clear DLI bits           */
     COLOR4 = BOARD_FIELD;                           /* flat lapis field again    */
+#endif
+}
+
+/* Frame the board in the active player's hue — deep blue for Light, deep green
+ * for Dark — a quiet ambient "whose turn" cue under the textual turn line. Only
+ * the border (COLOR4) and the gradient's top/bottom edge bands tint; the lapis
+ * board interior is untouched. (The set_color1 turn-tint idea from U5.) Called
+ * from draw_all each redraw, so it tracks the turn for free. A8-only for now. */
+void atari_board_tint(unsigned char player)
+{
+#ifndef UR_A5200
+    unsigned char frame = player ? 0xC2 : 0x82;     /* green (Dark) / blue (Light) */
+    COLOR4        = frame;                           /* board border / frame       */
+    dli_table[0]  = frame;                           /* top board-row edge meets it */
+    dli_table[13] = frame;                           /* bottom board-row edge       */
+#else
+    (void)player;
 #endif
 }
 
