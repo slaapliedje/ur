@@ -450,9 +450,19 @@ static void draw_pieces(void)
 #define CRAM_LANE COL_CELL
 #endif
 
+/* Pieces still waiting to enter (off-board at the start). */
+static unsigned char count_start(unsigned char pl)
+{
+    unsigned char i, n = 0;
+    for (i = 0; i < UR_PIECES; i++)
+        if (game.piece[pl][i] == UR_POS_START)
+            n++;
+    return n;
+}
+
 static void draw_static_board(void)
 {
-    unsigned char row, col;
+    unsigned char row, col, k, n;
     bgcolor(COL_BG);
     bordercolor(COL_BG);
     clrscr();
@@ -468,6 +478,19 @@ static void draw_static_board(void)
             else
                 put_glyph(tcol(col), trow(row), G_LANE, CRAM_LANE);
         }
+
+    /* Off-board trays — the whole 7-piece journey at a glance: pieces still waiting
+     * to enter (clustered left) and borne off "home" (clustered right), as discs on
+     * Light's row (above, white) and Dark's row (below, black). Char cells can't be
+     * bone/brown under multicolor mode, so Light/Dark is shown by white vs black. */
+    n = count_start(0);
+    for (k = 0; k < n; k++)              put_glyph((unsigned char)(2 + k),  1, G_DISC, C_WHITE);
+    n = (unsigned char)ur_score(&game, 0);
+    for (k = 0; k < n; k++)              put_glyph((unsigned char)(37 - k), 1, G_DISC, C_WHITE);
+    n = count_start(1);
+    for (k = 0; k < n; k++)              put_glyph((unsigned char)(2 + k),  21, G_DISC, C_BLACK);
+    n = (unsigned char)ur_score(&game, 1);
+    for (k = 0; k < n; k++)              put_glyph((unsigned char)(37 - k), 21, G_DISC, C_BLACK);
 }
 
 static void draw_board(unsigned char roll, const char *msg)
