@@ -10,7 +10,9 @@
 
 include makefiles/common.mk
 include makefiles/atari.mk
+include makefiles/a5200.mk
 include makefiles/adam.mk
+include makefiles/sms.mk
 include makefiles/c64.mk
 include makefiles/apple2.mk
 include makefiles/host-test.mk
