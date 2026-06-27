@@ -333,17 +333,19 @@ void atari_title_sky_off(void)
  * Mirrors atari_title_sky_on (14 flagged rows == dli_len, so idx self-wraps).   */
 void atari_board_dli_on(void)
 {
+    /* Flat field + flat tile faces. With 16x16 (2 char-row) boxes a per-row colour
+     * gradient banded inside each box and the cut-away exposed its bright centre,
+     * so keep the board one even lapis — the carve (white top/left bevel, dark
+     * bottom/right shadow) lives in the glyphs, not the DLI. The only per-row work
+     * left is the turn-tint frame (atari_board_tint sets the edge entries [0]/[15]).
+     * Flat COLPF2 also leaves it readable below the board, so the move list shows. */
     static const unsigned char grad[16] = {
-        0x82, 0x90, 0x92, 0x92, 0x92, 0x92, 0x92, 0x92,   /* dark-blue edge -> lapis */
-        0x92, 0x92, 0x92, 0x92, 0x92, 0x92, 0x90, 0x82    /* -> deep lapis -> edge   */
+        0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90,   /* uniform dark lapis field */
+        0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90
     };
-    /* Tile faces (COLPF2) catch a soft highlight through the board's vertical
-     * centre and dim toward the framed edges — the carved lapis reads as a raised
-     * tablet lit from the front. Stays brighter than the field grad above, so the
-     * white bevel + carve relief keep popping. (The "4½-colour" trick.) */
     static const unsigned char face[16] = {
-        0x96, 0x96, 0x98, 0x98, 0x9A, 0x9A, 0x9A, 0x9A,
-        0x9A, 0x9A, 0x9A, 0x9A, 0x98, 0x98, 0x96, 0x96
+        0x94, 0x94, 0x94, 0x94, 0x94, 0x94, 0x94, 0x94,   /* uniform lapis tile faces */
+        0x94, 0x94, 0x94, 0x94, 0x94, 0x94, 0x94, 0x94
     };
     unsigned char *dl = *(unsigned char **)DL_PTR;
     unsigned char i;
