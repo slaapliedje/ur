@@ -55,3 +55,22 @@ $(EOSLIB):
 
 $(ADAM_OUT):
 	mkdir -p $@
+
+# ---- ColecoVision cartridge -------------------------------------------------
+# Same Z80 / TMS9928A / SN76489 core as the Adam, so the carved board, token
+# sprites, and SN76489 sound are shared (src/adam/*.c). But the ColecoVision has
+# NO keyboard, NO AdamNet, and NO FujiNet, so -DUR_COLECO strips the EOS/online
+# paths and switches input to the controller (coleco_joypad: keypad digits + the
+# FIRE button), and we link neither eos.lib nor fujinet-adam.lib. +coleco (no
+# adam subtype) + -create-app packages a cartridge .rom.
+COLECO_OUT     := $(BUILD_DIR)/coleco
+COLECO_FLAGS   := +coleco -DUR_COLECO -I$(SRC_DIR)/adam $(COMMON_INC)
+COLECO_SOURCES := $(COMMON_SOURCES) $(wildcard $(SRC_DIR)/adam/*.c)
+
+.PHONY: coleco
+coleco: | $(COLECO_OUT) ## Build the ColecoVision cartridge (z88dk; joystick, no FujiNet)
+	$(ZCC) $(COLECO_FLAGS) $(COLECO_SOURCES) -o $(COLECO_OUT)/ur -create-app
+	@echo "[coleco] built $(COLECO_OUT)/ur.rom — cartridge; run in MAME (coleco) / real ColecoVision"
+
+$(COLECO_OUT):
+	mkdir -p $@

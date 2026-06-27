@@ -19,8 +19,10 @@
 #include "ur.h"
 #include "proto.h"          /* shared wire-protocol codec (cross-platform) */
 #include "sound.h"          /* SN76489 sound effects                              */
+#ifndef UR_COLECO           /* ColecoVision: no AdamNet/EOS/FujiNet (cartridge)   */
 #include "fujinet-network.h"/* FujiNet N: device: network_init/open/read/write/... */
 #include "fujinet-fuji.h"   /* fuji_*_appkey: persistent profile + lobby handoff   */
+#endif
 
 #define LIGHT_CH 'O'        /* Light pieces */
 #define DARK_CH  'X'        /* Dark pieces  */
@@ -46,7 +48,16 @@
  * released before the next read, turning one physical press into one get_key().
  * Holding a key longer than the settle will repeat -- so the UI says "press".
  */
+#ifndef UR_COLECO
 extern unsigned char eos_read_keyboard(void);
+#else
+/* ColecoVision controller. joystick(which) (z88dk, = coleco_joypad) returns the
+ * keypad ASCII ('1'-'9','0','*','#') in the high byte and the joystick MOVE_* bits
+ * in the low byte (which=3 = player-1 keypad+stick). We map the keypad digits onto
+ * the same menu/move-number input the keyboard build uses, and FIRE to roll. */
+#include <games.h>
+#define CV_FIRE (MOVE_FIRE | MOVE_FIRE2)   /* 0x10 | 0x20 */
+#endif
 
 /* Busy-wait ~0.4s on a 3.58MHz Z80 so a tap releases before the next read
  * (debounce). In MAME the EOS keyboard read is level-triggered -- it returns
@@ -73,6 +84,24 @@ static void settle(void)
 /* Wait for a printable keypress, debounce it, and return it. Non-printable
  * results (EOS error/status codes < 0x20 and special SmartKeys >= 0x80) are
  * skipped. Each key is folded into the RNG seed (seeded at the first roll). */
+#ifdef UR_COLECO
+/* Controller input: a keypad digit returns '1'-'9'; FIRE returns RETURN (used by
+ * the "press a key" prompts). Polls until release then press, so one tap = one key. */
+static unsigned char get_key(void)
+{
+    unsigned int r;
+    unsigned char kp;
+    do { r = joystick(3); g_seed += 0x9E37u; }     /* wait for release  */
+    while ((r >> 8) || (r & CV_FIRE));
+    for (;;) {                                          /* wait for a press  */
+        r = joystick(3);
+        g_seed += 0x9E37u;
+        kp = (unsigned char)(r >> 8);
+        if (kp >= '1' && kp <= '9') { g_seed = (uint16_t)(g_seed * 31u + kp); return kp; }
+        if (r & CV_FIRE)            { g_seed = (uint16_t)(g_seed * 31u + 1);  return '\r'; }
+    }
+}
+#else
 static unsigned char get_key(void)
 {
     unsigned char k;
@@ -84,6 +113,7 @@ static unsigned char get_key(void)
     settle();                               /* let the tap release (debounce) */
     return k;
 }
+#endif
 
 /* Roll the dice, seeding the core RNG from accumulated key entropy on first use
  * (by now the player has pressed at least the menu key and a roll key). */
@@ -402,6 +432,7 @@ static bool computer_turn(unsigned char player)
     return false;
 }
 
+#ifndef UR_COLECO   /* ---- networking is Adam-only (the ColecoVision has none) -- */
 /* ---- online mode (FujiNet N:TCP, server-authoritative, cross-platform) ------
  *
  * Speaks the SAME wire protocol (src/common/proto) as the Atari build, so the
@@ -700,6 +731,8 @@ static void online_game(void)
     network_close(g_net_url);
 }
 
+#endif /* !UR_COLECO (online block) */
+
 int main(void)
 {
     unsigned char key;
@@ -739,6 +772,13 @@ int main(void)
         clrscr();
         textcolor(COL_TITLE); gotoxy(0, 0);  cputs("The Royal Game of Ur");
         textcolor(COL_LABEL); gotoxy(0, 1);  cputs("Ur - Mesopotamia - c.2600 BCE");
+#ifdef UR_COLECO
+        gotoxy(0, 2);  cputs("ColecoVision");
+        gotoxy(0, 5);  cputs("1) Two players");
+        gotoxy(0, 6);  cputs("2) One player vs computer");
+        gotoxy(0, 8);  cputs("Keypad 1/2 picks; FIRE rolls.");
+        textcolor(COL_TITLE); gotoxy(0, 13); cputs("Select (1-2):");
+#else
         gotoxy(0, 2);  cputs("Coleco Adam");
         gotoxy(0, 5);  cputs("1) Two players");
         gotoxy(0, 6);  cputs("2) One player vs computer");
@@ -747,6 +787,7 @@ int main(void)
         gotoxy(0, 9);  cputs("5) Set server");
         textcolor(COL_LABEL); gotoxy(0, 11); cprintf("name:%s host:%s", g_name, g_host);
         textcolor(COL_TITLE); gotoxy(0, 13); cputs("Select (1-5):");
+#endif
         /* With thanks to the scholar who reconstructed the rules. */
         textcolor(COL_LABEL);
         gotoxy(0, 22); cputs("Rules by Dr Irving Finkel,");
@@ -755,9 +796,11 @@ int main(void)
         /* Read the menu choice (get_key waits for one fresh press and folds it
          * + its timing into the RNG seed; the RNG is seeded at the first roll). */
         key = get_key();
+#ifndef UR_COLECO
         if (key == '3') { online_game(); continue; }   /* cross-platform online */
         if (key == '4') { set_name();    continue; }
         if (key == '5') { set_host();    continue; }
+#endif
         if (key != '1' && key != '2')
             continue;
         ai1 = (key == '2');
