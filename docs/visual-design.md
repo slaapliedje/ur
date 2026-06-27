@@ -71,6 +71,11 @@ Two reframes worth calling out, because they make big wins cheap:
 
 ## Atari 8-bit (ANTIC / GTIA / PMG)
 
+> **Status: DONE.** All of the below is implemented — carved beveled lapis tiles +
+> gold flower rosettes, the DLI living-tablet sheen, round two-tone PMG tokens,
+> piece glide + capture fly-back, and the dice tumble. See [`src/atari/CLAUDE.md`].
+> (Remaining ideas are optional: true mode-4 *colour* dice, a richer title.)
+
 **Strengths that matter:** Display List Interrupts (unlimited colors *down* the
 screen via per-scanline register reloads — and the vertical board is row-indexed, a
 perfect fit); ANTIC mode 4/5 multicolor charset (5 colors/region, mode 5 = 8×16 for

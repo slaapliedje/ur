@@ -43,7 +43,10 @@ committable state.
 - [x] Graphics + sound: POKEY effects; custom-charset drawn board; ANTIC mode-4
       per-side colour (Light=white, Dark=green, rosette=orange, cells=blue); PMG
       highlight cursor with joystick selection; title/menu screen.
-- [ ] Further polish (optional): graphical dice, move animation, full sprite pieces.
+- [x] Visual polish: carved beveled tiles + gold flower rosettes, DLI living-tablet
+      board sheen, round two-tone **PMG** token pieces, piece glide + capture
+      fly-back animation, and a dice tumble. (Atari is the visual reference for the
+      other ports — see [`docs/visual-design.md`](docs/visual-design.md).)
 - [ ] Lift the game loop into a shared controller behind `plat.h` so the Adam/C64/
       Apple ports reuse it instead of re-implementing.
 
