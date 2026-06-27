@@ -26,7 +26,7 @@
 /* Board cells: row 1..8, col 0=Light(left) 1=shared(mid) 2=Dark(right).
  * Each cell is two characters wide (8 mode-4 pixels) for detailed glyphs. */
 #define BOARD_X    16       /* 3 cells, 2 chars each + gaps, centred on 40 cols */
-#define BOARD_Y    4
+#define BOARD_Y    3        /* 8 cells x 2 char-rows (16x16 boxes) -> rows 3..18 */
 #define ROW_TURN   1
 #define ROW_ROLL   2
 #define ROW_SEAT   3        /* online: which seat you are */
@@ -78,6 +78,20 @@ static char     g_top_url[64];   /* built: N:HTTP://<host>:8080/top        */
 
 static unsigned char cellx(unsigned char col) { return (unsigned char)(BOARD_X + col * 3); }
 static unsigned char celly(unsigned char row) { return (unsigned char)(BOARD_Y + (row - 1) * 2); }
+
+/* Draw a 16x16 carved cell box (2x2 chars) at board (col,row): a raised lapis
+ * tile, or a gold rosette (drawn inverse). Tokens are overlaid centred on top so a
+ * piece sits INSIDE its box rather than standing on a small button. */
+static void draw_box(unsigned char col, unsigned char row, bool rose)
+{
+    unsigned char x = cellx(col), y = celly(row);
+    if (rose) revers(1);
+    cputcxy(x,                    y,                    rose ? '*' : '+');   /* TL */
+    cputcxy((unsigned char)(x+1), y,                    rose ? '&' : '=');   /* TR */
+    cputcxy(x,                    (unsigned char)(y+1), rose ? '"' : '<');   /* BL */
+    cputcxy((unsigned char)(x+1), (unsigned char)(y+1), rose ? ';' : '%');   /* BR */
+    if (rose) revers(0);
+}
 
 /* Path position (1..14) -> board cell (row 1..8, col 0..2). False if off-board. */
 static bool pos_to_cell(unsigned char player, unsigned char pos,
@@ -132,52 +146,36 @@ static void draw_all(unsigned char roll, const char *msg)
     grid[4][1] = '*';                      /* central shared rosette */
     grid[1][2] = '*'; grid[7][2] = '*';   /* Dark rosettes */
 
+    /* Draw every playable cell as a 16x16 carved box (lapis tile or gold rosette);
+     * pieces are then overlaid centred so a token sits INSIDE its box. */
+    for (row = 1; row <= 8; row++)
+        for (col = 0; col < 3; col++) {
+            char b = grid[row][col];
+            if (b == ' ')
+                continue;
+            draw_box(col, row, b == '*');
+        }
+
+    /* Tokens, centred in their boxes (over the tiles). */
+    atari_pmg_tokens_clear();
     for (pl = 0; pl < UR_NUM_PLAYERS; pl++)
         for (i = 0; i < UR_PIECES; i++) {
             pos = game.piece[pl][i];
-            if (pos_to_cell(pl, pos, &rr, &cc))
-                grid[rr][cc] = pl ? DARK_CH : LIGHT_CH;
-        }
-
-    atari_pmg_tokens_clear();            /* on-board pieces are PMG discs (below) */
-    for (row = 1; row <= 8; row++)
-        for (col = 0; col < 3; col++) {
-            char ch = grid[row][col];
-            char rch;                    /* right-half glyph of the cell */
-            if (ch == ' ')
+            if (!pos_to_cell(pl, pos, &rr, &cc))
                 continue;
-            if (ch == LIGHT_CH || ch == DARK_CH) {
 #ifdef UR_A5200
-                /* 5200 v1: charset disc tokens (no PMG) — same glyphs as the trays:
-                 * '#'+'$' = white Light disc, '@'+'[' = green Dark ring. */
-                if (ch == LIGHT_CH) {
-                    cputcxy(cellx(col),     celly(row), '#');
-                    cputcxy(cellx(col) + 1, celly(row), '$');
-                } else {
-                    cputcxy(cellx(col),     celly(row), '@');
-                    cputcxy(cellx(col) + 1, celly(row), '[');
-                }
-#else
-                /* Round two-tone token: one player per board colour-column
-                 * (col0=P0 Light, col2=P1 Dark, col1=P2/P3 by colour). */
-                unsigned char slot = (col == 0) ? 0 :
-                                     (col == 2) ? 1 :
-                                     (ch == LIGHT_CH ? 2 : 3);
-                atari_pmg_token(slot, cellx(col), celly(row));
-                if (ch == DARK_CH) {     /* cream pip showing through the donut hole */
-                    cputcxy(cellx(col),     celly(row), PIP_L);
-                    cputcxy(cellx(col) + 1, celly(row), PIP_R);
-                }
-                /* Light: leave the cell blank so the hole shows the dark field
-                 * (= a dark pip); the disc body covers the rest. */
-#endif
-                continue;
+            /* 5200 (no PMG): a charset disc in the box — '#'+'$' Light, '@'+'[' Dark. */
+            if (pl == 0) {
+                cputcxy(cellx(cc),     celly(rr), '#'); cputcxy(cellx(cc) + 1, celly(rr), '$');
+            } else {
+                cputcxy(cellx(cc),     celly(rr), '@'); cputcxy(cellx(cc) + 1, celly(rr), '[');
             }
-            rch = (ch == '*') ? '&' : '=';   /* rosette / lane tile */
-            if (ch == '*') revers(1);
-            cputcxy(cellx(col),     celly(row), ch);
-            cputcxy(cellx(col) + 1, celly(row), rch);
-            if (ch == '*') revers(0);
+#else
+            /* Round PMG donut, one player per board colour-column (col0=P0 Light,
+             * col2=P1 Dark, col1=P2/P3 by colour); the hole shows the lapis tile. */
+            atari_pmg_token((cc == 0) ? 0 : (cc == 2) ? 1 : (pl ? 3 : 2),
+                            cellx(cc), celly(rr));
+#endif
         }
 
     /* Off-board pieces: those waiting to enter at the top corners, those borne
@@ -961,24 +959,35 @@ static char title_screen(void)
     }
     return key;
 #else
-    /* A8: a crisp ANTIC mode-F ziggurat band fills the middle (screen rows 5-15);
-     * the title + menu stay mode-2 text. The band owns the sky DLI + the gold PM
-     * sun, so pulse the sun's colour (PCOLR0) while waiting for a key. */
+    /* A8: charset ziggurat in the mode-4 board band + a lapis sky DLI; keyboard menu. */
+    hrun(6, 5, 28, '\\', false);              /* upper cuneiform frieze (lapis) */
+    revers(1);                                /* rosette "sun" over the apex (gold) */
+    cputcxy(19, 7, '*'); cputcxy(20, 7, '&');
+    revers(0);
+    hrun(19,  8,  2, ']', true);              /* ziggurat: gold stepped tiers */
+    hrun(18,  9,  4, ']', true);
+    hrun(17, 10,  6, ']', true);
+    hrun(16, 11,  8, ']', true);
+    hrun(15, 12, 10, ']', true);
+    hrun(14, 13, 12, ']', true);
+    hrun( 8, 14, 24, ']', false);             /* lapis ground band */
+    hrun(6, 16, 28, '\\', false);             /* lower cuneiform frieze */
+
     cputsxy(3, 19, "1) Two players");    cputsxy(22, 19, "2) vs Computer");
     cputsxy(3, 20, "3) Online");         cputsxy(22, 20, "4) How to play");
     cputsxy(3, 21, "5) Set name");       cputsxy(22, 21, "6) Leaderboard");
     cputsxy(3, 22, "7) Set server host");
     cputsxy(3, 23, "Select 1-7:");
 
-    atari_hires_band_on();
+    atari_title_sky_on();
     for (;;) {
         if (kbhit()) { key = cgetc(); if (key >= '1' && key <= '7') break; }
-        title_idle();                         /* one frame; music pumps in the heartbeat */
+        title_idle();                         /* music heartbeat while waiting */
     }
-    atari_hires_band_off();
+    atari_title_sky_off();
     atari_setup_colors();
     return key;
-#endif  /* 5200 charset/keypad title vs A8 hi-res-band title */
+#endif  /* 5200 charset/keypad title vs A8 charset title */
 }
 
 /* Draw an empty board (tiles + rosettes, no pieces) for the path demo. */

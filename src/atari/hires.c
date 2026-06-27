@@ -18,7 +18,9 @@
  * title_screen) still does the conio text + the menu loop, then calls _off() to
  * restore the OS display before play.
  */
-#ifndef UR_A5200
+/* Gated OFF for now (UR_HIRES_BAND): the GR.8 ziggurat band hung the title in the
+ * board-box redesign; the A8 title uses the charset ziggurat. Kept for later. */
+#if defined(UR_HIRES_BAND) && !defined(UR_A5200)
 
 #include <stdint.h>
 #include "atarihw.h"

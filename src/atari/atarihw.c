@@ -153,10 +153,23 @@ void atari_setup_colors(void)
  * round separates neighbouring tiles.  Rosette: a rounded 8-point gold flower with
  * a white (pearl) centre, clearly distinct from a plain lane.
  */
-static const unsigned char g_tile_l[8]    = {0x00,0x15,0x1F,0x1F,0x1F,0x1F,0x3F,0x00};
-static const unsigned char g_tile_r[8]    = {0x00,0x54,0xFC,0xFC,0xFC,0xFC,0xFC,0x00};
-static const unsigned char g_rosette_l[8] = {0x0F,0x3F,0xFD,0xF5,0xF5,0xFD,0x3F,0x0F};
-static const unsigned char g_rosette_r[8] = {0xF0,0xFC,0x7F,0x5F,0x5F,0x7F,0xFC,0xF0};
+/* Board cells are 16x16 (2x2 chars), like the Adam, so a token sits INSIDE a
+ * matching box instead of standing on a small button. Each cell is four mode-4
+ * glyphs: top-left/right + bottom-left/right. A raised lapis tile: white bevel
+ * along the top + left edge (COLOR0 "01"), lapis body (COLOR2 "11"), dark field
+ * shadow along the bottom + right edge (COLOR4 "00") — cells touch vertically, so
+ * the shadow+bevel between neighbours reads as a carved grid groove. */
+static const unsigned char g_tile_tl[8] = {0x55,0x7F,0x7F,0x7F,0x7F,0x7F,0x7F,0x7F};
+static const unsigned char g_tile_tr[8] = {0x55,0xFC,0xFC,0xFC,0xFC,0xFC,0xFC,0xFC};
+static const unsigned char g_tile_bl[8] = {0x7F,0x7F,0x7F,0x7F,0x7F,0x7F,0x7F,0x00};
+static const unsigned char g_tile_br[8] = {0xFC,0xFC,0xFC,0xFC,0xFC,0xFC,0xFC,0x00};
+
+/* Rosette: a rounded gold tile (clipped corners) with a white pearl centre, drawn
+ * inverse so "11"->COLOR3 gold and "01"->COLOR0 white. Fills the 16x16 box. */
+static const unsigned char g_rose_tl[8] = {0x0F,0x3F,0xFF,0xFF,0xFF,0xFF,0xFD,0xFD};
+static const unsigned char g_rose_tr[8] = {0xF0,0xFC,0xFF,0xFF,0xFF,0xFF,0x7F,0x7F};
+static const unsigned char g_rose_bl[8] = {0xFD,0xFD,0xFF,0xFF,0xFF,0xFF,0x3F,0x0F};
+static const unsigned char g_rose_br[8] = {0x7F,0x7F,0xFF,0xFF,0xFF,0xFF,0xFC,0xF0};
 static const unsigned char g_light_l[8]   = {0x05,0x15,0x55,0x55,0x55,0x55,0x15,0x05};
 static const unsigned char g_light_r[8]   = {0x50,0x54,0x55,0x55,0x55,0x55,0x54,0x50};
 static const unsigned char g_dark_l[8]    = {0x0A,0x20,0x80,0x80,0x80,0x80,0x20,0x0A};
@@ -214,8 +227,10 @@ void atari_setup_charset(void)
     for (i = 0; i < 1024; i++)
         font[i] = rom[i];
 
-    put_glyph(font, 0x0B, g_tile_l);    put_glyph(font, 0x1D, g_tile_r);    /* '+' '=' */
-    put_glyph(font, 0x0A, g_rosette_l); put_glyph(font, 0x06, g_rosette_r); /* '*' '&' */
+    put_glyph(font, 0x0B, g_tile_tl);   put_glyph(font, 0x1D, g_tile_tr);   /* tile '+' '=' (top)    */
+    put_glyph(font, 0x1C, g_tile_bl);   put_glyph(font, 0x05, g_tile_br);   /* tile '<' '%' (bottom) */
+    put_glyph(font, 0x0A, g_rose_tl);   put_glyph(font, 0x06, g_rose_tr);   /* rose '*' '&' (top)    */
+    put_glyph(font, 0x02, g_rose_bl);   put_glyph(font, 0x1B, g_rose_br);   /* rose '"' ';' (bottom) */
     put_glyph(font, 0x03, g_light_l);   put_glyph(font, 0x04, g_light_r);   /* '#' '$' */
     put_glyph(font, 0x20, g_dark_l);    put_glyph(font, 0x3B, g_dark_r);    /* '@' '[' */
     put_glyph(font, 0x3F, g_die0);     /* '_' unmarked die */
@@ -243,7 +258,7 @@ void atari_mode4_board(void)
 {
     unsigned char *dl = *(unsigned char **)DL_PTR;
     unsigned char r;
-    for (r = 4; r <= 18; r++)
+    for (r = 3; r <= 18; r++)
         dl[5 + r] = 0x04;
 }
 
@@ -253,7 +268,7 @@ void atari_text_mode(void)
 {
     unsigned char *dl = *(unsigned char **)DL_PTR;
     unsigned char r;
-    for (r = 4; r <= 18; r++)
+    for (r = 3; r <= 18; r++)
         dl[5 + r] = 0x02;
 }
 
@@ -313,31 +328,29 @@ void atari_title_sky_off(void)
  * Mirrors atari_title_sky_on (14 flagged rows == dli_len, so idx self-wraps).   */
 void atari_board_dli_on(void)
 {
-    static const unsigned char grad[14] = {
-        0x82, 0x90, 0x92, 0x92, 0x92, 0x92,   /* dark-blue edge -> luminous lapis */
-        0x92, 0x92, 0x92, 0x92, 0x92, 0x92,   /* uniform body (no mid-band stripe)*/
-        0x90, 0x82                            /* -> deep lapis -> dark-blue edge  */
+    static const unsigned char grad[16] = {
+        0x82, 0x90, 0x92, 0x92, 0x92, 0x92, 0x92, 0x92,   /* dark-blue edge -> lapis */
+        0x92, 0x92, 0x92, 0x92, 0x92, 0x92, 0x90, 0x82    /* -> deep lapis -> edge   */
     };
     /* Tile faces (COLPF2) catch a soft highlight through the board's vertical
      * centre and dim toward the framed edges — the carved lapis reads as a raised
      * tablet lit from the front. Stays brighter than the field grad above, so the
      * white bevel + carve relief keep popping. (The "4½-colour" trick.) */
-    static const unsigned char face[14] = {
-        0x96, 0x96, 0x98, 0x98, 0x9A, 0x9A,
-        0x9A, 0x9A, 0x9A, 0x9A, 0x98, 0x98,
-        0x96, 0x96
+    static const unsigned char face[16] = {
+        0x96, 0x96, 0x98, 0x98, 0x9A, 0x9A, 0x9A, 0x9A,
+        0x9A, 0x9A, 0x9A, 0x9A, 0x98, 0x98, 0x96, 0x96
     };
     unsigned char *dl = *(unsigned char **)DL_PTR;
     unsigned char i;
 
-    for (i = 0; i < 14; i++) {
+    for (i = 0; i < 16; i++) {
         dli_table[i]  = grad[i];
         dli_table2[i] = face[i];
     }
-    dli_len = 14;
+    dli_len = 16;
     *(volatile unsigned char *)VDSLST       = (unsigned char)((unsigned int)dli_handler & 0xFF);
     *(volatile unsigned char *)(VDSLST + 1) = (unsigned char)((unsigned int)dli_handler >> 8);
-    for (i = 4; i <= 17; i++)
+    for (i = 3; i <= 18; i++)
         dl[5 + i] |= 0x80;                          /* DLI bit on each board-band row */
     *(volatile unsigned char *)0xD40E = 0xC0;       /* NMIEN: DLI + VBI               */
     atari_board_shimmer(1);                         /* gold rosettes/cursor glint during play */
@@ -349,7 +362,7 @@ void atari_board_dli_off(void)
     unsigned char i;
     atari_board_shimmer(0);                         /* steady gold off the board */
     *(volatile unsigned char *)0xD40E = 0x40;       /* NMIEN: VBI only (DLI off) */
-    for (i = 4; i <= 17; i++)
+    for (i = 3; i <= 18; i++)
         dl[5 + i] &= 0x7F;                          /* clear DLI bits           */
     COLOR4 = BOARD_FIELD;                           /* flat lapis field again    */
 }
@@ -364,7 +377,7 @@ void atari_board_tint(unsigned char player)
     unsigned char frame = player ? 0xC2 : 0x82;     /* green (Dark) / blue (Light) */
     COLOR4        = frame;                           /* board border / frame       */
     dli_table[0]  = frame;                           /* top board-row edge meets it */
-    dli_table[13] = frame;                           /* bottom board-row edge       */
+    dli_table[15] = frame;                           /* bottom board-row edge       */
 }
 
 /* ---- player-missile graphics: round two-tone tokens --------------------- *
@@ -401,10 +414,10 @@ void atari_board_tint(unsigned char player)
 static unsigned char pm_ram[2048];   /* 1 KB P/M area, aligned to 1 KB at run time */
 static unsigned char *pm_pl[4];      /* -> the four double-line player strips       */
 
-/* A donut disc: 4 double-line bytes (= 8 scanlines, one board cell tall), 8 colour
- * clocks (one 2-char cell) wide, with a 2-clock centre hole so the pip beneath
- * shows through. */
-static const unsigned char tok_disc[4] = { 0x3C, 0x66, 0x66, 0x3C };
+/* A round donut token that fills the 16x16 board box: 8 double-line bytes (= 16
+ * scanlines, one 2-char-tall cell), ~6 colour clocks wide, with a 2-clock centre
+ * hole so the lapis tile beneath shows through (the two-tone "Ur set" look). */
+static const unsigned char tok_disc[8] = { 0x18, 0x3C, 0x66, 0x66, 0x66, 0x66, 0x3C, 0x18 };
 
 void atari_pmg_init(void)
 {
@@ -446,18 +459,19 @@ void atari_pmg_token(unsigned char slot, unsigned char char_x, unsigned char cha
 {
     unsigned char off = (unsigned char)(PM_VTOP + char_y * 4);
     unsigned char k;
-    (&HPOSP0_R)[slot] = (unsigned char)(PM_HLEFT + char_x * 4);
-    for (k = 0; k < 4; k++)
+    /* +1 colour clock centres the ~6-clock disc in the 8-clock (2-char) box */
+    (&HPOSP0_R)[slot] = (unsigned char)(PM_HLEFT + char_x * 4 + 1);
+    for (k = 0; k < 8; k++)              /* 8 double-line bytes = the full 16px cell */
         pm_pl[slot][off + k] = tok_disc[k];
 }
 
-/* Clear one token disc (the 4 PM bytes at char_y) without touching the other
- * pieces in that player strip — used by the glide / fly-back animation. */
+/* Clear one token disc (the 8 PM bytes of the cell at char_y) without touching the
+ * other pieces in that player strip — used by the glide / fly-back animation. */
 void atari_pmg_token_clear(unsigned char slot, unsigned char char_y)
 {
     unsigned char off = (unsigned char)(PM_VTOP + char_y * 4);
     unsigned char k;
-    for (k = 0; k < 4; k++)
+    for (k = 0; k < 8; k++)
         pm_pl[slot][off + k] = 0;
 }
 #else  /* UR_A5200: no PMG — main.c draws pieces as charset disc glyphs */
