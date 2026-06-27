@@ -65,9 +65,17 @@ committable state.
       that lists games and launches ours.
 
 ## Phase 5 — Coleco Adam port
-- [ ] Implement `plat_*` for Adam (TMS9928A video, SN76489 sound, AdamNet input).
-- [ ] Confirm the shared core compiles unchanged under z88dk.
-- [ ] **Adam ↔ Atari cross-play.**
+- [x] `plat_*` for Adam (TMS9928A video, SN76489 sound, EOS keyboard over AdamNet)
+      — local hot-seat + vs-AI, builds `build/adam/ur.ddp` (MAME `adam`).
+- [x] Shared core compiles unchanged under z88dk.
+- [x] **FujiNet online** (`online_game`, same `N:TCP` protocol/server as the Atari);
+      builds + boots, fails the network gracefully under MAME (no FujiNet emulation).
+- [x] **Carved Graphics-II board** — beveled lapis cells + shaped gold rosette
+      flowers (custom Mode-II patterns), two-tone token sprites, + the Finkel credit.
+- [x] **ColecoVision cartridge** (`make coleco` → `build/coleco/ur.rom`): the same
+      Adam layer with controller (keypad + FIRE) input, online/EOS/AdamNet stripped;
+      fits the CV's 1 KB RAM. Verified in MAME (`coleco`).
+- [ ] **Adam ↔ Atari cross-play** end-to-end (needs FujiNet + the server, real hw).
 
 ## Phase 6 — Commodore 64 port
 - [x] Local play (colour conio board, hot-seat + vs-AI) — builds `ur.prg`, runs in VICE.

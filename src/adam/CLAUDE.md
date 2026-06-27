@@ -1,12 +1,21 @@
-# src/adam — Coleco Adam platform layer (future target)
+# src/adam — Coleco Adam platform layer (+ ColecoVision)
 
-> **Status: playable — local + online, colour + sound.** `src/adam/main.c` reuses
-> the shared core and renders a **colour** board: lapis background, gold
-> rosettes/title, pieces as **hardware-sprite tokens** (cream-with-dark-pip /
-> dark-with-cream-pip) over conio lanes/labels, with **SN76489 sound effects**.
-> Menu: hot-seat, vs-AI, **online (FujiNet)**, and Set name/server. `make adam` →
-> `build/adam/ur.ddp` (run in MAME `adam` / ADAMEm). The shared core + protocol
-> codec drop in unchanged; only this layer is new.
+> **Status: playable — local + online, carved colour board + sound.**
+> `src/adam/main.c` reuses the shared core and renders a **carved Graphics-II
+> board**: a deep lapis field, **beveled grey lane tiles** and **shaped gold
+> rosette flowers** (custom Mode-II patterns via `carve_cell`, not flat colour
+> blocks), pieces as **hardware-sprite tokens** (cream-with-dark-pip /
+> dark-with-cream-pip), with **SN76489 sound effects**. Menu: hot-seat, vs-AI,
+> **online (FujiNet)**, and Set name/server, + the "Ur — Mesopotamia" subtitle and
+> the **Dr. Finkel** credit. `make adam` → `build/adam/ur.ddp` (run in MAME `adam`
+> / ADAMEm). The shared core + protocol codec drop in unchanged.
+>
+> **Also builds for the ColecoVision** (the Adam's console core): `make coleco` →
+> `build/coleco/ur.rom`, a **cartridge** that shares the carved board + token
+> sprites + SN76489 sound, with `-DUR_COLECO` stripping the EOS keyboard /
+> AdamNet / FujiNet (the CV has none) and switching input to the **controller**
+> (z88dk `joystick()`/`coleco_joypad`: keypad digits pick menu/move numbers, FIRE
+> rolls). Local play only; fits the CV's **1 KB RAM**. See **ColecoVision** below.
 
 ## Sound (SN76489)
 
@@ -126,6 +135,34 @@ Implements the `plat_*` interface for the **Coleco Adam**.
 
 > Parent context: [`/CLAUDE.md`](../../CLAUDE.md). Networking model:
 > [`src/net/CLAUDE.md`](../net/CLAUDE.md).
+
+## ColecoVision (`make coleco` → `build/coleco/ur.rom`)
+
+The Adam *is* a ColecoVision with a keyboard / drives / EOS bolted on, so the same
+`src/adam/main.c` builds a ColecoVision **cartridge** — the carved board, token
+sprites, and SN76489 sound are byte-identical; only input + the stripped subsystems
+differ. The `make coleco` target (in `makefiles/adam.mk`) builds with `+coleco`
+(no `-subtype=adam`) and `-DUR_COLECO`:
+
+- **No EOS / AdamNet / FujiNet.** The online block, the EOS keyboard decl, and the
+  fujinet includes are all `#ifndef UR_COLECO`-out; the build links neither
+  `eos.lib` nor `fujinet-adam.lib`. The menu drops Online / Set name / Set server
+  (local hot-seat + vs-AI only).
+- **Controller input.** `get_key()` reads z88dk's `joystick(3)` (an alias for the
+  coleco `coleco_joypad`), which returns the **keypad ASCII** (`'1'`-`'9'`,`*`,`#`)
+  in the high byte and the joystick `MOVE_*` bits in the low byte. The keypad
+  digits drive the same menu/move-number input the keyboard build uses; **FIRE**
+  returns RETURN for the "press a key to roll" prompts. It polls release→press so
+  one tap = one action (no `settle()` busy-wait).
+- **1 KB RAM.** The CV has only 1 KB (vs the Adam's 64 KB); stripping the online
+  buffers keeps it tiny — BSS is ~371 bytes. `ur.rom` is a 32 KB cartridge.
+- **Run:** `mame coleco -cart build/coleco/ur.rom` (or a real ColecoVision). Boots
+  **instantly** (a cartridge — no ~60 s data-pack load like the Adam). Verified in
+  MAME: menu + keypad selection + the carved board + a vs-AI turn.
+
+*Future:* offer the controller on the **Adam** too (it has CV controllers), as an
+alternative to the keyboard — tricky because `eos_read_keyboard()` blocks, so it
+would need a non-blocking poll of both keyboard and joystick.
 
 ## ⚠️ This is a Z80 machine, not 6502
 

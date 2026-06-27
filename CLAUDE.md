@@ -15,9 +15,14 @@ FujiNet**.
 3. **Commodore 64** — third target. *(6502 / 6510)*
 4. **Apple II** — fourth target. *(6502)*
 
+…plus a **ColecoVision** build (`make coleco`) that falls out of the Adam layer for
+free — same Z80 / TMS9928A / SN76489 core, controller (keypad + FIRE) input, no
+FujiNet. See [`src/adam/CLAUDE.md`](src/adam/CLAUDE.md).
+
 All four targets now have a working platform layer with local play **and FujiNet
-online**: **Atari** (charset board + PMG cursor + POKEY), **Adam** (colour board +
-sprite tokens + SN76489), **C64** (multicolor sprite-token showcase + SID), and
+online**: **Atari** (carved board + PMG two-tone tokens + DLI sheen + POKEY),
+**Adam** (carved Graphics-II board + sprite tokens + SN76489), **C64** (carved
+multicolor board + two-tone sprite-token showcase + SID), and
 **Apple II** (lo-res *and* double-hi-res 16-colour boards + 1-bit speaker). Every
 target speaks the same `N:TCP` wire protocol to the Go server. The Atari and Adam
 online paths are the most exercised end-to-end; the C64/Apple II online builds are
