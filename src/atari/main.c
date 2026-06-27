@@ -30,8 +30,11 @@
 #define ROW_MOVE   19       /* move list (rows 19..22, below the board) */
 #define ROW_MSG    23
 
-#define LIGHT_CH '#'        /* mode-4 light piece glyph (white) */
-#define DARK_CH  '@'        /* mode-4 dark piece glyph (green)  */
+#define LIGHT_CH '#'        /* grid marker: light piece (rendered as a PMG disc) */
+#define DARK_CH  '@'        /* grid marker: dark piece  (rendered as a PMG disc) */
+#define PIP_L    '('        /* cream pip dot (l/r halves) shown under a Dark disc */
+#define PIP_R    ')'
+#define CURSOR_CH '\''      /* move cursor: gold pointer left of the selected cell */
 #define NO_ROLL  0xFF
 #define UR_DEFAULT_HOST "localhost"   /* server host; runtime-configurable (menu 7) */
 #define DIE_MARKED   '^'
@@ -97,12 +100,15 @@ static bool opp_on(unsigned char player, unsigned char pos)
     return count_at((unsigned char)(1 - player), pos) > 0;
 }
 
+static unsigned char cur_cx = 0xFF, cur_cy;   /* last cursor char cell; 0xFF = none */
+
 static void draw_all(unsigned char roll, const char *msg)
 {
     char grid[9][3];
     unsigned char row, col, pl, i, pos, rr, cc;
 
     clrscr();
+    cur_cx = 0xFF;                    /* clrscr wiped any cursor glyph */
     cputsxy(0, 0, "The Royal Game of Ur");
 
     /* base board: '+' playable, ' ' cut-away, '*' rosettes.
@@ -121,19 +127,29 @@ static void draw_all(unsigned char roll, const char *msg)
                 grid[rr][cc] = pl ? DARK_CH : LIGHT_CH;
         }
 
+    atari_pmg_tokens_clear();            /* on-board pieces are PMG discs (below) */
     for (row = 1; row <= 8; row++)
         for (col = 0; col < 3; col++) {
             char ch = grid[row][col];
             char rch;                    /* right-half glyph of the cell */
             if (ch == ' ')
                 continue;
-            switch (ch) {
-                case '+': rch = '='; break;
-                case '*': rch = '&'; break;
-                case '#': rch = '$'; break;
-                case '@': rch = '['; break;
-                default:  rch = ch;  break;
+            if (ch == LIGHT_CH || ch == DARK_CH) {
+                /* Round two-tone token: one player per board colour-column
+                 * (col0=P0 Light, col2=P1 Dark, col1=P2/P3 by colour). */
+                unsigned char slot = (col == 0) ? 0 :
+                                     (col == 2) ? 1 :
+                                     (ch == LIGHT_CH ? 2 : 3);
+                atari_pmg_token(slot, cellx(col), celly(row));
+                if (ch == DARK_CH) {     /* cream pip showing through the donut hole */
+                    cputcxy(cellx(col),     celly(row), PIP_L);
+                    cputcxy(cellx(col) + 1, celly(row), PIP_R);
+                }
+                /* Light: leave the cell blank so the hole shows the dark field
+                 * (= a dark pip); the disc body covers the rest. */
+                continue;
             }
+            rch = (ch == '*') ? '&' : '=';   /* rosette / lane tile */
             if (ch == '*') revers(1);
             cputcxy(cellx(col),     celly(row), ch);
             cputcxy(cellx(col) + 1, celly(row), rch);
@@ -192,14 +208,28 @@ static void center(unsigned char y, const char *s)
     cputsxy((unsigned char)((40 - n) / 2), y, s);
 }
 
-/* Move the PMG highlight onto a piece's board cell (or hide it if home). */
+/* Move cursor: a gold pointer in the field column just left of the selected cell.
+ * (The four PMG players are all used for tokens now, so the cursor is charset.) */
+static void cursor_hide(void)
+{
+    if (cur_cx != 0xFF) { cputcxy(cur_cx, cur_cy, ' '); cur_cx = 0xFF; }
+}
+static void cursor_at(unsigned char char_x, unsigned char char_y)
+{
+    cursor_hide();
+    cur_cx = (unsigned char)(char_x - 1);
+    cur_cy = char_y;
+    revers(1); cputcxy(cur_cx, cur_cy, CURSOR_CH); revers(0);
+}
+
+/* Point the cursor at a piece's board cell (or hide it if borne off). */
 static void highlight_dest(unsigned char player, unsigned char dest)
 {
     unsigned char rr, cc;
     if (pos_to_cell(player, dest, &rr, &cc))
-        atari_pmg_highlight(cellx(cc), celly(rr));
+        cursor_at(cellx(cc), celly(rr));
     else
-        atari_pmg_hide();
+        cursor_hide();
 }
 
 static void sfx_for_result(const ur_move_result *r)
@@ -234,7 +264,7 @@ static void show_option(unsigned char player, const unsigned char *srcs,
     dest = (unsigned char)(src + roll);
     cell = (src == UR_POS_START) ? dest : src;     /* on-board 1..14 */
     if (pos_to_cell(player, cell, &rr, &cc))
-        atari_pmg_highlight(cellx(cc), celly(rr));
+        cursor_at(cellx(cc), celly(rr));
 
     top = 0;                                        /* scroll window */
     if (nsrc > MOVE_ROWS && sel >= MOVE_ROWS)
@@ -760,6 +790,7 @@ static char title_screen(void)
     char key;
 
     clrscr();
+    atari_pmg_tokens_clear();                /* clear any tokens left from a game */
     gotoxy(0, 0);
     cprintf("Server: %s", g_host);          /* where Online connects (menu 7) */
     revers(1);
@@ -1001,6 +1032,7 @@ static void play_local(bool ai1)
         show_result(player == 0 ? " LIGHT (WHITE) WINS! " : " DARK (GREEN) WINS! ");
     }
     atari_board_dli_off();              /* flat field back for the menu/title */
+    atari_pmg_tokens_clear();           /* no stray token discs over the menu */
 }
 
 int main(void)

@@ -17,10 +17,11 @@ void atari_title_sky_off(void);  /* tear down the title DLI (restore plain backg
 void atari_board_dli_on(void);   /* DLI: in-game lapis sheen down the board field   */
 void atari_board_dli_off(void);  /* tear down the board DLI (flat lapis field again) */
 
-/* Player-missile graphics: a highlight box (player 0) over a board cell. */
+/* Player-missile graphics: round two-tone token discs (4 players, one per board
+ * colour-column). Off-board trays + the move cursor stay charset (main.c). */
 void atari_pmg_init(void);
-void atari_pmg_highlight(unsigned char char_x, unsigned char char_y);
-void atari_pmg_hide(void);
+void atari_pmg_tokens_clear(void);  /* clear/hide all four player strips */
+void atari_pmg_token(unsigned char slot, unsigned char char_x, unsigned char char_y);
 
 /* Joystick port 1 (via OS shadow registers). */
 unsigned char atari_stick(void);   /* raw STICK0: bit0 up,1 down,2 left,3 right (0=pressed) */

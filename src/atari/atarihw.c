@@ -121,6 +121,16 @@ static const unsigned char g_arrow_w_r[8] = {0x40,0x50,0x54,0x55,0x40,0x40,0x40,
 static const unsigned char g_arrow_g_l[8] = {0x02,0x0A,0x2A,0xAA,0x02,0x02,0x02,0x00}; /* '}' */
 static const unsigned char g_arrow_g_r[8] = {0x80,0xA0,0xA8,0xAA,0x80,0x80,0x80,0x00}; /* '~' */
 
+/* Token pip seen through the PMG donut hole on a DARK piece: a 2-clock cream
+ * ("01"->COLOR0) dot at the cell centre (colour-pixels 3-4, scanlines 2-5).
+ * Left half = pixel 3, right half = pixel 4.  Internal codes 0x08 / 0x09.        */
+static const unsigned char g_pip_l[8] = {0x00,0x00,0x01,0x01,0x01,0x01,0x00,0x00}; /* '(' */
+static const unsigned char g_pip_r[8] = {0x00,0x00,0x40,0x40,0x40,0x40,0x00,0x00}; /* ')' */
+
+/* Move cursor: a right-pointing gold triangle ("11" -> COLOR3 when drawn inverse),
+ * placed in the field column just left of the selected cell.  Internal code 0x07. */
+static const unsigned char g_cursor[8] = {0x00,0xC0,0xF0,0xFC,0xFC,0xF0,0xC0,0x00}; /* ''' */
+
 /* Over-allocated so we can align the active 1 KB to a $400 boundary at run time. */
 static unsigned char font_ram[1024 + 1024];
 
@@ -152,6 +162,8 @@ void atari_setup_charset(void)
     put_glyph(font, 0x3C, g_wedge);    /* '\' cuneiform wedge         */
     put_glyph(font, 0x7B, g_arrow_w_l); put_glyph(font, 0x7C, g_arrow_w_r); /* '{' '|' white up */
     put_glyph(font, 0x7D, g_arrow_g_l); put_glyph(font, 0x7E, g_arrow_g_r); /* '}' '~' green up */
+    put_glyph(font, 0x08, g_pip_l);     put_glyph(font, 0x09, g_pip_r);     /* '(' ')' cream pip */
+    put_glyph(font, 0x07, g_cursor);    /* ''' move cursor (drawn inverse = gold) */
 
     *(volatile unsigned char *)0x02F4 = (unsigned char)(base >> 8);  /* CHBAS */
 }
@@ -260,24 +272,43 @@ void atari_board_dli_off(void)
     COLOR4 = BOARD_FIELD;                           /* flat lapis field again    */
 }
 
-/* ---- player-missile graphics (highlight cursor) ------------------------- *
- * One player (P0), double-line resolution, used as a hollow box drawn around a
- * board cell. Additive over the playfield, so it can't disturb the drawn board.
- * If the box is misaligned, nudge PM_HLEFT / PM_VTOP.
+/* ---- player-missile graphics: round two-tone tokens --------------------- *
+ * The on-board pieces are PMG round discs, not charset glyphs — true colours (a
+ * real brown for Dark, independent of the playfield) and smooth positioning for
+ * future animation.  The board is VERTICAL, so a column's pieces share an X: one
+ * player covers one column, no multiplexing.  The shared middle column holds both
+ * colours, so it takes two players (same X, different rows):
+ *   P0 = Light private column (col 0)   PCOLR0 cream
+ *   P1 = Dark  private column (col 2)   PCOLR1 brown
+ *   P2 = Light in the middle  (col 1)   PCOLR2 cream
+ *   P3 = Dark  in the middle  (col 1)   PCOLR3 brown
+ * Each disc is a donut: the centre hole shows the cell beneath — the lapis field
+ * (a dark pip) under a cream Light disc, or a cream charset dot under a brown Dark
+ * disc — giving the two-tone "real Ur set" look.  Off-board tray stacks stay
+ * charset glyphs (fixed corners, no spare players).  The move cursor is a charset
+ * pointer (main.c), so all four players are free for tokens.
  */
 #define PMBASE_R (*(volatile unsigned char *)0xD407)   /* P/M base (high byte)   */
 #define GRACTL_R (*(volatile unsigned char *)0xD01D)   /* P/M output enable      */
 #define SDMCTL_R (*(volatile unsigned char *)0x022F)   /* DMACTL shadow          */
-#define HPOSP0_R (*(volatile unsigned char *)0xD000)   /* P0 horizontal position */
-#define SIZEP0_R (*(volatile unsigned char *)0xD008)   /* P0 width               */
-#define PCOLR0_R (*(volatile unsigned char *)0x02C0)   /* P0 colour (shadow)     */
+#define HPOSP0_R (*(volatile unsigned char *)0xD000)   /* P0..P3 = $D000..$D003  */
+#define SIZEP0_R (*(volatile unsigned char *)0xD008)   /* P0..P3 width           */
+#define PCOLR0_R (*(volatile unsigned char *)0x02C0)   /* P0..P3 colour (shadow) */
 
-#define PM_HLEFT 48    /* HPOSP0 for screen char column 0 (tune if off); a normal
-                          player is 8 colour clocks = one 2-char board cell wide  */
-#define PM_VTOP  16    /* P0 byte offset for screen char row 0 (double-line)   */
+#define PM_HLEFT 48    /* HPOSP for screen char column 0; a normal player is
+                          8 colour clocks = one 2-char board cell wide           */
+#define PM_VTOP  16    /* P/M byte offset for screen char row 0 (double-line)     */
+
+#define TOK_LIGHT 0x0E /* cream  -> Light token bodies (P0/P2) */
+#define TOK_DARK  0x24 /* brown  -> Dark  token bodies (P1/P3) */
 
 static unsigned char pm_ram[2048];   /* 1 KB P/M area, aligned to 1 KB at run time */
-static unsigned char *pm_p0;         /* -> player-0 strip                          */
+static unsigned char *pm_pl[4];      /* -> the four double-line player strips       */
+
+/* A donut disc: 4 double-line bytes (= 8 scanlines, one board cell tall), 8 colour
+ * clocks (one 2-char cell) wide, with a 2-clock centre hole so the pip beneath
+ * shows through. */
+static const unsigned char tok_disc[4] = { 0x3C, 0x66, 0x66, 0x3C };
 
 void atari_pmg_init(void)
 {
@@ -287,38 +318,41 @@ void atari_pmg_init(void)
 
     for (i = 0; i < 1024; i++)
         pm[i] = 0;
-    pm_p0 = pm + 0x200;                 /* double-line player 0 */
+    pm_pl[0] = pm + 0x200;             /* double-line players P0..P3 */
+    pm_pl[1] = pm + 0x280;
+    pm_pl[2] = pm + 0x300;
+    pm_pl[3] = pm + 0x380;
 
     PMBASE_R = (unsigned char)(base >> 8);
-    PCOLR0_R = 0x1A;                    /* bright yellow */
-    SIZEP0_R = 0;                       /* normal width */
-    HPOSP0_R = 0;                       /* hidden until placed */
+    (&PCOLR0_R)[0] = TOK_LIGHT;        /* P0 cream, P1 brown, P2 cream, P3 brown */
+    (&PCOLR0_R)[1] = TOK_DARK;
+    (&PCOLR0_R)[2] = TOK_LIGHT;
+    (&PCOLR0_R)[3] = TOK_DARK;
+    for (i = 0; i < 4; i++) { (&SIZEP0_R)[i] = 0; (&HPOSP0_R)[i] = 0; }
     SDMCTL_R = (unsigned char)(SDMCTL_R | 0x0C);  /* + player & missile DMA */
-    GRACTL_R = 0x03;                    /* enable P/M output */
+    GRACTL_R = 0x03;                   /* enable P/M output */
 }
 
-void atari_pmg_hide(void)
+/* Clear all four player strips + hide them — call before drawing a fresh board,
+ * and when leaving the board so no stray discs hang over the menu/title. */
+void atari_pmg_tokens_clear(void)
 {
-    HPOSP0_R = 0;
+    unsigned char s, i;
+    for (s = 0; s < 4; s++) {
+        for (i = 0; i < 128; i++)
+            pm_pl[s][i] = 0;
+        (&HPOSP0_R)[s] = 0;
+    }
 }
 
-void atari_pmg_highlight(unsigned char char_x, unsigned char char_y)
+/* Place a token disc for player `slot` (0..3) at board cell (char_x, char_y). */
+void atari_pmg_token(unsigned char slot, unsigned char char_x, unsigned char char_y)
 {
-    unsigned char off, i;
-    if (pm_p0 == 0)
-        return;
-    for (i = 0; i < 128; i++)
-        pm_p0[i] = 0;
-    /* A box one byte taller than the cell on each side, so its top/bottom bars
-     * sit in the gaps above/below the piece and the glyph stays fully visible. */
-    off = (unsigned char)(PM_VTOP + char_y * 4 - 1);
-    pm_p0[off]     = 0xFF;     /* top bar (above the glyph)    */
-    pm_p0[off + 1] = 0x81;     /* sides flank the glyph...     */
-    pm_p0[off + 2] = 0x81;
-    pm_p0[off + 3] = 0x81;
-    pm_p0[off + 4] = 0x81;
-    pm_p0[off + 5] = 0xFF;     /* bottom bar (below the glyph) */
-    HPOSP0_R = (unsigned char)(PM_HLEFT + char_x * 4);
+    unsigned char off = (unsigned char)(PM_VTOP + char_y * 4);
+    unsigned char k;
+    (&HPOSP0_R)[slot] = (unsigned char)(PM_HLEFT + char_x * 4);
+    for (k = 0; k < 4; k++)
+        pm_pl[slot][off + k] = tok_disc[k];
 }
 
 /* ---- joystick input (port 1, OS shadow registers) ----------------------- */
