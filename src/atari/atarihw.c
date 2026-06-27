@@ -58,14 +58,18 @@ void atari_quiet_sio(void)
     *(volatile unsigned char *)0x0041 = 0;
 }
 
+/* The board field / border. Was black; now a dark lapis so the board reads as a
+ * carved lapis tablet (the tile faces are a brighter lapis, COLOR2). */
+#define BOARD_FIELD 0x90   /* deep lapis (dark) — tile faces (COLOR2 0x94) sit brighter */
+
 void atari_setup_colors(void)
 {
     /* Standard-of-Ur palette: lapis + gold, shell-white pieces. */
-    COLOR0 = 0x0E;   /* shell white -> Light pieces           */
-    COLOR1 = 0xCA;   /* green       -> Dark pieces + text     */
-    COLOR2 = 0x94;   /* lapis       -> text bg + cell lines   */
-    COLOR3 = 0x1A;   /* gold        -> rosettes + ziggurat    */
-    COLOR4 = 0x00;   /* black       -> board bg + border      */
+    COLOR0 = 0x0E;          /* shell white -> Light pieces + tile bevel highlight */
+    COLOR1 = 0xCA;          /* green       -> Dark pieces + text                  */
+    COLOR2 = 0x94;          /* lapis       -> text bg + tile faces ("11")         */
+    COLOR3 = 0x1A;          /* gold        -> rosettes + ziggurat                 */
+    COLOR4 = BOARD_FIELD;   /* dark lapis  -> board field + border                */
 }
 
 /* ---- custom character set ----------------------------------------------- *
@@ -78,15 +82,23 @@ void atari_setup_colors(void)
  * (00=bg, 01=COLOR0, 10=COLOR1, 11=COLOR2/COLOR3-if-inverse), 8 rows tall.
  * Each board cell is TWO characters wide (8 colour-pixels), so every element has
  * a left-half and right-half glyph. Internal (screen) codes, board rows only:
- *   tile    '+' 0x0B / '=' 0x1D   ("11" blue diamond outline)
- *   rosette '*' 0x0A / '&' 0x06   ("11", drawn inverse -> orange flower)
+ *   tile    '+' 0x0B / '=' 0x1D   (filled lapis tile, COLOR2, with a white
+ *                                  top/left bevel highlight = COLOR0, on the
+ *                                  dark-lapis field = COLOR4 "00")
+ *   rosette '*' 0x0A / '&' 0x06   (drawn inverse: gold petals "11"->COLOR3,
+ *                                  white centre "01"->COLOR0, on the field)
  *   light   '#' 0x03 / '$' 0x04   ("01" white disc)
  *   dark    '@' 0x20 / '[' 0x3B   ("10" green ring)
+ *
+ * Tiles: a raised lapis inlay lit from the top-left — top row + left column are a
+ * white highlight ("01"), the body is lapis ("11"), a 1px field gap ("00") all
+ * round separates neighbouring tiles.  Rosette: a rounded 8-point gold flower with
+ * a white (pearl) centre, clearly distinct from a plain lane.
  */
-static const unsigned char g_tile_l[8]    = {0x03,0x0C,0x30,0xC0,0xC0,0x30,0x0C,0x03};
-static const unsigned char g_tile_r[8]    = {0xC0,0x30,0x0C,0x03,0x03,0x0C,0x30,0xC0};
-static const unsigned char g_rosette_l[8] = {0x03,0x33,0x0F,0xFF,0xFF,0x0F,0x33,0x03};
-static const unsigned char g_rosette_r[8] = {0xC0,0xCC,0xF0,0xFF,0xFF,0xF0,0xCC,0xC0};
+static const unsigned char g_tile_l[8]    = {0x00,0x15,0x1F,0x1F,0x1F,0x1F,0x3F,0x00};
+static const unsigned char g_tile_r[8]    = {0x00,0x54,0xFC,0xFC,0xFC,0xFC,0xFC,0x00};
+static const unsigned char g_rosette_l[8] = {0x0F,0x3F,0xFD,0xF5,0xF5,0xFD,0x3F,0x0F};
+static const unsigned char g_rosette_r[8] = {0xF0,0xFC,0x7F,0x5F,0x5F,0x7F,0xFC,0xF0};
 static const unsigned char g_light_l[8]   = {0x05,0x15,0x55,0x55,0x55,0x55,0x15,0x05};
 static const unsigned char g_light_r[8]   = {0x50,0x54,0x55,0x55,0x55,0x55,0x54,0x50};
 static const unsigned char g_dark_l[8]    = {0x0A,0x20,0x80,0x80,0x80,0x80,0x20,0x0A};
@@ -206,7 +218,7 @@ void atari_title_sky_off(void)
     *(volatile unsigned char *)0xD40E = 0x40;       /* NMIEN: VBI only (DLI off) */
     for (i = 4; i <= 17; i++)
         dl[5 + i] &= 0x7F;                          /* clear DLI bits */
-    COLOR4 = 0x00;                                  /* restore plain board background */
+    COLOR4 = BOARD_FIELD;                           /* restore the lapis board field */
 }
 
 /* ---- player-missile graphics (highlight cursor) ------------------------- *
