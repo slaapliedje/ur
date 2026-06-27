@@ -738,7 +738,8 @@ int main(void)
         textbackground(COL_BG);
         clrscr();
         textcolor(COL_TITLE); gotoxy(0, 0);  cputs("The Royal Game of Ur");
-        textcolor(COL_LABEL); gotoxy(0, 2);  cputs("Coleco Adam");
+        textcolor(COL_LABEL); gotoxy(0, 1);  cputs("Ur - Mesopotamia - c.2600 BCE");
+        gotoxy(0, 2);  cputs("Coleco Adam");
         gotoxy(0, 5);  cputs("1) Two players");
         gotoxy(0, 6);  cputs("2) One player vs computer");
         gotoxy(0, 7);  cputs("3) Online (FujiNet)");
@@ -746,6 +747,10 @@ int main(void)
         gotoxy(0, 9);  cputs("5) Set server");
         textcolor(COL_LABEL); gotoxy(0, 11); cprintf("name:%s host:%s", g_name, g_host);
         textcolor(COL_TITLE); gotoxy(0, 13); cputs("Select (1-5):");
+        /* With thanks to the scholar who reconstructed the rules. */
+        textcolor(COL_LABEL);
+        gotoxy(0, 22); cputs("Rules by Dr Irving Finkel,");
+        gotoxy(0, 23); cputs("British Museum - with thanks.");
 
         /* Read the menu choice (get_key waits for one fresh press and folds it
          * + its timing into the RNG seed; the RNG is seeded at the first roll). */
