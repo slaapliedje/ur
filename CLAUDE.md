@@ -144,6 +144,7 @@ docs/
   rules.md           ← full Finkel ruleset + path/rosette tables
   protocol.md        ← Ur wire-protocol spec (the cross-platform contract)
   design.md          ← game design (modes, UX, AI, sound)
+  visual-design.md   ← per-platform plan to make each port look great (HW strengths)
   architecture.md    ← layering, data model, per-platform memory maps
 src/
   common/            ← portable C core (rules, AI, state machine, protocol codec)

@@ -5,6 +5,12 @@ so the roadmap stays about shipping. Nothing here blocks a release.
 
 ## Visual parity across platforms — one look, four expressions
 
+> **Deep per-platform plan:** [`visual-design.md`](visual-design.md) — a researched,
+> prioritized design plan for each machine (Atari DLI+PMG, C64 multicolor tiles+
+> sprites, Adam Mode-II carved board, Apple II dithering), with signature moves,
+> recommendation tables, and anti-patterns. This section is the summary; that doc is
+> the detail.
+
 **Goal:** the four builds should *read* as the same game — a shared visual
 language for the Royal Game of Ur — while each plays to its own machine's
 graphical and audio strengths rather than to a lowest common denominator. The bar
