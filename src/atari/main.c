@@ -942,10 +942,13 @@ static char title_screen(void)
     hrun(6, 16, 28, '\\', false);             /* lower cuneiform frieze */
 
 #ifdef UR_A5200
-    /* 5200: no keyboard — pick with the stick + FIRE (the ColecoVision pattern). */
+    /* 5200: no keyboard — the controller's numeric keypad stands in (digits read
+     * through cgetc), and the stick + FIRE drive a highlight selector. Either picks
+     * a mode: tap 1/2/4 on the keypad, or aim with the stick and press FIRE. */
     cputsxy(3, 19, "1) Two players");
     cputsxy(3, 20, "2) One player vs computer");
-    cputsxy(3, 22, "Stick UP/DOWN, FIRE to start");
+    cputsxy(3, 21, "4) How to play");
+    cputsxy(3, 23, "Keypad 1/2/4  -or-  stick/FIRE");
     play_hymn();                              /* the Hurrian Hymn (once, skippable) */
     {
         unsigned char sel = 1;                /* 0 = two players, 1 = vs computer */
@@ -954,14 +957,18 @@ static char title_screen(void)
         for (;;) {
             cputcxy(1, 19, sel == 0 ? '>' : ' ');
             cputcxy(1, 20, sel == 1 ? '>' : ' ');
+            if (kbhit()) {                    /* keypad digit picks a mode directly */
+                key = cgetc();
+                if (key == '1' || key == '2' || key == '4') break;
+            }
             s = atari_stick();
             if (!(s & 0x01)) sel = 0;         /* up   -> two players */
             if (!(s & 0x02)) sel = 1;         /* down -> vs computer */
-            if (atari_trig()) break;
+            if (atari_trig()) { key = (char)(sel == 0 ? '1' : '2'); break; }
             atari_wait_frames(4);
         }
         while (atari_trig()) { }
-        key = (char)(sel == 0 ? '1' : '2');
+        while (kbhit()) { }                   /* drain the held key before play */
     }
     return key;
 #else

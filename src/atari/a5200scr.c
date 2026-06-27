@@ -35,6 +35,17 @@
 #define SH_SDLSTH    (*(volatile unsigned char *)0x0006)   /* DL ptr shadow (hi) */
 #define SH_SAVMSC    (*(unsigned char **)0x001B)            /* screen ptr shadow  */
 
+/* POKEY keypad scan: the controller's 12-key pad + Start/Pause/Reset are read by
+ * POKEY's keyboard circuit exactly like an A8 keyboard. KBCODE latches the last
+ * key; SKSTAT bit2 (active-low) says whether a key is currently held; SKCTL must
+ * have the scan + debounce bits set to make this work. (SKSTAT read / SKCTL write
+ * share $E80F.) Both controllers' pads scan into the same KBCODE — fine for a
+ * turn-based game: only the player to move ever presses a digit. */
+#define POKEY_KBCODE (*(volatile unsigned char *)0xE809)   /* last keypad scan code  */
+#define POKEY_SKSTAT (*(volatile unsigned char *)0xE80F)   /* read:  serial/key status */
+#define POKEY_SKCTL  (*(volatile unsigned char *)0xE80F)   /* write: serial/key control */
+#define SKSTAT_KEYDOWN 0x04                                 /* 0 = a key is held now    */
+
 #define SCR_W 40
 #define SCR_H 24
 
@@ -80,6 +91,7 @@ void atari_screen_init(void)
     *(volatile unsigned char *)0xD402 = SH_SDLSTL;   /* also set ANTIC now */
     *(volatile unsigned char *)0xD403 = SH_SDLSTH;
     curx = cury = rev = 0;
+    POKEY_SKCTL = 0x03;             /* enable keyboard debounce + scan (KBCODE live) */
     joy_install(joy_static_stddrv);
 }
 
@@ -150,20 +162,41 @@ int cprintf(const char *format, ...)
     return 0;
 }
 
-/* ---- input: 5200 controller (stick + FIRE), exposed as conio + atarihw ---- */
-/* cgetc(): block until FIRE, return RETURN. kbhit(): FIRE currently pressed.
- * main.c uses these only for "press a key" prompts + as a fallback in the move
- * chooser; the menu + cursor use atari_stick()/atari_trig() (5200 versions). */
+/* ---- input: 5200 controller keypad, exposed as conio (kbhit/cgetc) -------- */
+/* The 5200 controller's numeric keypad stands in for the keyboard: the menu and
+ * the move chooser read digits through cgetc()/kbhit() (the ColecoVision pattern),
+ * while the analog stick + FIRE drive the cursor via atari_stick()/atari_trig().
+ *
+ * KBCODE's key field is bits 1-4; (KBCODE>>1)&0x0F indexes this table. Values come
+ * from the 5200 POKEY keypad scan codes (cross-checked against atari800's
+ * AKEY_5200_* and the published keypad table). Start/Pause/Reset map to 0 (ignored
+ * here — FIRE confirms, RESET is a hardware reset); '*' and '#' are available too. */
+static const char keypad_map[16] = {
+    /* 0 */ 0,   /* 1 */ '#', /* 2 */ '0', /* 3 */ '*',
+    /* 4 */ 0,   /* 5 */ '9', /* 6 */ '8', /* 7 */ '7',   /* 4=Reset */
+    /* 8 */ 0,   /* 9 */ '6', /*10 */ '5', /*11 */ '4',   /* 8=Pause */
+    /*12 */ 0,   /*13 */ '3', /*14 */ '2', /*15 */ '1'    /*12=Start */
+};
+
+/* The keypad digit currently held ('0'-'9','*','#'), or 0 if none. Level-triggered:
+ * KBCODE only latches the last key, so SKSTAT's key-down bit gates a stale code. */
+static char keypad_char(void)
+{
+    if (POKEY_SKSTAT & SKSTAT_KEYDOWN)            /* bit set -> no key held now */
+        return 0;
+    return keypad_map[(unsigned char)((POKEY_KBCODE >> 1) & 0x0F)];
+}
+
 unsigned char kbhit(void)
 {
-    return (unsigned char)((joy_read(JOY_1) & JOY_BTN_1_MASK) ? 1 : 0);
+    return (unsigned char)(keypad_char() ? 1 : 0);
 }
 
 char cgetc(void)
 {
-    while (joy_read(JOY_1) & JOY_BTN_1_MASK) { }   /* wait release first */
-    while (!(joy_read(JOY_1) & JOY_BTN_1_MASK)) { }/* then a fresh press */
-    return '\r';
+    char c;
+    while ((c = keypad_char()) == 0) { }          /* block until a keypad digit */
+    return c;
 }
 
 /* atari_stick(): present the analog stick in the A8 STICK0 bit layout
