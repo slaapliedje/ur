@@ -16,8 +16,13 @@
         .import _dli_len
 
 WSYNC  = $D40A
-COLBK  = $D01A
+.ifdef UR_A5200
+COLBK  = $C01A          ; 5200 GTIA at $C000
+COLPF2 = $C018
+.else
+COLBK  = $D01A          ; A8 GTIA at $D000
 COLPF2 = $D018
+.endif
 
         .segment "BSS"
 idx:    .res 1

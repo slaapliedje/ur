@@ -7,9 +7,10 @@
 # no fujinet-lib. Output: build/a5200/ur.a52.  $(CL65) comes from atari.mk.
 A5200_OUT     := $(BUILD_DIR)/a5200
 # 32K cart ($8000): the shared renderer + cprintf/vsprintf + joy driver overflow 16K.
-A5200_FLAGS   := -t atari5200 -DUR_A5200 -Osir -I$(SRC_DIR)/atari $(COMMON_INC) \
-                 -Wl -D,__CARTSIZE__=0x8000
+A5200_FLAGS   := -t atari5200 -DUR_A5200 --asm-define UR_A5200 -Osir -I$(SRC_DIR)/atari \
+                 $(COMMON_INC) -Wl -D,__CARTSIZE__=0x8000
 A5200_SOURCES := $(COMMON_SOURCES) $(wildcard $(SRC_DIR)/atari/*.c)
+A5200_SOURCES += $(SRC_DIR)/atari/dli.s   # board-sheen DLI (UR_A5200: GTIA at $C000)
 
 .PHONY: a5200
 a5200: | $(A5200_OUT) ## Build the Atari 5200 cartridge ROM (unified src/atari, -DUR_A5200)

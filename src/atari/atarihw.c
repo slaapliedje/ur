@@ -51,8 +51,10 @@
  * board-row mode-4 patch is identical. */
 #ifdef UR_A5200
 #define DL_PTR 0x0005
+#define VDSLST 0x0206      /* 5200 display-list-interrupt vector */
 #else
 #define DL_PTR 0x0230
+#define VDSLST 0x0200      /* A8 OS DLI vector */
 #endif
 
 #define PURE_TONE  0xA0   /* distortion bits for a clean tone (OR in volume 0-15) */
@@ -266,7 +268,6 @@ unsigned char dli_len;              /* number of gradient entries (_dli_len)    
 
 void atari_title_sky_on(void)
 {
-#ifndef UR_A5200   /* 5200 v1: no DLI (no NMI/VDSLST routing yet) — flat field */
     /* Two-hue sky: deep indigo-violet (hue 7) easing through blue (hue 8) to
      * bright lapis (hue 9), luminance rising top->bottom. Blending hues yields
      * more apparent steps than one hue's 8 luminances, so the fade looks smooth
@@ -276,7 +277,7 @@ void atari_title_sky_on(void)
         0x72, 0x72, 0x74, 0x84, 0x86, 0x86, 0x88,   /* indigo-violet -> blue   */
         0x98, 0x9A, 0x9A, 0x9C, 0x9C, 0x9E, 0x9E    /* -> lapis (brightening)  */
     };
-    unsigned char *dl = *(unsigned char **)0x0230;
+    unsigned char *dl = *(unsigned char **)DL_PTR;
     unsigned char i;
 
     for (i = 0; i < 14; i++) {
@@ -284,24 +285,21 @@ void atari_title_sky_on(void)
         dli_table2[i] = 0x94;                        /* tile faces unchanged on the title */
     }
     dli_len = 14;
-    *(volatile unsigned char *)0x0200 = (unsigned char)((unsigned int)dli_handler & 0xFF);
-    *(volatile unsigned char *)0x0201 = (unsigned char)((unsigned int)dli_handler >> 8);
+    *(volatile unsigned char *)VDSLST       = (unsigned char)((unsigned int)dli_handler & 0xFF);
+    *(volatile unsigned char *)(VDSLST + 1) = (unsigned char)((unsigned int)dli_handler >> 8);
     for (i = 4; i <= 17; i++)
         dl[5 + i] |= 0x80;                          /* DLI bit on each board-band row */
     *(volatile unsigned char *)0xD40E = 0xC0;       /* NMIEN: DLI + VBI (write-only)  */
-#endif
 }
 
 void atari_title_sky_off(void)
 {
-#ifndef UR_A5200
-    unsigned char *dl = *(unsigned char **)0x0230;
+    unsigned char *dl = *(unsigned char **)DL_PTR;
     unsigned char i;
     *(volatile unsigned char *)0xD40E = 0x40;       /* NMIEN: VBI only (DLI off) */
     for (i = 4; i <= 17; i++)
         dl[5 + i] &= 0x7F;                          /* clear DLI bits */
     COLOR4 = BOARD_FIELD;                           /* restore the lapis board field */
-#endif
 }
 
 /* ---- in-game board sheen (display list interrupt) ----------------------- *
@@ -315,7 +313,6 @@ void atari_title_sky_off(void)
  * Mirrors atari_title_sky_on (14 flagged rows == dli_len, so idx self-wraps).   */
 void atari_board_dli_on(void)
 {
-#ifndef UR_A5200   /* 5200 v1: flat lapis field (no DLI yet) */
     static const unsigned char grad[14] = {
         0x82, 0x90, 0x92, 0x92, 0x92, 0x92,   /* dark-blue edge -> luminous lapis */
         0x92, 0x92, 0x92, 0x92, 0x92, 0x92,   /* uniform body (no mid-band stripe)*/
@@ -330,7 +327,7 @@ void atari_board_dli_on(void)
         0x9A, 0x9A, 0x9A, 0x9A, 0x98, 0x98,
         0x96, 0x96
     };
-    unsigned char *dl = *(unsigned char **)0x0230;
+    unsigned char *dl = *(unsigned char **)DL_PTR;
     unsigned char i;
 
     for (i = 0; i < 14; i++) {
@@ -338,26 +335,23 @@ void atari_board_dli_on(void)
         dli_table2[i] = face[i];
     }
     dli_len = 14;
-    *(volatile unsigned char *)0x0200 = (unsigned char)((unsigned int)dli_handler & 0xFF);
-    *(volatile unsigned char *)0x0201 = (unsigned char)((unsigned int)dli_handler >> 8);
+    *(volatile unsigned char *)VDSLST       = (unsigned char)((unsigned int)dli_handler & 0xFF);
+    *(volatile unsigned char *)(VDSLST + 1) = (unsigned char)((unsigned int)dli_handler >> 8);
     for (i = 4; i <= 17; i++)
         dl[5 + i] |= 0x80;                          /* DLI bit on each board-band row */
     *(volatile unsigned char *)0xD40E = 0xC0;       /* NMIEN: DLI + VBI               */
     atari_board_shimmer(1);                         /* gold rosettes/cursor glint during play */
-#endif
 }
 
 void atari_board_dli_off(void)
 {
-#ifndef UR_A5200
-    unsigned char *dl = *(unsigned char **)0x0230;
+    unsigned char *dl = *(unsigned char **)DL_PTR;
     unsigned char i;
     atari_board_shimmer(0);                         /* steady gold off the board */
     *(volatile unsigned char *)0xD40E = 0x40;       /* NMIEN: VBI only (DLI off) */
     for (i = 4; i <= 17; i++)
         dl[5 + i] &= 0x7F;                          /* clear DLI bits           */
     COLOR4 = BOARD_FIELD;                           /* flat lapis field again    */
-#endif
 }
 
 /* Frame the board in the active player's hue — deep blue for Light, deep green
@@ -367,14 +361,10 @@ void atari_board_dli_off(void)
  * from draw_all each redraw, so it tracks the turn for free. A8-only for now. */
 void atari_board_tint(unsigned char player)
 {
-#ifndef UR_A5200
     unsigned char frame = player ? 0xC2 : 0x82;     /* green (Dark) / blue (Light) */
     COLOR4        = frame;                           /* board border / frame       */
     dli_table[0]  = frame;                           /* top board-row edge meets it */
     dli_table[13] = frame;                           /* bottom board-row edge       */
-#else
-    (void)player;
-#endif
 }
 
 /* ---- player-missile graphics: round two-tone tokens --------------------- *
