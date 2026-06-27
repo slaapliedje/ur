@@ -386,6 +386,29 @@ static void anim_glide(unsigned char player, unsigned char from, unsigned char t
     }
 }
 
+/* Rattle the four tetrahedral dice through random faces, then settle on `roll`.
+ * Panel row, so it's monochrome (matches the text HUD); POKEY RANDOM drives the
+ * tumble. The next draw_all repaints the settled dice, so this is just the lead-up. */
+static void dice_tumble(unsigned char roll)
+{
+    volatile unsigned char *RND = (volatile unsigned char *)0xD20A;
+    unsigned char t, i, r;
+
+    gotoxy(0, ROW_ROLL);
+    cputs("Roll:");
+    for (t = 0; t < 8; t++) {
+        r = *RND;
+        gotoxy(5, ROW_ROLL);
+        for (i = 0; i < 4; i++)
+            cputc((r & (unsigned char)(1u << i)) ? DIE_MARKED : DIE_UNMARKED);
+        atari_wait_frames(4);
+    }
+    gotoxy(5, ROW_ROLL);                       /* settle on the real roll */
+    for (i = 0; i < 4; i++)
+        cputc(i < roll ? DIE_MARKED : DIE_UNMARKED);
+    cprintf(" %u", roll);
+}
+
 static bool human_turn(unsigned char player)
 {
     unsigned char roll;
@@ -396,6 +419,7 @@ static bool human_turn(unsigned char player)
     wait_action();
     roll = ur_dice_roll();
     sfx_roll();
+    dice_tumble(roll);
 
     picked = choose_move(player, roll);
     if (picked < 0) {
@@ -439,6 +463,7 @@ static bool computer_turn(unsigned char player)
     wait_action();
     roll = ur_dice_roll();
     sfx_roll();
+    dice_tumble(roll);
 
     if (ur_legal_moves(&game, player, roll, pieces) == 0) {
         draw_all(roll, "Computer has no move. FIRE/key.");
