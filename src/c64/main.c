@@ -1030,13 +1030,42 @@ static void play_local(bool ai1)
 static void title_banner(void)
 {
 #if CUSTOM_CHARSET && !defined(UR_CHARSET)
-    unsigned char x;
+    unsigned char x, rose;
     *(unsigned char *)0xD022 = C_LBLUE;
     *(unsigned char *)0xD023 = C_BLACK;
     *(unsigned char *)0xD016 |= 0x10;            /* MC char mode for the band */
-    for (x = 2; x <= 36; x += 2)
-        if (x & 2) put_glyph(x, 3, G_LANE, CRAM_LANE);   /* beveled lapis tile */
-        else       put_glyph(x, 3, G_ROSE, CRAM_ROSE);   /* gold rosette flower */
+    /* A continuous carved board-strip: beveled lapis tiles with a gold rosette
+     * flower every fifth cell — previews the board's look across the title. */
+    for (x = 3; x <= 36; x++) {
+        rose = (unsigned char)(((x - 3) % 5) == 0);
+        put_glyph(x, 3, (unsigned char)(rose ? G_ROSE : G_LANE),
+                        (unsigned char)(rose ? CRAM_ROSE : CRAM_LANE));
+    }
+#endif
+}
+
+/* Showcase the C64's signature on the title: a row of two-tone token sprites
+ * (bone Light, brown Dark — sprite colours, so the real bone/brown the char board
+ * can't show). Shapes/MC colours come from sprite_hw_init (board_setup). */
+static void title_sprites(void)
+{
+#ifndef UR_CHARSET
+    static const unsigned char sx[4] = { 116, 152, 188, 224 };
+    unsigned char i;
+    *(unsigned char *)0x07F8 = SPR_LIGHT;
+    *(unsigned char *)0x07F9 = SPR_DARK;
+    *(unsigned char *)0x07FA = SPR_LIGHT;
+    *(unsigned char *)0x07FB = SPR_DARK;
+    for (i = 0; i < 4; i++) {
+        *(unsigned char *)(0xD000u + i * 2)     = sx[i];   /* X */
+        *(unsigned char *)(0xD000u + i * 2 + 1) = 150;     /* Y (mid-screen) */
+    }
+    *(unsigned char *)0xD027 = COL_LIGHT;   /* sprite 0 bone  */
+    *(unsigned char *)0xD028 = COL_DARK;    /* sprite 1 brown */
+    *(unsigned char *)0xD029 = COL_LIGHT;   /* sprite 2 bone  */
+    *(unsigned char *)0xD02A = COL_DARK;    /* sprite 3 brown */
+    *(unsigned char *)0xD010 = 0x00;        /* all sprite X < 256 */
+    *(unsigned char *)0xD015 = 0x0F;        /* enable sprites 0-3 */
 #endif
 }
 
@@ -1064,9 +1093,10 @@ int main(void)
 
     for (;;) {
         clrscr();
-        title_banner();          /* gold-rosette + lapis-tile board motif (row 3) */
-        textcolor(COL_TITLE); cputsxy(0, 0, "The Royal Game of Ur");
-        textcolor(COL_LABEL); cputsxy(0, 1, "Commodore 64");
+        title_banner();          /* carved board-strip band under the title (row 3) */
+        title_sprites();         /* two-tone token sprites mid-screen (the showcase) */
+        textcolor(COL_TITLE); cputsxy(10, 0, "The Royal Game of Ur");
+        textcolor(COL_LABEL); cputsxy(5, 1, "Ur - Mesopotamia - c.2600 BCE");
 #ifdef UR_ONLINE
         gotoxy(0, 3); cprintf("Server: %s", g_host);
         if (g_name[0]) { gotoxy(0, 4); cprintf("Player %s  Wins %u", g_name, g_wins); }
@@ -1083,9 +1113,15 @@ int main(void)
         textcolor(COL_TITLE); cputsxy(0, 8, "Select (1-2):");
 #endif
 
+        /* With thanks to the scholar who reconstructed the rules. */
+        textcolor(COL_LABEL);
+        cputsxy(0, 22, "Rules deciphered by Dr Irving Finkel,");
+        cputsxy(0, 23, "British Museum - with thanks.");
+
         /* Seed the RNG from how long the player takes to choose. */
         while (!kbhit()) g_seed++;
         key = (unsigned char)cgetc();
+        *(unsigned char *)0xD015 = 0;   /* hide the title tokens before the choice */
 
 #ifdef UR_ONLINE
         if (key == '4') { edit_field("Set name", g_name, UR_NAME_LEN, false); continue; }
