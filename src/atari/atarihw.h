@@ -7,6 +7,9 @@
 #ifndef ATARIHW_H
 #define ATARIHW_H
 
+#ifdef UR_A5200
+void atari_screen_init(void);    /* 5200 only: build our own 40-col DL + screen (no OS) */
+#endif
 void atari_setup_colors(void);   /* set the playfield colour registers          */
 void atari_quiet_sio(void);      /* SOUNDR=0: silence the OS SIO I/O "drive" drone */
 void atari_setup_charset(void);  /* install a custom font: board tiles + pieces */

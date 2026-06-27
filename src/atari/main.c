@@ -18,8 +18,10 @@
 #include "proto.h"
 #include "atarihw.h"
 #include "music.h"             /* the Hurrian Hymn title theme (shared melody) */
+#ifndef UR_A5200               /* the 5200 is a cartridge console: no FujiNet/SIO */
 #include "fujinet-network.h"
 #include "fujinet-fuji.h"      /* fuji_*_appkey: persistent profile on the FujiNet SD */
+#endif
 
 /* Board cells: row 1..8, col 0=Light(left) 1=shared(mid) 2=Dark(right).
  * Each cell is two characters wide (8 mode-4 pixels) for detailed glyphs. */
@@ -42,6 +44,13 @@
 #define UR_DEFAULT_HOST "localhost"   /* server host; runtime-configurable (menu 7) */
 #define DIE_MARKED   '^'
 #define DIE_UNMARKED '_'
+
+/* POKEY RANDOM register: $D20A on the A8, $E80A on the 5200 (POKEY at $E800). */
+#ifdef UR_A5200
+#define POKEY_RND_ADDR 0xE80A
+#else
+#define POKEY_RND_ADDR 0xD20A
+#endif
 
 /* FujiNet AppKey (persistent SD storage) for the local player profile. Creator
  * IDs 0x0000-0x00FF are reserved by FujiNet for internal use; apps use > 0xFF.
@@ -138,6 +147,17 @@ static void draw_all(unsigned char roll, const char *msg)
             if (ch == ' ')
                 continue;
             if (ch == LIGHT_CH || ch == DARK_CH) {
+#ifdef UR_A5200
+                /* 5200 v1: charset disc tokens (no PMG) — same glyphs as the trays:
+                 * '#'+'$' = white Light disc, '@'+'[' = green Dark ring. */
+                if (ch == LIGHT_CH) {
+                    cputcxy(cellx(col),     celly(row), '#');
+                    cputcxy(cellx(col) + 1, celly(row), '$');
+                } else {
+                    cputcxy(cellx(col),     celly(row), '@');
+                    cputcxy(cellx(col) + 1, celly(row), '[');
+                }
+#else
                 /* Round two-tone token: one player per board colour-column
                  * (col0=P0 Light, col2=P1 Dark, col1=P2/P3 by colour). */
                 unsigned char slot = (col == 0) ? 0 :
@@ -150,6 +170,7 @@ static void draw_all(unsigned char roll, const char *msg)
                 }
                 /* Light: leave the cell blank so the hole shows the dark field
                  * (= a dark pip); the disc body covers the rest. */
+#endif
                 continue;
             }
             rch = (ch == '*') ? '&' : '=';   /* rosette / lane tile */
@@ -198,7 +219,7 @@ static void draw_all(unsigned char roll, const char *msg)
 
 static void seed_rng(void)
 {
-    volatile unsigned char *RANDOM = (volatile unsigned char *)0xD20A;
+    volatile unsigned char *RANDOM = (volatile unsigned char *)POKEY_RND_ADDR;
     uint16_t s = (uint16_t)(((uint16_t)*RANDOM << 8) ^ (uint16_t)*RANDOM);
     ur_rng_seed(s);
 }
@@ -392,7 +413,7 @@ static void anim_glide(unsigned char player, unsigned char from, unsigned char t
  * tumble. The next draw_all repaints the settled dice, so this is just the lead-up. */
 static void dice_tumble(unsigned char roll)
 {
-    volatile unsigned char *RND = (volatile unsigned char *)0xD20A;
+    volatile unsigned char *RND = (volatile unsigned char *)POKEY_RND_ADDR;
     unsigned char t, i, r;
 
     gotoxy(0, ROW_ROLL);
@@ -513,6 +534,7 @@ static void show_result(const char *banner)
     wait_action();
 }
 
+#ifndef UR_A5200   /* ===== FujiNet online + profile + keyboard entry: A8 only ===== */
 /* ---- online mode (FujiNet N:TCP, server-authoritative) ------------------ */
 
 /* Poll for the next STATE. 1 = got one, 0 = disconnected/error, -1 = the player
@@ -846,6 +868,7 @@ static void enter_host(void)
     profile_save();
     atari_mode4_board();
 }
+#endif /* !UR_A5200 (online + profile + keyboard entry) */
 
 /* Draw a horizontal run of `n` copies of `ch` at (x,y); `inv` selects the gold
  * (COLOR3) variant of a mode-4 glyph instead of lapis (COLOR2). */
@@ -889,8 +912,10 @@ static char title_screen(void)
 
     clrscr();
     atari_pmg_tokens_clear();                /* clear any tokens left from a game */
+#ifndef UR_A5200
     gotoxy(0, 0);
     cprintf("Server: %s", g_host);          /* where Online connects (menu 7) */
+#endif
     revers(1);
     cputsxy(9, 1, " THE ROYAL GAME OF UR ");
     revers(0);
@@ -916,6 +941,30 @@ static char title_screen(void)
 
     hrun(6, 16, 28, '\\', false);             /* lower cuneiform frieze */
 
+#ifdef UR_A5200
+    /* 5200: no keyboard — pick with the stick + FIRE (the ColecoVision pattern). */
+    cputsxy(3, 19, "1) Two players");
+    cputsxy(3, 20, "2) One player vs computer");
+    cputsxy(3, 22, "Stick UP/DOWN, FIRE to start");
+    play_hymn();                              /* the Hurrian Hymn (once, skippable) */
+    {
+        unsigned char sel = 1;                /* 0 = two players, 1 = vs computer */
+        unsigned char s;
+        while (atari_trig()) { }              /* don't inherit a held trigger */
+        for (;;) {
+            cputcxy(1, 19, sel == 0 ? '>' : ' ');
+            cputcxy(1, 20, sel == 1 ? '>' : ' ');
+            s = atari_stick();
+            if (!(s & 0x01)) sel = 0;         /* up   -> two players */
+            if (!(s & 0x02)) sel = 1;         /* down -> vs computer */
+            if (atari_trig()) break;
+            atari_wait_frames(4);
+        }
+        while (atari_trig()) { }
+        key = (char)(sel == 0 ? '1' : '2');
+    }
+    return key;
+#else
     cputsxy(3, 19, "1) Two players");    cputsxy(22, 19, "2) vs Computer");
     cputsxy(3, 20, "3) Online");         cputsxy(22, 20, "4) How to play");
     cputsxy(3, 21, "5) Set name");       cputsxy(22, 21, "6) Leaderboard");
@@ -939,6 +988,7 @@ static char title_screen(void)
     atari_title_sky_off();
     atari_setup_colors();
     return key;
+#endif
 }
 
 /* Draw an empty board (tiles + rosettes, no pieces) for the path demo. */
@@ -1045,6 +1095,7 @@ static void show_instructions(void)
     show_path_demo();           /* page 3: animated white/green path */
 }
 
+#ifndef UR_A5200   /* leaderboard is online (N:HTTP) — A8 only */
 /* Fetch the compact /top leaderboard over N:HTTP and show it. The body is
  * 1 count byte then up to 10 records of name[3] + wins (uint16 LE). */
 static void show_leaderboard(void)
@@ -1105,6 +1156,7 @@ static void show_leaderboard(void)
     wait_action();
     atari_mode4_board();
 }
+#endif /* !UR_A5200 (leaderboard) */
 
 /* Run a local game to completion and show the result. ai1 = player 1 (Dark) is
  * the computer; otherwise hot-seat. */
@@ -1124,7 +1176,9 @@ static void play_local(bool ai1)
     if (ai1) {
         if (player == 0) {              /* you beat the computer: record it */
             g_wins++;
-            profile_save();
+#ifndef UR_A5200
+            profile_save();             /* persisted to the FujiNet appkey (A8) */
+#endif
         }
         show_result(player == 0 ? " YOU WIN! " : " YOU LOSE ");
     } else {
@@ -1140,30 +1194,43 @@ int main(void)
 
     seed_rng();
 
+#ifdef UR_A5200
+    atari_screen_init();        /* 5200: build our own 40-col display (no OS) */
+#endif
     atari_setup_colors();
     atari_setup_charset();
     atari_mode4_board();
     atari_pmg_init();
     atari_quiet_sio();          /* no OS SIO "drive" drone during FujiNet polling */
 
+#ifndef UR_A5200
     profile_load();             /* name/wins/host from the FujiNet appkey, if any */
     lobby_host_from_appkey();   /* launched from the lobby? use its server host */
     build_urls();               /* N: URLs from the resolved host */
+#endif
 
     for (;;) {                  /* play again forever; never falls out to Memo Pad */
         do {
             key = title_screen();
             if (key == '4')      show_instructions();
+#ifndef UR_A5200
             else if (key == '5') enter_name();
             else if (key == '6') show_leaderboard();
             else if (key == '7') enter_host();
-        } while (key == '4' || key == '5' || key == '6' || key == '7');
+#endif
+        } while (key == '4'
+#ifndef UR_A5200
+                 || key == '5' || key == '6' || key == '7'
+#endif
+                );
 
+#ifndef UR_A5200
         if (key == '3') {
             if (online_game())  /* bailed out of waiting -> play the computer */
                 play_local(true);
             continue;
         }
+#endif
         play_local(key == '2'); /* 1 = hot-seat, 2 = vs computer */
     }
     return 0;                   /* not reached: the play-again loop never exits */

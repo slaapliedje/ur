@@ -4,12 +4,23 @@
 #include "atarihw.h"
 #include "music.h"          /* the Hurrian Hymn melody data (shared) */
 
-/* POKEY audio registers (channel 1). */
+/* POKEY audio registers (channel 1) + colour shadows. The A8 (under the OS) and
+ * the 5200 (no OS, cc65 runtime) differ only in base addresses: POKEY is $D200 vs
+ * $E800, and the colour shadows the per-frame VBI copies to GTIA are at $02C4-$02C8
+ * (A8 OS) vs $0C-$10 (cc65 5200). ANTIC (incl. WSYNC $D40A) is at $D400 on both. */
+#ifdef UR_A5200
+#define AUDF1  (*(volatile unsigned char *)0xE800)
+#define AUDC1  (*(volatile unsigned char *)0xE801)
+#define AUDCTL (*(volatile unsigned char *)0xE808)
+#define COLOR0 (*(volatile unsigned char *)0x000C)   /* COLPF0 shadow */
+#define COLOR1 (*(volatile unsigned char *)0x000D)   /* COLPF1        */
+#define COLOR2 (*(volatile unsigned char *)0x000E)   /* COLPF2        */
+#define COLOR3 (*(volatile unsigned char *)0x000F)   /* COLPF3        */
+#define COLOR4 (*(volatile unsigned char *)0x0010)   /* COLBK         */
+#else
 #define AUDF1  (*(volatile unsigned char *)0xD200)   /* frequency (divisor)   */
 #define AUDC1  (*(volatile unsigned char *)0xD201)   /* distortion + volume   */
 #define AUDCTL (*(volatile unsigned char *)0xD208)   /* audio control         */
-#define WSYNC  (*(volatile unsigned char *)0xD40A)   /* wait for horiz. sync  */
-
 /* OS colour shadow registers (copied to the hardware each vertical blank).
  * Shared by the mode-2 text rows and the mode-4 board rows:
  *   mode 2 text:  bg = COLOR2, text luminance = COLOR1
@@ -20,6 +31,17 @@
 #define COLOR2 (*(volatile unsigned char *)0x02C6)   /* text bg + cell lines ("11") */
 #define COLOR3 (*(volatile unsigned char *)0x02C7)   /* rosette ("11" inverse)  */
 #define COLOR4 (*(volatile unsigned char *)0x02C8)   /* board bg + border        */
+#endif
+#define WSYNC  (*(volatile unsigned char *)0xD40A)   /* wait for horiz. sync (both) */
+
+/* Display-list pointer shadow: A8 OS SDLSTL=$0230, cc65 5200 runtime SDLSTL=$05.
+ * Both point at a GR.0-structured list (the 5200's is built in a5200scr.c), so the
+ * board-row mode-4 patch is identical. */
+#ifdef UR_A5200
+#define DL_PTR 0x0005
+#else
+#define DL_PTR 0x0230
+#endif
 
 #define PURE_TONE  0xA0   /* distortion bits for a clean tone (OR in volume 0-15) */
 #define BUZZ_TONE  0x40   /* buzzy distortion (for capture)                       */
@@ -56,7 +78,9 @@ static void buzz(unsigned char pitch, unsigned char vol, unsigned int lines)
  * silence it. Our own sound effects write POKEY directly and are unaffected. */
 void atari_quiet_sio(void)
 {
-    *(volatile unsigned char *)0x0041 = 0;
+#ifndef UR_A5200
+    *(volatile unsigned char *)0x0041 = 0;   /* SOUNDR (OS SIO drone) — A8 only */
+#endif
 }
 
 /* The board field / border. Was black; now a dark lapis so the board reads as a
@@ -147,7 +171,11 @@ void atari_setup_charset(void)
 {
     unsigned int   base = ((unsigned int)font_ram + 0x3FF) & 0xFC00;  /* 1 KB align */
     unsigned char *font = (unsigned char *)base;
-    const unsigned char *rom = (const unsigned char *)0xE000;
+#ifdef UR_A5200
+    const unsigned char *rom = (const unsigned char *)0xF800;  /* 5200 CHRORG (BIOS font) */
+#else
+    const unsigned char *rom = (const unsigned char *)0xE000;  /* A8 OS ROM font */
+#endif
     unsigned int i;
 
     for (i = 0; i < 1024; i++)
@@ -166,7 +194,11 @@ void atari_setup_charset(void)
     put_glyph(font, 0x08, g_pip_l);     put_glyph(font, 0x09, g_pip_r);     /* '(' ')' cream pip */
     put_glyph(font, 0x07, g_cursor);    /* ''' move cursor (drawn inverse = gold) */
 
-    *(volatile unsigned char *)0x02F4 = (unsigned char)(base >> 8);  /* CHBAS */
+#ifdef UR_A5200
+    *(volatile unsigned char *)0xD409 = (unsigned char)(base >> 8);  /* ANTIC CHBASE (no OS) */
+#else
+    *(volatile unsigned char *)0x02F4 = (unsigned char)(base >> 8);  /* CHBAS shadow (OS VBI) */
+#endif
 }
 
 /* Switch the board's character rows to ANTIC mode 4 (multicolour) by patching the
@@ -176,7 +208,7 @@ void atari_setup_charset(void)
  * screen char rows 4..18. */
 void atari_mode4_board(void)
 {
-    unsigned char *dl = *(unsigned char **)0x0230;   /* SDLSTL / SDLSTH */
+    unsigned char *dl = *(unsigned char **)DL_PTR;
     unsigned char r;
     for (r = 4; r <= 18; r++)
         dl[5 + r] = 0x04;
@@ -186,7 +218,7 @@ void atari_mode4_board(void)
  * whole screen can show ordinary text (e.g. the instructions pages). */
 void atari_text_mode(void)
 {
-    unsigned char *dl = *(unsigned char **)0x0230;
+    unsigned char *dl = *(unsigned char **)DL_PTR;
     unsigned char r;
     for (r = 4; r <= 18; r++)
         dl[5 + r] = 0x02;
@@ -202,6 +234,7 @@ unsigned char dli_len;              /* number of gradient entries (_dli_len)    
 
 void atari_title_sky_on(void)
 {
+#ifndef UR_A5200   /* 5200 v1: no DLI (no NMI/VDSLST routing yet) — flat field */
     /* Two-hue sky: deep indigo-violet (hue 7) easing through blue (hue 8) to
      * bright lapis (hue 9), luminance rising top->bottom. Blending hues yields
      * more apparent steps than one hue's 8 luminances, so the fade looks smooth
@@ -222,16 +255,19 @@ void atari_title_sky_on(void)
     for (i = 4; i <= 17; i++)
         dl[5 + i] |= 0x80;                          /* DLI bit on each board-band row */
     *(volatile unsigned char *)0xD40E = 0xC0;       /* NMIEN: DLI + VBI (write-only)  */
+#endif
 }
 
 void atari_title_sky_off(void)
 {
+#ifndef UR_A5200
     unsigned char *dl = *(unsigned char **)0x0230;
     unsigned char i;
     *(volatile unsigned char *)0xD40E = 0x40;       /* NMIEN: VBI only (DLI off) */
     for (i = 4; i <= 17; i++)
         dl[5 + i] &= 0x7F;                          /* clear DLI bits */
     COLOR4 = BOARD_FIELD;                           /* restore the lapis board field */
+#endif
 }
 
 /* ---- in-game board sheen (display list interrupt) ----------------------- *
@@ -245,6 +281,7 @@ void atari_title_sky_off(void)
  * Mirrors atari_title_sky_on (14 flagged rows == dli_len, so idx self-wraps).   */
 void atari_board_dli_on(void)
 {
+#ifndef UR_A5200   /* 5200 v1: flat lapis field (no DLI yet) */
     static const unsigned char grad[14] = {
         0x82, 0x90, 0x92, 0x92, 0x92, 0x92,   /* dark-blue edge -> luminous lapis */
         0x92, 0x92, 0x92, 0x92, 0x92, 0x92,   /* uniform body (no mid-band stripe)*/
@@ -261,16 +298,19 @@ void atari_board_dli_on(void)
     for (i = 4; i <= 17; i++)
         dl[5 + i] |= 0x80;                          /* DLI bit on each board-band row */
     *(volatile unsigned char *)0xD40E = 0xC0;       /* NMIEN: DLI + VBI               */
+#endif
 }
 
 void atari_board_dli_off(void)
 {
+#ifndef UR_A5200
     unsigned char *dl = *(unsigned char **)0x0230;
     unsigned char i;
     *(volatile unsigned char *)0xD40E = 0x40;       /* NMIEN: VBI only (DLI off) */
     for (i = 4; i <= 17; i++)
         dl[5 + i] &= 0x7F;                          /* clear DLI bits           */
     COLOR4 = BOARD_FIELD;                           /* flat lapis field again    */
+#endif
 }
 
 /* ---- player-missile graphics: round two-tone tokens --------------------- *
@@ -289,6 +329,7 @@ void atari_board_dli_off(void)
  * charset glyphs (fixed corners, no spare players).  The move cursor is a charset
  * pointer (main.c), so all four players are free for tokens.
  */
+#ifndef UR_A5200   /* PMG tokens are A8-only for v1; the 5200 draws charset disc pieces */
 #define PMBASE_R (*(volatile unsigned char *)0xD407)   /* P/M base (high byte)   */
 #define GRACTL_R (*(volatile unsigned char *)0xD01D)   /* P/M output enable      */
 #define SDMCTL_R (*(volatile unsigned char *)0x022F)   /* DMACTL shadow          */
@@ -365,13 +406,23 @@ void atari_pmg_token_clear(unsigned char slot, unsigned char char_y)
     for (k = 0; k < 4; k++)
         pm_pl[slot][off + k] = 0;
 }
+#else  /* UR_A5200: no PMG — main.c draws pieces as charset disc glyphs */
+void atari_pmg_init(void) { }
+void atari_pmg_tokens_clear(void) { }
+void atari_pmg_token(unsigned char slot, unsigned char char_x, unsigned char char_y)
+{ (void)slot; (void)char_x; (void)char_y; }
+void atari_pmg_token_clear(unsigned char slot, unsigned char char_y)
+{ (void)slot; (void)char_y; }
+#endif /* !UR_A5200 (PMG) */
 
+#ifndef UR_A5200
 /* ---- joystick input (port 1, OS shadow registers) ----------------------- */
 #define STICK0_R (*(volatile unsigned char *)0x0278)
 #define STRIG0_R (*(volatile unsigned char *)0x0284)
 
 unsigned char atari_stick(void) { return STICK0_R; }
 unsigned char atari_trig(void)  { return (unsigned char)(STRIG0_R == 0); }
+#endif /* !UR_A5200 (input is in a5200scr.c) */
 
 /* Busy-wait roughly `frames` display frames (~262 scanlines each, NTSC). */
 void atari_wait_frames(unsigned char frames)
