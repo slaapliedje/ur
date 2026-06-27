@@ -122,8 +122,19 @@ static char     g_top_url[64];                   /* N:HTTP://<host>:8080/top    
 #define D018_BOARD 0x1E            /* screen $0400, charset $3800 */
 
 static const unsigned char g_disc[8] = { 0x3C,0x7E,0xFF,0xFF,0xFF,0xFF,0x7E,0x3C };
+#ifdef UR_CHARSET
+/* Charset fallback (vertical board): hi-res single-colour glyphs. */
 static const unsigned char g_rose[8] = { 0x99,0x5A,0x3C,0xFF,0xFF,0x3C,0x5A,0x99 };
 static const unsigned char g_lane[8] = { 0x00,0x00,0x18,0x3C,0x3C,0x18,0x00,0x00 };
+#else
+/* Sprite showcase: MULTICOLOR carved cells (4 double-wide pixels, 2 bits each:
+ * 00=$D021 blue field, 01=$D022 light-blue, 10=$D023 black, 11=Color-RAM per cell).
+ * g_lane = a beveled lapis tile (light-blue body, white top/left highlight via the
+ * "11" cell colour, black bottom/right shadow); g_rose = a gold cross/flower (the
+ * "11" cell colour = gold). See board_enter() for the shared colours. */
+static const unsigned char g_lane[8] = { 0xFF,0xD6,0xD6,0xD6,0xD6,0xD6,0xD6,0xAA };
+static const unsigned char g_rose[8] = { 0x3C,0x3C,0xFF,0xFF,0xFF,0xFF,0x3C,0x3C };
+#endif
 
 static void setup_charset(void)
 {
@@ -374,9 +385,23 @@ static void board_setup(void) { setup_charset(); sprite_hw_init(); }
 static void board_enter(void)
 {
     band_en[0] = band_en[1] = band_en[2] = 0;  /* no stray tokens until drawn */
+#if CUSTOM_CHARSET
+    /* Carved board: multicolor character mode. Shared cell colours — 01=light blue
+     * (tile body), 10=black (shadow); 00 stays the blue field ($D021); the per-cell
+     * "11" colour is white (tile highlight) or gold (rosette), set in colour RAM. */
+    *(unsigned char *)0xD022 = C_LBLUE;
+    *(unsigned char *)0xD023 = C_BLACK;
+    *(unsigned char *)0xD016 |= 0x10;          /* MC char mode ON */
+#endif
     mux_install();
 }
-static void board_leave(void) { mux_stop(); }
+static void board_leave(void)
+{
+#if CUSTOM_CHARSET
+    *(unsigned char *)0xD016 &= (unsigned char)~0x10;  /* hi-res text for the menu */
+#endif
+    mux_stop();
+}
 
 /* Populate the multiplexer's per-row sprite tables from the game state. */
 static void draw_pieces(void)
@@ -404,6 +429,17 @@ static void draw_pieces(void)
     }
 }
 
+/* Cell colour RAM. With the custom charset the cells are MULTICOLOR (bit 3 set =
+ * MC; low 3 bits = the "11" colour): gold rosette, white-highlight lapis tile.
+ * Online uses the ROM charset, so plain single colours. */
+#if CUSTOM_CHARSET
+#define CRAM_ROSE 0x0F   /* MC + "11" = gold (7)  */
+#define CRAM_LANE 0x09   /* MC + "11" = white (1) */
+#else
+#define CRAM_ROSE COL_ROSE
+#define CRAM_LANE COL_CELL
+#endif
+
 static void draw_static_board(void)
 {
     unsigned char row, col;
@@ -418,9 +454,9 @@ static void draw_static_board(void)
             if (!cell_exists(row, col))
                 continue;
             if (is_rosette_cell(row, col))
-                put_glyph(tcol(col), trow(row), G_ROSE, COL_ROSE);
+                put_glyph(tcol(col), trow(row), G_ROSE, CRAM_ROSE);
             else
-                put_glyph(tcol(col), trow(row), G_LANE, COL_CELL);
+                put_glyph(tcol(col), trow(row), G_LANE, CRAM_LANE);
         }
 }
 
