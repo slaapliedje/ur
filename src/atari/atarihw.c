@@ -408,7 +408,9 @@ void atari_board_tint(unsigned char player)
 #define GRACTL_R (*(volatile unsigned char *)0xD01D)   /* P/M output enable      */
 #define SDMCTL_R (*(volatile unsigned char *)0x022F)   /* DMACTL shadow          */
 #define HPOSP0_R (*(volatile unsigned char *)0xD000)   /* P0..P3 = $D000..$D003  */
+#define HPOSM0_R (*(volatile unsigned char *)0xD004)   /* M0..M3 = $D004..$D007  */
 #define SIZEP0_R (*(volatile unsigned char *)0xD008)   /* P0..P3 width           */
+#define SIZEM_R  (*(volatile unsigned char *)0xD00C)   /* all-missile widths     */
 #define PCOLR0_R (*(volatile unsigned char *)0x02C0)   /* P0..P3 colour (shadow) */
 
 #define PM_HLEFT 48    /* HPOSP for screen char column 0; a normal player is
@@ -420,10 +422,12 @@ void atari_board_tint(unsigned char player)
 
 static unsigned char pm_ram[2048];   /* 1 KB P/M area, aligned to 1 KB at run time */
 static unsigned char *pm_pl[4];      /* -> the four double-line player strips       */
+static unsigned char *pm_mis;        /* -> the shared missile strip (2 bits/missile) */
 
 /* A round donut token that fills the 16x16 board box: 8 double-line bytes (= 16
  * scanlines, one 2-char-tall cell), ~6 colour clocks wide, with a 2-clock centre
- * hole so the lapis tile beneath shows through (the two-tone "Ur set" look). */
+ * hole. The hole shows the two-tone "Ur set" centre: the lapis tile (a dark pip)
+ * under a cream Light disc, or a cream MISSILE pip under a brown Dark disc. */
 static const unsigned char tok_disc[8] = { 0x18, 0x3C, 0x66, 0x66, 0x66, 0x66, 0x3C, 0x18 };
 
 void atari_pmg_init(void)
@@ -438,6 +442,7 @@ void atari_pmg_init(void)
     pm_pl[1] = pm + 0x280;
     pm_pl[2] = pm + 0x300;
     pm_pl[3] = pm + 0x380;
+    pm_mis   = pm + 0x180;             /* shared missile strip (M0..M3 = 2 bits each) */
 
     PMBASE_R = (unsigned char)(base >> 8);
     (&PCOLR0_R)[0] = TOK_LIGHT;        /* P0 cream, P1 brown, P2 cream, P3 brown */
@@ -445,6 +450,8 @@ void atari_pmg_init(void)
     (&PCOLR0_R)[2] = TOK_LIGHT;
     (&PCOLR0_R)[3] = TOK_DARK;
     for (i = 0; i < 4; i++) { (&SIZEP0_R)[i] = 0; (&HPOSP0_R)[i] = 0; }
+    SIZEM_R = 0;                       /* normal-width missiles; each takes its player's
+                                          colour, so M0/M2 are cream (the Dark-token pip) */
     SDMCTL_R = (unsigned char)(SDMCTL_R | 0x0C);  /* + player & missile DMA */
     GRACTL_R = 0x03;                   /* enable P/M output */
 }
@@ -458,7 +465,10 @@ void atari_pmg_tokens_clear(void)
         for (i = 0; i < 128; i++)
             pm_pl[s][i] = 0;
         (&HPOSP0_R)[s] = 0;
+        (&HPOSM0_R)[s] = 0;
     }
+    for (i = 0; i < 128; i++)
+        pm_mis[i] = 0;                  /* clear the shared missile (pip) strip */
 }
 
 /* Place a token disc for player `slot` (0..3) at board cell (char_x, char_y). */
@@ -481,9 +491,24 @@ void atari_pmg_token_clear(unsigned char slot, unsigned char char_y)
     for (k = 0; k < 8; k++)
         pm_pl[slot][off + k] = 0;
 }
+
+/* Cream pip in the centre of a Dark token's donut hole, via a missile (mslot 0 or
+ * 2 — both take a Light player's cream colour). The hole is 2 colour clocks at the
+ * disc's centre (HPOS+1 +3) and the box-centre rows; a 2-clock missile fills it,
+ * so a brown disc reads as "brown with a cream centre" — the real Ur dark piece. */
+void atari_pmg_pip(unsigned char mslot, unsigned char char_x, unsigned char char_y)
+{
+    unsigned char off  = (unsigned char)(PM_VTOP + char_y * 4 + 3);   /* box centre */
+    unsigned char bits = (unsigned char)(mslot == 0 ? 0x03 : 0x30);   /* M0 / M2 bits */
+    (&HPOSM0_R)[mslot] = (unsigned char)(PM_HLEFT + char_x * 4 + 4);   /* over the hole */
+    pm_mis[off]     |= bits;
+    pm_mis[off + 1] |= bits;            /* ~4 scanlines tall */
+}
 #else  /* UR_A5200: no PMG — main.c draws pieces as charset disc glyphs */
 void atari_pmg_init(void) { }
 void atari_pmg_tokens_clear(void) { }
+void atari_pmg_pip(unsigned char mslot, unsigned char char_x, unsigned char char_y)
+{ (void)mslot; (void)char_x; (void)char_y; }
 void atari_pmg_token(unsigned char slot, unsigned char char_x, unsigned char char_y)
 { (void)slot; (void)char_x; (void)char_y; }
 void atari_pmg_token_clear(unsigned char slot, unsigned char char_y)

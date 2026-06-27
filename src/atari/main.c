@@ -172,9 +172,13 @@ static void draw_all(unsigned char roll, const char *msg)
             }
 #else
             /* Round PMG donut, one player per board colour-column (col0=P0 Light,
-             * col2=P1 Dark, col1=P2/P3 by colour); the hole shows the lapis tile. */
+             * col2=P1 Dark, col1=P2/P3 by colour). Light's hole shows the lapis
+             * tile (a dark pip); Dark gets a cream MISSILE pip in the hole (M0 for
+             * col2, M2 for col1) — the two-tone Ur set. */
             atari_pmg_token((cc == 0) ? 0 : (cc == 2) ? 1 : (pl ? 3 : 2),
                             cellx(cc), celly(rr));
+            if (pl)
+                atari_pmg_pip((cc == 2) ? 0 : 2, cellx(cc), celly(rr));
 #endif
         }
 
