@@ -118,10 +118,14 @@ static char     g_top_url[64];                   /* N:HTTP://<host>:8080/top    
 #define G_DISC 0xE0
 #define G_ROSE 0xE1
 #define G_LANE 0xE2
+#define G_DIE0 0xE3                /* unmarked tetrahedral die */
+#define G_DIE1 0xE4                /* marked die (apex pip)    */
 #define CHARSET 0x3800u
 #define D018_BOARD 0x1E            /* screen $0400, charset $3800 */
 
 static const unsigned char g_disc[8] = { 0x3C,0x7E,0xFF,0xFF,0xFF,0xFF,0x7E,0x3C };
+static const unsigned char g_die0[8] = { 0x18,0x24,0x24,0x42,0x42,0x81,0xFF,0x00 };
+static const unsigned char g_die1[8] = { 0x18,0x24,0x24,0x5A,0x5A,0x81,0xFF,0x00 };
 #ifdef UR_CHARSET
 /* Charset fallback (vertical board): hi-res single-colour glyphs. */
 static const unsigned char g_rose[8] = { 0x99,0x5A,0x3C,0xFF,0xFF,0x3C,0x5A,0x99 };
@@ -146,6 +150,8 @@ static void setup_charset(void)
     memcpy((void *)(CHARSET + G_DISC * 8), g_disc, 8);
     memcpy((void *)(CHARSET + G_ROSE * 8), g_rose, 8);
     memcpy((void *)(CHARSET + G_LANE * 8), g_lane, 8);
+    memcpy((void *)(CHARSET + G_DIE0 * 8), g_die0, 8);
+    memcpy((void *)(CHARSET + G_DIE1 * 8), g_die1, 8);
     *(unsigned char *)0xD018 = D018_BOARD;
 }
 #else
@@ -170,6 +176,9 @@ static void put_glyph(unsigned char x, unsigned char y, unsigned char code,
     *(unsigned char *)(0x0400u + off) = code;
     *(unsigned char *)(0xD800u + off) = color;
 }
+
+/* Draw the four dice (defined after the board sections; called by draw_board). */
+static void draw_dice(unsigned char roll);
 
 /* Write a status message on the bottom row, clearing any previous text. */
 static void status(const char *msg)
@@ -252,6 +261,7 @@ static void draw_board(unsigned char roll, const char *msg)
     gotoxy(INFO_COL, 5); cprintf("Dark home:%u ", (unsigned)ur_score(&game, 1));
     if (roll != NO_ROLL) {
         textcolor(COL_TITLE); gotoxy(INFO_COL, 7); cprintf("Roll: %u  ", roll);
+        draw_dice(roll);
     }
     if (msg) status(msg);
 }
@@ -471,6 +481,7 @@ static void draw_board(unsigned char roll, const char *msg)
     gotoxy(INFO_COL, 5); cprintf("Dark: %u ", (unsigned)ur_score(&game, 1));
     if (roll != NO_ROLL) {
         textcolor(COL_TITLE); gotoxy(INFO_COL, 7); cprintf("Roll: %u  ", roll);
+        draw_dice(roll);
     }
     if (msg) status(msg);
 }
@@ -531,6 +542,46 @@ static unsigned char roll_dice(void)
     return ur_dice_roll();
 }
 
+/* Wait n video frames via the KERNAL jiffy ($A2), which keeps advancing under the
+ * sprite multiplexer (band 0 chains to the KERNAL IRQ). Shared by the dice tumble
+ * and the online network polling. */
+static void wait_frames(unsigned char n)
+{
+    unsigned char prev = *(volatile unsigned char *)0x00A2;
+    while (n) {
+        unsigned char now = *(volatile unsigned char *)0x00A2;
+        if (now != prev) { prev = now; n--; }
+    }
+}
+
+#if CUSTOM_CHARSET
+/* Four tetrahedral dice on the HUD (row 8): marked = apex pip; count = the roll. */
+static void draw_dice(unsigned char roll)
+{
+    unsigned char i;
+    for (i = 0; i < 4; i++)
+        put_glyph((unsigned char)(INFO_COL + i), 8,
+                  (unsigned char)((i < roll) ? G_DIE1 : G_DIE0), COL_TITLE);
+}
+
+/* Rattle the dice through random faces, then settle on the roll. */
+static void dice_tumble(unsigned char roll)
+{
+    unsigned char t, i, r;
+    for (t = 0; t < 8; t++) {
+        r = *(volatile unsigned char *)0xD012;   /* raster line = cheap entropy */
+        for (i = 0; i < 4; i++)
+            put_glyph((unsigned char)(INFO_COL + i), 8,
+                      (unsigned char)((r & (1u << i)) ? G_DIE1 : G_DIE0), COL_TITLE);
+        wait_frames(3);
+    }
+    draw_dice(roll);
+}
+#else
+static void draw_dice(unsigned char roll) { (void)roll; }   /* online: number only */
+#define dice_tumble(r) ((void)0)
+#endif
+
 /* ======================================================================== */
 #ifdef UR_ONLINE
 /* ---- FujiNet online play (N:TCP, server-authoritative) ----------------- */
@@ -543,17 +594,6 @@ static unsigned char roll_dice(void)
  * network calls gracefully.  The CHARSET=1 build runs online with no raster IRQ,
  * so it is the safer choice if the sprite build's IEC/raster timing ever fights.
  */
-
-/* Wait n video frames using the KERNAL jiffy clock ($A2), which keeps advancing
- * under the sprite multiplexer (band 0 chains to the KERNAL IRQ). */
-static void wait_frames(unsigned char n)
-{
-    unsigned char prev = *(volatile unsigned char *)0x00A2;
-    while (n) {
-        unsigned char now = *(volatile unsigned char *)0x00A2;
-        if (now != prev) { prev = now; n--; }
-    }
-}
 
 static char *url_append(char *d, const char *s)
 {
@@ -886,6 +926,7 @@ static bool human_turn(unsigned char player)
     cgetc();
     roll = roll_dice();
     sfx_roll();
+    dice_tumble(roll);
 
     picked = choose_move(player, roll);
     if (picked < 0) {
@@ -916,6 +957,7 @@ static bool computer_turn(unsigned char player)
     cgetc();
     roll = roll_dice();
     sfx_roll();
+    dice_tumble(roll);
 
     if (ur_legal_moves(&game, player, roll, pieces) == 0) {
         draw_board(roll, "Computer: no move. Key");
