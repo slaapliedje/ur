@@ -918,12 +918,12 @@ static char title_screen(void)
         cprintf("Player %s   Wins %u", g_name, g_wins);
     }
 
+#ifdef UR_A5200
+    /* 5200: charset ziggurat in the mode-4 board band (no GR.8); keypad menu. */
     hrun(6, 5, 28, '\\', false);              /* upper cuneiform frieze (lapis) */
-
     revers(1);                                /* rosette "sun" over the apex (gold) */
     cputcxy(19, 7, '*'); cputcxy(20, 7, '&');
     revers(0);
-
     hrun(19,  8,  2, ']', true);              /* ziggurat: gold stepped tiers */
     hrun(18,  9,  4, ']', true);
     hrun(17, 10,  6, ']', true);
@@ -931,13 +931,10 @@ static char title_screen(void)
     hrun(15, 12, 10, ']', true);
     hrun(14, 13, 12, ']', true);
     hrun( 8, 14, 24, ']', false);             /* lapis ground band */
-
     hrun(6, 16, 28, '\\', false);             /* lower cuneiform frieze */
 
-#ifdef UR_A5200
-    /* 5200: no keyboard — the controller's numeric keypad stands in (digits read
-     * through cgetc), and the stick + FIRE drive a highlight selector. Either picks
-     * a mode: tap 1/2/4 on the keypad, or aim with the stick and press FIRE. */
+    /* no keyboard — the controller's numeric keypad stands in (digits read through
+     * cgetc), and the stick + FIRE drive a highlight selector. */
     cputsxy(3, 19, "1) Two players");
     cputsxy(3, 20, "2) One player vs computer");
     cputsxy(3, 21, "4) How to play");
@@ -964,31 +961,24 @@ static char title_screen(void)
     }
     return key;
 #else
+    /* A8: a crisp ANTIC mode-F ziggurat band fills the middle (screen rows 5-15);
+     * the title + menu stay mode-2 text. The band owns the sky DLI + the gold PM
+     * sun, so pulse the sun's colour (PCOLR0) while waiting for a key. */
     cputsxy(3, 19, "1) Two players");    cputsxy(22, 19, "2) vs Computer");
     cputsxy(3, 20, "3) Online");         cputsxy(22, 20, "4) How to play");
     cputsxy(3, 21, "5) Set name");       cputsxy(22, 21, "6) Leaderboard");
     cputsxy(3, 22, "7) Set server host");
     cputsxy(3, 23, "Select 1-7:");
 
-    /* Lapis gradient sky (DLI) + pulse the gold (COLOR3 = ziggurat + sun) while
-     * waiting for a key, so the title shimmers. Restore everything on the way out. */
-    atari_title_sky_on();
-    {
-        unsigned char lum = 2, up = 1, sh = 0;
-        for (;;) {
-            if (kbhit()) { key = cgetc(); if (key >= '1' && key <= '7') break; }
-            if ((++sh & 7) == 0) {            /* pulse the gold ~every 8 frames */
-                *(volatile unsigned char *)0x02C7 = (unsigned char)(0x10 | lum);
-                if (up) { lum += 2; if (lum >= 14) up = 0; }
-                else    { lum -= 2; if (lum <= 2)  up = 1; }
-            }
-            title_idle();                     /* one frame; music pumps in the heartbeat */
-        }
+    atari_hires_band_on();
+    for (;;) {
+        if (kbhit()) { key = cgetc(); if (key >= '1' && key <= '7') break; }
+        title_idle();                         /* one frame; music pumps in the heartbeat */
     }
-    atari_title_sky_off();
+    atari_hires_band_off();
     atari_setup_colors();
     return key;
-#endif
+#endif  /* 5200 charset/keypad title vs A8 hi-res-band title */
 }
 
 /* Draw an empty board (tiles + rosettes, no pieces) for the path demo. */

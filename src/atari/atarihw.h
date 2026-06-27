@@ -9,6 +9,9 @@
 
 #ifdef UR_A5200
 void atari_screen_init(void);    /* 5200 only: build our own 40-col DL + screen (no OS) */
+#else
+void atari_hires_band_on(void);  /* A8 only: install the GR.8 ziggurat title band       */
+void atari_hires_band_off(void); /* A8 only: tear it down, restore the OS display list  */
 #endif
 void atari_setup_colors(void);   /* set the playfield colour registers          */
 void atari_quiet_sio(void);      /* SOUNDR=0: silence the OS SIO I/O "drive" drone */
