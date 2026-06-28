@@ -340,12 +340,12 @@ void atari_board_dli_on(void)
      * left is the turn-tint frame (atari_board_tint sets the edge entries [0]/[15]).
      * Flat COLPF2 also leaves it readable below the board, so the move list shows. */
     static const unsigned char grad[16] = {
-        0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90,   /* uniform dark lapis field */
+        0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90,   /* dark lapis field (behind tiles) */
         0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90
     };
     static const unsigned char face[16] = {
-        0x94, 0x94, 0x94, 0x94, 0x94, 0x94, 0x94, 0x94,   /* uniform lapis tile faces */
-        0x94, 0x94, 0x94, 0x94, 0x94, 0x94, 0x94, 0x94
+        0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08,   /* grey lane tiles (Adam-style) */
+        0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08    /* so cream/brown tokens both pop */
     };
     unsigned char *dl = *(unsigned char **)DL_PTR;
     unsigned char i;
@@ -381,10 +381,9 @@ void atari_board_dli_off(void)
  * from draw_all each redraw, so it tracks the turn for free. A8-only for now. */
 void atari_board_tint(unsigned char player)
 {
-    unsigned char frame = player ? 0xC2 : 0x82;     /* green (Dark) / blue (Light) */
-    COLOR4        = frame;                           /* board border / frame       */
-    dli_table[0]  = frame;                           /* top board-row edge meets it */
-    dli_table[15] = frame;                           /* bottom board-row edge       */
+    /* The per-turn cue moves to the HUD text background (stage 2); the board-edge
+     * "frame bar" is gone so the lanes read as one clean grey-on-lapis grid. */
+    (void)player;
 }
 
 /* ---- player-missile graphics: round two-tone tokens --------------------- *
@@ -425,10 +424,11 @@ static unsigned char *pm_pl[4];      /* -> the four double-line player strips   
 static unsigned char *pm_mis;        /* -> the shared missile strip (2 bits/missile) */
 
 /* A round donut token that fills the 16x16 board box: 8 double-line bytes (= 16
- * scanlines, one 2-char-tall cell), ~6 colour clocks wide, with a 2-clock centre
- * hole. The hole shows the two-tone "Ur set" centre: the lapis tile (a dark pip)
- * under a cream Light disc, or a cream MISSILE pip under a brown Dark disc. */
-static const unsigned char tok_disc[8] = { 0x18, 0x3C, 0x66, 0x66, 0x66, 0x66, 0x3C, 0x18 };
+ * scanlines) by 8 colour clocks (the full 2-char width), so it reads as a round
+ * disc, not a squished one. A 2-clock centre hole (bits 3-4) shows the two-tone
+ * "Ur set" centre: the lapis tile (a dark pip) under a cream Light disc, or a
+ * cream MISSILE pip under a brown Dark disc. */
+static const unsigned char tok_disc[8] = { 0x3C, 0x7E, 0xE7, 0xE7, 0xE7, 0xE7, 0x7E, 0x3C };
 
 void atari_pmg_init(void)
 {
@@ -476,8 +476,8 @@ void atari_pmg_token(unsigned char slot, unsigned char char_x, unsigned char cha
 {
     unsigned char off = (unsigned char)(PM_VTOP + char_y * 4);
     unsigned char k;
-    /* +1 colour clock centres the ~6-clock disc in the 8-clock (2-char) box */
-    (&HPOSP0_R)[slot] = (unsigned char)(PM_HLEFT + char_x * 4 + 1);
+    /* the disc spans the full 8-clock (2-char) box, so no centring offset */
+    (&HPOSP0_R)[slot] = (unsigned char)(PM_HLEFT + char_x * 4);
     for (k = 0; k < 8; k++)              /* 8 double-line bytes = the full 16px cell */
         pm_pl[slot][off + k] = tok_disc[k];
 }
@@ -500,7 +500,7 @@ void atari_pmg_pip(unsigned char mslot, unsigned char char_x, unsigned char char
 {
     unsigned char off  = (unsigned char)(PM_VTOP + char_y * 4 + 3);   /* box centre */
     unsigned char bits = (unsigned char)(mslot == 0 ? 0x03 : 0x30);   /* M0 / M2 bits */
-    (&HPOSM0_R)[mslot] = (unsigned char)(PM_HLEFT + char_x * 4 + 4);   /* over the hole */
+    (&HPOSM0_R)[mslot] = (unsigned char)(PM_HLEFT + char_x * 4 + 3);   /* over the hole (bits 3-4) */
     pm_mis[off]     |= bits;
     pm_mis[off + 1] |= bits;            /* ~4 scanlines tall */
 }
