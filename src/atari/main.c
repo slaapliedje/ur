@@ -82,15 +82,24 @@ static unsigned char celly(unsigned char row) { return (unsigned char)(BOARD_Y +
 /* Draw a 16x16 carved cell box (2x2 chars) at board (col,row): a raised lapis
  * tile, or a gold rosette (drawn inverse). Tokens are overlaid centred on top so a
  * piece sits INSIDE its box rather than standing on a small button. */
-static void draw_box(unsigned char col, unsigned char row, bool rose)
+/* Cell kinds: every square is an inlaid mosaic (SMS parity). 0 = DOTS (carved tile
+ * + white quincunx, private lanes), 1 = ROSE (gold flower), 2 = EYE (gold bullseye,
+ * the shared lane). ROSE + EYE are gold, drawn inverse ("11"->COLOR3). */
+#define CELL_DOTS 0
+#define CELL_ROSE 1
+#define CELL_EYE  2
+static void draw_box(unsigned char col, unsigned char row, unsigned char kind)
 {
     unsigned char x = cellx(col), y = celly(row);
-    if (rose) revers(1);
-    cputcxy(x,                    y,                    rose ? '*' : '+');   /* TL */
-    cputcxy((unsigned char)(x+1), y,                    rose ? '&' : '=');   /* TR */
-    cputcxy(x,                    (unsigned char)(y+1), rose ? '"' : '<');   /* BL */
-    cputcxy((unsigned char)(x+1), (unsigned char)(y+1), rose ? ';' : '%');   /* BR */
-    if (rose) revers(0);
+    const char *g = (kind == CELL_ROSE) ? "*&\";"      /* rosette glyphs */
+                  : (kind == CELL_EYE)  ? ",>?`"       /* eye glyphs     */
+                                        : "+=<%";      /* dots glyphs    */
+    if (kind != CELL_DOTS) revers(1);                  /* gold (inverse) for rose/eye */
+    cputcxy(x,                    y,                    g[0]);   /* TL */
+    cputcxy((unsigned char)(x+1), y,                    g[1]);   /* TR */
+    cputcxy(x,                    (unsigned char)(y+1), g[2]);   /* BL */
+    cputcxy((unsigned char)(x+1), (unsigned char)(y+1), g[3]);   /* BR */
+    if (kind != CELL_DOTS) revers(0);
 }
 
 /* Path position (1..14) -> board cell (row 1..8, col 0..2). False if off-board. */
@@ -153,7 +162,10 @@ static void draw_all(unsigned char roll, const char *msg)
             char b = grid[row][col];
             if (b == ' ')
                 continue;
-            draw_box(col, row, b == '*');
+            /* rosette -> gold flower; shared middle column -> gold eye; private
+             * lanes -> carved dots. Every square is decorated. */
+            draw_box(col, row, (b == '*') ? CELL_ROSE
+                             : (col == 1)  ? CELL_EYE : CELL_DOTS);
         }
 
     /* Tokens, centred in their boxes (over the tiles). */
