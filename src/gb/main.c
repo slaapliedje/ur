@@ -1,0 +1,470 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+/*
+ * Nintendo Game Boy / Game Boy Color (Sharp LR35902 / z88dk +gb) — Royal Game of Ur.
+ *
+ * One cart that runs on both: on a Game Boy Color it shows the "Standard of Ur"
+ * colour board (lapis / gold / shell), on a plain DMG Game Boy the same tiles render
+ * in 4 greys. The cart is marked CGB-compatible (header byte 0x143 = 0x80, patched
+ * in makefiles/gb.mk since z88dk's crt0 hard-codes 0). It reuses the SMS port's
+ * design — the authentic horizontal H-board (3 rows x 8 cols), procedurally drawn
+ * carved cells, gold rosette stars, bullseye "eyes", five-dot quincunx studs, and
+ * two-tone tokens — adapted to the GB's 2bpp tiles (4 colours per palette). The GB
+ * screen is 160x144 = 20x18 tiles at map origin, so it uses the compact layout.
+ *
+ * Rendered via z88dk's GBDK-style API (<arch/gb/gb.h>, <arch/gb/cgb.h>). The shared
+ * src/common core drops in unchanged. This is the bring-up: board + tokens + input
+ * + full game (hot-seat + vs-AI). Sound and token glide animation are follow-ups.
+ * Build: makefiles/gb.mk -> build/gb/ur.gb. Run: MAME gameboy (grey) / gbcolor.
+ */
+#include <stdint.h>
+#include <arch/gb/gb.h>
+#include <arch/gb/cgb.h>
+
+#include "ur.h"
+#include "font8.h"          /* shared 1bpp font (from src/sms; -I in gb.mk) */
+
+#define rBGP (*(volatile uint8_t *)0xFF47)   /* DMG bg palette register */
+
+/* ---- palette: one 4-colour palette does the whole board ---------------- *
+ * 0 field (dark lapis)  1 face (lapis)  2 shell (cream/white)  3 gold.
+ * Carved bevels use field/face/shell; the gold motifs + tokens use all four. */
+enum { C_FIELD = 0, C_FACE, C_SHELL, C_GOLD };
+
+/* GBC 15-bit RGB (5 bits each) for the four colours. */
+static const uint16_t cgb_pal[4] = {
+    RGB(2, 4, 11),      /* field: deep lapis        */
+    RGB(7, 10, 22),     /* face:  lapis             */
+    RGB(30, 28, 21),    /* shell: warm cream/white  */
+    RGB(30, 23, 4)      /* gold                     */
+};
+/* DMG: map colour index -> grey so it reads (shell brightest, field darkest).
+ * BGP bits: [i0 i1 i2 i3], each 0=white..3=black. field=black, face=dkgrey,
+ * shell=white, gold=ltgrey. */
+#define DMG_BGP 0x4B    /* i0=3 i1=2 i2=0 i3=1 */
+
+/* tile allocation (font occupies 0..95); each board cell is 16x16 = 4 tiles */
+#define TILE_CELL  FONT8_COUNT             /* 4: carved cell (fallback)  */
+#define TILE_ROSE  (FONT8_COUNT + 4)       /* 4: gold rosette star       */
+#define TILE_DOTS  (FONT8_COUNT + 8)       /* 4: five-dot quincunx        */
+#define TILE_EYE   (FONT8_COUNT + 12)      /* 4: bullseye eye             */
+#define TILE_TOKL  (FONT8_COUNT + 16)      /* 4: shell token              */
+#define TILE_TOKD  (FONT8_COUNT + 20)      /* 4: lapis token              */
+#define TILE_TRYL  (FONT8_COUNT + 24)      /* 1: shell tray bead          */
+#define TILE_TRYD  (FONT8_COUNT + 25)      /* 1: lapis tray bead          */
+
+/* ---- procedural tiles: a 16x16 colour grid baked into four 2bpp tiles --- */
+static uint8_t grid[256];
+static uint8_t t16[16];
+
+static void load_quad(uint8_t sx, uint8_t sy, uint8_t tno)
+{
+    uint8_t r, c, p0, p1;
+    for (r = 0; r < 8; r++) {
+        p0 = 0; p1 = 0;
+        for (c = 0; c < 8; c++) {
+            uint8_t v = grid[((sy + r) << 4) + sx + c] & 3;
+            if (v & 1) p0 |= (uint8_t)(0x80 >> c);
+            if (v & 2) p1 |= (uint8_t)(0x80 >> c);
+        }
+        t16[r * 2] = p0; t16[r * 2 + 1] = p1;
+    }
+    set_bkg_data(tno, 1, t16);
+}
+static void load_cell(uint8_t first)
+{
+    load_quad(0, 0, first);
+    load_quad(8, 0, (uint8_t)(first + 1));
+    load_quad(0, 8, (uint8_t)(first + 2));
+    load_quad(8, 8, (uint8_t)(first + 3));
+}
+
+static void grid_carved(void)
+{
+    uint8_t x, y, v;
+    for (y = 0; y < 16; y++)
+        for (x = 0; x < 16; x++) {
+            v = C_FACE;
+            if (x >= 14 || y >= 14) v = C_FIELD;   /* bottom/right shadow */
+            if (x <= 1  || y <= 1)  v = C_SHELL;   /* top/left highlight  */
+            grid[(y << 4) + x] = v;
+        }
+}
+static void build_rosette(void)
+{
+    signed char x, y; int dx, dy, r2;
+    grid_carved();
+    for (y = 0; y < 16; y++)
+        for (x = 0; x < 16; x++) {
+            dx = 2 * x - 15; dy = 2 * y - 15; r2 = dx * dx + dy * dy;
+            if ((x == 7 || x == 8 || y == 7 || y == 8 || dx == dy || dx == -dy) && r2 <= 150)
+                grid[(y << 4) + x] = C_GOLD;
+            if (r2 <= 12) grid[(y << 4) + x] = C_SHELL;
+        }
+}
+static void stamp_dot(uint8_t cx, uint8_t cy, uint8_t rad, uint8_t c)
+{
+    signed char x, y;
+    for (y = (signed char)(cy - rad); y <= (signed char)(cy + rad); y++)
+        for (x = (signed char)(cx - rad); x <= (signed char)(cx + rad); x++)
+            if (x >= 0 && x < 16 && y >= 0 && y < 16) {
+                signed char dx = (signed char)(x - cx), dy = (signed char)(y - cy);
+                if (dx < 0) dx = (signed char)-dx;
+                if (dy < 0) dy = (signed char)-dy;
+                if (dx + dy <= (signed char)rad) grid[(y << 4) + x] = c;
+            }
+}
+static void build_dots(void)
+{
+    grid_carved();
+    stamp_dot(4, 4, 1, C_SHELL);  stamp_dot(11, 4, 1, C_SHELL);
+    stamp_dot(4, 11, 1, C_SHELL); stamp_dot(11, 11, 1, C_SHELL);
+    stamp_dot(7, 7, 2, C_SHELL);  stamp_dot(7, 7, 1, C_GOLD);
+}
+static void build_eye(void)
+{
+    signed char x, y; int dx, dy, r2;
+    grid_carved();
+    for (y = 0; y < 16; y++)
+        for (x = 0; x < 16; x++) {
+            dx = 2 * x - 15; dy = 2 * y - 15; r2 = dx * dx + dy * dy;
+            if (r2 > 60 && r2 <= 120) grid[(y << 4) + x] = C_GOLD;
+            else if (r2 <= 14)        grid[(y << 4) + x] = C_SHELL;
+        }
+}
+/* round token: outer rim + body + centre pip; field corners (transparent-ish) */
+static void build_token(uint8_t body, uint8_t ring, uint8_t pip, uint8_t first)
+{
+    signed char x, y; int dx, dy, r2; uint8_t v;
+    for (y = 0; y < 16; y++)
+        for (x = 0; x < 16; x++) {
+            dx = 2 * x - 15; dy = 2 * y - 15; r2 = dx * dx + dy * dy;
+            v = C_FIELD;
+            if (r2 <= 215) { v = ring; if (r2 <= 150) v = body; }
+            if (r2 <= 16) v = pip;
+            grid[(y << 4) + x] = v;
+        }
+    load_cell(first);
+}
+static void build_bead(uint8_t body, uint8_t ring, uint8_t tno)
+{
+    signed char x, y; int dx, dy, r2; uint8_t v;
+    for (y = 0; y < 8; y++)
+        for (x = 0; x < 8; x++) {
+            dx = 2 * x - 7; dy = 2 * y - 7; r2 = dx * dx + dy * dy;
+            v = C_FIELD;
+            if (r2 <= 49) { v = ring; if (r2 <= 28) v = body; }
+            grid[(y << 4) + x] = v;
+        }
+    load_quad(0, 0, tno);
+}
+
+static void load_font(void);            /* defined just below */
+
+static void video_init(void)
+{
+    DISPLAY_OFF;
+    if (_cpu == CGB_TYPE)
+        set_bkg_palette(0, 1, (uint16_t *)cgb_pal);   /* GBC colour */
+    else
+        rBGP = DMG_BGP;                               /* DMG greys  */
+
+    load_font();
+    grid_carved();   load_cell(TILE_CELL);
+    build_rosette(); load_cell(TILE_ROSE);
+    build_dots();    load_cell(TILE_DOTS);
+    build_eye();     load_cell(TILE_EYE);
+    build_token(C_SHELL, C_FACE,  C_FIELD, TILE_TOKL);  /* Light: shell disc */
+    build_token(C_FACE,  C_SHELL, C_GOLD,  TILE_TOKD);  /* Dark: lapis+gold  */
+    build_bead(C_SHELL, C_FACE,  TILE_TRYL);
+    build_bead(C_FACE,  C_SHELL, TILE_TRYD);
+
+    SHOW_BKG;
+    DISPLAY_ON;
+}
+static void load_font(void)
+{
+    uint16_t g; uint8_t r;
+    for (g = 0; g < FONT8_COUNT; g++) {
+        const uint8_t *s = &font8[g * 8];
+        for (r = 0; r < 8; r++) { t16[r * 2] = 0; t16[r * 2 + 1] = s[r]; }  /* index 2 */
+        set_bkg_data((uint8_t)g, 1, t16);
+    }
+}
+
+/* ---- positioned tiles / text ------------------------------------------- */
+static void put_tile(uint8_t x, uint8_t y, uint8_t tile)
+{
+    set_bkg_tiles(x, y, 1, 1, &tile);
+}
+/* A 16x16 cell = 4 tiles (TL,TR / BL,BR). z88dk's set_bkg_tiles misplaces a
+ * small multi-tile array here (a pointer/codegen quirk: a w>1 block from a tiny
+ * local buffer scatters), so place the four tiles with single-tile writes, which
+ * are reliable. */
+static void put_cell(uint8_t x, uint8_t y, uint8_t first)
+{
+    put_tile(x, y, first);
+    put_tile((uint8_t)(x + 1), y, (uint8_t)(first + 1));
+    put_tile(x, (uint8_t)(y + 1), (uint8_t)(first + 2));
+    put_tile((uint8_t)(x + 1), (uint8_t)(y + 1), (uint8_t)(first + 3));
+}
+static void put_str(uint8_t x, uint8_t y, const char *s)
+{
+    uint8_t w[20], n = 0;
+    while (s[n] && n < 20) { w[n] = (uint8_t)((uint8_t)s[n] - 0x20); n++; }
+    if (n) set_bkg_tiles(x, y, n, 1, w);
+}
+static void put_u(uint8_t x, uint8_t y, uint8_t v)
+{
+    char buf[4]; signed char i = 3;
+    buf[3] = 0;
+    do { buf[--i] = (char)('0' + v % 10); v = (uint8_t)(v / 10); } while (v && i > 0);
+    put_str(x, y, &buf[i]);
+}
+static void screen_clear(void)
+{
+    uint8_t blank[20], y;
+    uint8_t i;
+    for (i = 0; i < 20; i++) blank[i] = 0;       /* tile 0 = space = field */
+    for (y = 0; y < 18; y++) set_bkg_tiles(0, y, 20, 1, blank);
+}
+
+/* ---- input: control pad, release-then-press (one tap = one action) ----- */
+static uint8_t wait_press(void)
+{
+    waitpadup();
+    return waitpad(J_A | J_B | J_START | J_UP | J_DOWN | J_LEFT | J_RIGHT);
+}
+
+/* ---- layout: horizontal H-board in the 160x144 (20x18) screen ----------- */
+#define BX 2
+#define BY 4
+#define TITLE_Y 0
+#define HUD_Y 1
+#define HUD_TURN_X 5
+#define HUD_ROLL_X 11
+#define HUD_ROLLV_X 14
+#define LTRAY_Y 2
+#define DTRAY_Y 10
+#define TRAY_WX 2
+#define TRAY_HX 11
+#define LIST_X 0
+#define LIST_Y 11
+#define MSG_X 0
+#define MSG_Y 17
+static uint8_t cellx(uint8_t col) { return (uint8_t)(BX + (col << 1)); }
+static uint8_t celly(uint8_t row) { return (uint8_t)(BY + (row << 1)); }
+
+static bool cell_exists(uint8_t row, uint8_t col) { return row == 1 || col <= 3 || col >= 6; }
+static bool pos_to_cell(uint8_t player, uint8_t pos, uint8_t *row, uint8_t *col)
+{
+    if (pos < 1 || pos > UR_PATH_LEN) return false;
+    if (pos <= 4)       { *row = player ? 2 : 0; *col = (uint8_t)(4 - pos); }
+    else if (pos <= 12) { *row = 1;              *col = (uint8_t)(pos - 5); }
+    else                { *row = player ? 2 : 0; *col = (pos == 13) ? 7 : 6; }
+    return true;
+}
+static bool is_rosette_cell(uint8_t row, uint8_t col)
+{
+    return (row != 1 && (col == 0 || col == 6)) || (row == 1 && col == 3);
+}
+
+static ur_state game;
+static bool ai1;
+
+static uint8_t count_at(uint8_t pl, uint8_t pos)
+{
+    uint8_t i, n = 0;
+    for (i = 0; i < UR_PIECES; i++) if (game.piece[pl][i] == pos) n++;
+    return n;
+}
+
+#define NO_ROLL 0xFF
+
+static void draw_tray(uint8_t x, uint8_t y, uint8_t n, uint8_t tile)
+{
+    uint8_t i;
+    for (i = 0; i < n; i++) put_tile((uint8_t)(x + i), y, tile);
+}
+
+static void draw_board(uint8_t roll, const char *msg)
+{
+    uint8_t row, col, pl, i, pos, rr, cc;
+
+    DISPLAY_OFF;            /* blank during the full redraw: z88dk's set_bkg_tiles
+                            * isn't VRAM-safe during active display (writes drop /
+                            * corrupt), so draw with the LCD off, then back on. */
+    screen_clear();
+    put_str(0, TITLE_Y, "THE ROYAL GAME OF UR");
+    put_str(0, HUD_Y, "Turn:");
+    put_str(HUD_TURN_X, HUD_Y, game.turn ? "DARK " : "LIGHT");
+    put_str(HUD_ROLL_X, HUD_Y, "Rl:");
+    if (roll != NO_ROLL) put_u(HUD_ROLLV_X, HUD_Y, roll);
+
+    for (row = 0; row < 3; row++)
+        for (col = 0; col < 8; col++) {
+            uint8_t base;
+            if (!cell_exists(row, col)) continue;
+            if (is_rosette_cell(row, col)) base = TILE_ROSE;
+            else if (row == 1)             base = TILE_EYE;
+            else                           base = TILE_DOTS;
+            put_cell(cellx(col), celly(row), base);
+        }
+
+    for (pl = 0; pl < UR_NUM_PLAYERS; pl++)
+        for (i = 0; i < UR_PIECES; i++) {
+            pos = game.piece[pl][i];
+            if (pos_to_cell(pl, pos, &rr, &cc))
+                put_cell(cellx(cc), celly(rr), pl ? TILE_TOKD : TILE_TOKL);
+        }
+
+    put_str(0, LTRAY_Y, "L");
+    draw_tray(TRAY_WX, LTRAY_Y, count_at(0, UR_POS_START), TILE_TRYL);
+    draw_tray(TRAY_HX, LTRAY_Y, ur_score(&game, 0), TILE_TRYL);
+    put_str(0, DTRAY_Y, "D");
+    draw_tray(TRAY_WX, DTRAY_Y, count_at(1, UR_POS_START), TILE_TRYD);
+    draw_tray(TRAY_HX, DTRAY_Y, ur_score(&game, 1), TILE_TRYD);
+
+    if (msg) put_str(MSG_X, MSG_Y, msg);
+    DISPLAY_ON;
+}
+
+static int8_t choose_move(uint8_t player, uint8_t roll)
+{
+    uint8_t pieces[UR_PIECES], srcs[UR_PIECES];
+    uint8_t count, nsrc, i, j, pos, sel;
+    bool seen;
+    uint8_t k;
+
+    count = ur_legal_moves(&game, player, roll, pieces);
+    if (count == 0) return -1;
+    nsrc = 0;
+    for (i = 0; i < count; i++) {
+        pos = game.piece[player][pieces[i]];
+        seen = false;
+        for (j = 0; j < nsrc; j++) if (srcs[j] == pos) { seen = true; break; }
+        if (!seen) srcs[nsrc++] = pos;
+    }
+
+    put_str(MSG_X, MSG_Y, "U/D pick A go ");
+    sel = 0;
+    for (;;) {
+        for (i = 0; i < nsrc; i++) {
+            uint8_t y = (uint8_t)(LIST_Y + i);
+            uint8_t src = srcs[i], dest = (uint8_t)(src + roll);
+            put_str(LIST_X, y, "          ");
+            put_tile(LIST_X, y, (uint8_t)((i == sel ? '>' : ' ') - 0x20));
+            if (src == UR_POS_START) put_str(LIST_X + 2, y, "ent->");
+            else { put_tile(LIST_X + 2, y, (uint8_t)('p' - 0x20)); put_u(LIST_X + 3, y, src); put_str(LIST_X + 5, y, "->"); }
+            if (dest == UR_POS_HOME) put_tile(LIST_X + 7, y, (uint8_t)('H' - 0x20));
+            else { put_u(LIST_X + 7, y, dest); if (ur_is_rosette(dest)) put_tile(LIST_X + 9, y, (uint8_t)('*' - 0x20)); }
+        }
+        k = wait_press();
+        if (k & J_UP)   sel = (uint8_t)((sel + nsrc - 1) % nsrc);
+        if (k & J_DOWN) sel = (uint8_t)((sel + 1) % nsrc);
+        if (k & (J_A | J_B | J_START)) break;
+    }
+
+    pos = srcs[sel];
+    for (i = 0; i < count; i++)
+        if (game.piece[player][pieces[i]] == pos) return (int8_t)pieces[i];
+    return (int8_t)pieces[0];
+}
+
+static bool human_turn(uint8_t player)
+{
+    uint8_t roll;
+    int8_t picked;
+    ur_move_result res;
+
+    draw_board(NO_ROLL, "Press A to roll");
+    wait_press();
+    roll = ur_dice_roll();
+    draw_board(roll, "");
+
+    picked = choose_move(player, roll);
+    if (picked < 0) {
+        draw_board(roll, "No legal move - A");
+        wait_press();
+        ur_advance_turn(&game, (const ur_move_result *)0);
+        return false;
+    }
+    ur_apply_move(&game, player, (uint8_t)picked, roll, &res);
+    if (res.won) return true;
+    if (res.captured || res.rosette) {
+        draw_board(roll, res.captured ? "Capture! - A" : "Rosette - again!");
+        wait_press();
+    }
+    ur_advance_turn(&game, &res);
+    return false;
+}
+
+static bool computer_turn(uint8_t player)
+{
+    uint8_t pieces[UR_PIECES], roll;
+    int8_t pick;
+    ur_move_result res;
+
+    draw_board(NO_ROLL, "Dark's turn - A");
+    wait_press();
+    roll = ur_dice_roll();
+    draw_board(roll, "");
+    if (ur_legal_moves(&game, player, roll, pieces) == 0) {
+        draw_board(roll, "Dark: no move");
+        wait_press();
+        ur_advance_turn(&game, (const ur_move_result *)0);
+        return false;
+    }
+    pick = ur_ai_pick(&game, player, roll);
+    ur_apply_move(&game, player, (uint8_t)pick, roll, &res);
+    draw_board(roll, "Dark moved - A");
+    wait_press();
+    if (res.won) return true;
+    ur_advance_turn(&game, &res);
+    return false;
+}
+
+static bool title_menu(void)
+{
+    uint8_t sel = 1, k;
+    screen_clear();
+    put_str(0, 0, "THE ROYAL GAME OF UR");
+    put_str(3, 2, "Mesopotamia");
+    put_cell(0, 5, TILE_ROSE);
+    put_cell(18, 5, TILE_ROSE);
+    put_str(5, 6, "Two Players");
+    put_str(5, 8, "Vs Computer");
+    put_str(2, 11, "D-pad: pick");
+    put_str(2, 12, "A: start");
+    for (;;) {
+        put_tile(3, 6, (uint8_t)((sel == 0 ? '>' : ' ') - 0x20));
+        put_tile(3, 8, (uint8_t)((sel == 1 ? '>' : ' ') - 0x20));
+        k = wait_press();
+        if (k & J_UP)   sel = 0;
+        if (k & J_DOWN) sel = 1;
+        if (k & (J_A | J_B | J_START)) break;
+    }
+    return sel == 1;
+}
+
+void main(void)
+{
+    uint8_t player;
+    bool over;
+
+    video_init();
+    ur_rng_seed(0xA537);
+
+    for (;;) {
+        ai1 = title_menu();
+        ur_init(&game);
+        over = false;
+        for (;;) {
+            player = game.turn;
+            if (player == 1 && ai1) over = computer_turn(player);
+            else                    over = human_turn(player);
+            if (over) break;
+        }
+        draw_board(NO_ROLL, player == 0 ? "LIGHT WINS! - A" : "DARK WINS! - A");
+        wait_press();
+    }
+}

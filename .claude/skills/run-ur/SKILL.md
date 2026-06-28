@@ -84,6 +84,10 @@ your terminal — a backgrounded atari800 spawned from the agent's shell gets ki
   first (X key-repeat → extra control-pad edges). See [`src/sms/CLAUDE.md`](../../../src/sms/CLAUDE.md).
 - **Game Gear** `make gamegear` → `build/sms/ur-gg.gg` — same art, compacted to the
   GG's 160×144 window (`-DUR_GG`); run in `mame gamegear` (same controls as SMS).
+- **Game Boy / Color** `make gb` → `build/gb/ur.gb` — ONE dual-mode cart: colour in
+  `mame gbcolor`, 4 greys in `mame gameboy` (D-pad = arrows, A = Left Ctrl). The
+  `gameboy` driver shows a "sound" warning — press a key to dismiss before driving.
+  See [`src/gb/CLAUDE.md`](../../../src/gb/CLAUDE.md).
 
 ## Gotchas (this environment — non-obvious)
 
