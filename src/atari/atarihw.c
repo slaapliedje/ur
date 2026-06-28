@@ -282,9 +282,10 @@ void atari_text_mode(void)
  * ziggurat. dli.s reads dli_table/dli_len; we flag rows 4..17 in the display
  * list (one DLI each, 14 == dli_len so the index wraps once per frame).        */
 extern void dli_handler(void);      /* asm, src/atari/dli.s */
-unsigned char dli_table[16];        /* COLBK (field) per board-band row (_dli_table) */
-unsigned char dli_table2[16];       /* COLPF2 (tile face) per board-band row         */
-unsigned char dli_len;              /* number of gradient entries (_dli_len)      */
+unsigned char dli_table[18];        /* COLBK (field/border) per flagged row (_dli_table)  */
+unsigned char dli_table2[18];       /* COLPF2 (tile face / text bg) per flagged row        */
+unsigned char dli_table3[18];       /* COLPF1 (tray pieces / text luminance) per flagged row*/
+unsigned char dli_len;              /* number of flagged rows (_dli_len)                  */
 
 void atari_title_sky_on(void)
 {
@@ -303,6 +304,7 @@ void atari_title_sky_on(void)
     for (i = 0; i < 14; i++) {
         dli_table[i]  = grad[i];
         dli_table2[i] = 0x94;                        /* tile faces unchanged on the title */
+        dli_table3[i] = 0x0E;                        /* COLPF1 (unused by title glyphs)   */
     }
     dli_len = 14;
     *(volatile unsigned char *)VDSLST       = (unsigned char)((unsigned int)dli_handler & 0xFF);
@@ -333,32 +335,28 @@ void atari_title_sky_off(void)
  * Mirrors atari_title_sky_on (14 flagged rows == dli_len, so idx self-wraps).   */
 void atari_board_dli_on(void)
 {
-    /* Flat field + flat tile faces. With 16x16 (2 char-row) boxes a per-row colour
-     * gradient banded inside each box and the cut-away exposed its bright centre,
-     * so keep the board one even lapis — the carve (white top/left bevel, dark
-     * bottom/right shadow) lives in the glyphs, not the DLI. The only per-row work
-     * left is the turn-tint frame (atari_board_tint sets the edge entries [0]/[15]).
-     * Flat COLPF2 also leaves it readable below the board, so the move list shows. */
-    static const unsigned char grad[16] = {
-        0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90,   /* dark lapis field (behind tiles) */
-        0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90
-    };
-    static const unsigned char face[16] = {
-        0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08,   /* grey lane tiles (Adam-style) */
-        0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08, 0x08    /* so cream/brown tokens both pop */
-    };
+    /* Board band = one even grey-on-lapis grid (the carve lives in the glyph
+     * bevel/shadow, not the DLI). The DLI pins three registers across rows 3..18:
+     *   COLBK   = 0x90 dark lapis field      (dli_table)
+     *   COLPF2  = 0x08 grey tile face        (dli_table2)
+     *   COLPF1  = 0x0A green tray pieces     (dli_table3)
+     * Pinning COLPF1/COLPF2 frees the HUD text rows to use their OWN COLPF1/COLPF2
+     * for the per-turn background — a final "reset" row (index 16 = screen row 19)
+     * hands those back, and atari_board_tint fills it per turn. */
     unsigned char *dl = *(unsigned char **)DL_PTR;
     unsigned char i;
 
-    for (i = 0; i < 16; i++) {
-        dli_table[i]  = grad[i];
-        dli_table2[i] = face[i];
+    for (i = 0; i < 16; i++) {            /* rows 3..18: the board */
+        dli_table[i]  = 0x90;            /* dark lapis field  */
+        dli_table2[i] = 0x08;            /* grey lane tile    */
+        dli_table3[i] = 0xCA;            /* green tray pieces (COLPF1 "10") */
     }
-    dli_len = 16;
+    dli_table[16] = 0x90; dli_table2[16] = 0x08; dli_table3[16] = 0xCA;  /* reset row: tint overrides */
+    dli_len = 17;                         /* 16 board rows + 1 reset row */
     *(volatile unsigned char *)VDSLST       = (unsigned char)((unsigned int)dli_handler & 0xFF);
     *(volatile unsigned char *)(VDSLST + 1) = (unsigned char)((unsigned int)dli_handler >> 8);
-    for (i = 3; i <= 18; i++)
-        dl[5 + i] |= 0x80;                          /* DLI bit on each board-band row */
+    for (i = 3; i <= 19; i++)
+        dl[5 + i] |= 0x80;                          /* DLI on board rows 3..18 + reset row 19 */
     *(volatile unsigned char *)0xD40E = 0xC0;       /* NMIEN: DLI + VBI               */
     atari_board_shimmer(1);                         /* gold rosettes/cursor glint during play */
 }
@@ -369,21 +367,26 @@ void atari_board_dli_off(void)
     unsigned char i;
     atari_board_shimmer(0);                         /* steady gold off the board */
     *(volatile unsigned char *)0xD40E = 0x40;       /* NMIEN: VBI only (DLI off) */
-    for (i = 3; i <= 18; i++)
+    for (i = 3; i <= 19; i++)
         dl[5 + i] &= 0x7F;                          /* clear DLI bits           */
     COLOR4 = BOARD_FIELD;                           /* flat lapis field again    */
 }
 
-/* Frame the board in the active player's hue — deep blue for Light, deep green
- * for Dark — a quiet ambient "whose turn" cue under the textual turn line. Only
- * the border (COLOR4) and the gradient's top/bottom edge bands tint; the lapis
- * board interior is untouched. (The set_color1 turn-tint idea from U5.) Called
- * from draw_all each redraw, so it tracks the turn for free. A8-only for now. */
+/* Whose-turn cue: colour the HUD text rows by turn — Light = black text on a
+ * light-grey ground, Dark = light text on a deep-green ground. The text rows
+ * share COLPF1/COLPF2 with the board, so the top rows (0..2) use the OS shadow
+ * registers and the rows below the board (19..23) get them from the DLI's "reset"
+ * row (dli_table*[16]); the board band in between keeps grey/green via the DLI.
+ * Called from draw_all each redraw, so it tracks the turn for free. */
 void atari_board_tint(unsigned char player)
 {
-    /* The per-turn cue moves to the HUD text background (stage 2); the board-edge
-     * "frame bar" is gone so the lanes read as one clean grey-on-lapis grid. */
-    (void)player;
+    unsigned char bg = (unsigned char)(player ? 0xC4 : 0x0C);   /* COLPF2: deep green / light grey */
+    unsigned char tx = (unsigned char)(player ? 0x0E : 0x00);   /* COLPF1: light text / black text */
+    COLOR1 = tx;                     /* top rows (0..2): text luminance */
+    COLOR2 = bg;                     /* top rows: text background       */
+    dli_table3[16] = tx;             /* reset row -> rows 19..23: text luminance */
+    dli_table2[16] = bg;             /* reset row: text background      */
+    dli_table[16]  = BOARD_FIELD;    /* reset row: keep the dark overscan border */
 }
 
 /* ---- player-missile graphics: round two-tone tokens --------------------- *
