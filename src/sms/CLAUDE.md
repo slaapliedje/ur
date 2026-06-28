@@ -8,7 +8,8 @@
 > square an inlaid mosaic — gold **8-point rosette** stars at the 5 rosette squares,
 > bullseye **"eyes"** down the shared lane, **five-dot quincunx** studs on the private
 > lanes — plus shaded round **tokens** (shell-white Light, lapis Dark with a shell
-> rim + gold pip), shell/lapis bead **trays**, a gold title, a Turn/Roll HUD, and a
+> rim + gold pip) that **glide cell-to-cell as a hardware sprite** on a move,
+> shell/lapis bead **trays**, a gold title, a Turn/Roll HUD, and a
 > D-pad move chooser. The board/token/rosette tiles are **generated procedurally at
 > boot** (a 16×16 colour grid → four 4bpp tiles), not stored as art. **SN76489
 > sound**: the Hurrian Hymn at boot (skippable) + roll/move/capture/rosette/score/win
@@ -115,14 +116,20 @@ Pipeline in `main.c`:
   /dev/null` (non-silence ⇒ the SN76489 writes are landing). With `-nothrottle` the
   capture runs far ahead of real time, so a few real seconds is plenty.
 
-## When you extend this port
+Token glide animation uses hardware sprites (`anim_move`/`glide`/`put_token_sprite`):
+the moving piece becomes a four-sprite 16×16 token (sprite palette = CRAM 16..31,
+`TILE_SPRL`/`TILE_SPRD`) that slides cell-to-cell along the path, paced by
+`wait_vblank_noint`; static pieces stay BG tiles so the per-scanline sprite limit is
+never near. Source verified: a static sprite test (`-DUR_SPRTEST`) confirmed both
+token sprites render with correct colours, and full games play correctly with
+`anim_move` in the loop. (Single-frame *mid-glide* screenshots are timing-hard: under
+MAME `-nothrottle` the glide flies by, and *with* throttle the busy-wait boot hymn
+runs at real Z80 speed and dominates — so verify motion live, not by one capture.)
 
-1. **Carved lane tiles** — give the lane cells a beveled/coloured tile (like the
-   Adam's `carve_cell`) instead of a plain `.`, for closer visual parity. The token
-   discs + gold rosettes are already custom 4bpp tiles; a lane tile is the same idea.
-2. **Animation** — glide a token cell-to-cell on a move / knock a captured piece back
-   (the Atari/Adam do this); the SMS could move a hardware sprite over the tilemap.
-3. **In-game music / richer SFX** — currently the hymn is title-only; a per-frame
-   PSG tick (vblank) could play under the board like a future Atari/Adam parity pass.
-4. The core + protocol are unchanged; if FujiNet-for-SMS ever lands, the online
+### Still to do
+1. **Capture knock-back** — when a move captures, glide the victim back to its tray
+   too (only the mover animates today; the capture just redraws).
+2. **In-game music / richer SFX** — the hymn is title-only; a per-frame PSG tick
+   (vblank) could play under the board, a future Atari/Adam parity pass.
+3. The core + protocol are unchanged; if FujiNet-for-SMS ever lands, the online
    path mirrors the other targets.

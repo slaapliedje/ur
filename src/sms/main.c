@@ -45,10 +45,15 @@ static const unsigned char palette0[16] = {
     0x10, 0x3F, 0x20, 0x35, 0x00, 0x0B, 0x2F, 0x03, 0x15, 0x06,
     0,0,0,0,0,0
 };
-/* bank 1: index 0 = field (backdrop), index 1 = gold (INK_GOLD title text) */
+/* CRAM 16..31: doubles as the BG "bank 1" (index 0 = field backdrop, index 1 =
+ * gold for INK_GOLD title text) AND the sprite palette for the gliding tokens.
+ * 2=shell 3=lapis 4=highlight 5=shadow 6=grey 7=white. */
 static const unsigned char palette1[16] = {
-    0x10, 0x0B, 0,0,0,0,0,0, 0,0,0,0,0,0,0,0
+    0x10, 0x0B, 0x2F, 0x20, 0x35, 0x00, 0x15, 0x3F,
+    0,0,0,0,0,0,0,0
 };
+/* sprite-palette colour indices (into CRAM 16..31) used by the token sprites */
+enum { S_GOLD = 1, S_SHELL, S_LAPIS, S_HI, S_SH, S_GREY, S_WHITE };
 
 #define INK_WHITE 0x0000
 #define INK_GOLD  BKG_ATTR_SPRPAL          /* per-tile -> palette bank 1 */
@@ -62,10 +67,14 @@ static const unsigned char palette1[16] = {
 #define TILE_TOKD  (FONT8_COUNT + 20)      /* 4: 16x16 lapis token            */
 #define TILE_TRYL  (FONT8_COUNT + 24)      /* 1: 8x8 shell tray bead          */
 #define TILE_TRYD  (FONT8_COUNT + 25)      /* 1: 8x8 lapis tray bead          */
+#define TILE_SPRL  (FONT8_COUNT + 26)      /* 4: shell token, sprite palette  */
+#define TILE_SPRD  (FONT8_COUNT + 30)      /* 4: lapis token, sprite palette  */
 
 /* SMS VDP R1: bit6 = display enable, bit7 = (legacy, kept set); no frame IRQ. */
 #define display_on()   vdp_set_reg(0x01, 0xC0)
 #define display_off()  vdp_set_reg(0x01, 0x80)
+
+static void sprites_off(void);              /* defined with the animation code */
 
 static unsigned int ink = INK_WHITE;        /* current text ink */
 static void set_ink(unsigned int a) { ink = a; }
@@ -255,8 +264,13 @@ static void video_init(void)
     build_token16(C_FACE,  C_HI,    C_SH,   C_GOLD, C_SHELL, TILE_TOKD);
     build_bead8(C_SHELL, C_WHITE, C_GREY, C_GREY,  TILE_TRYL);
     build_bead8(C_FACE,  C_HI,    C_SH,   C_SHELL, TILE_TRYD);
+    /* sprite copies of the tokens (same shapes, sprite-palette colour indices;
+     * corner index 0 is transparent for sprites) — used for the glide animation */
+    build_token16(S_SHELL, S_WHITE, S_GREY, S_SH,   S_GREY,  TILE_SPRL);
+    build_token16(S_LAPIS, S_HI,    S_SH,   S_GOLD, S_SHELL, TILE_SPRD);
 
     vdp_set_reg(0x07, C_FIELD);                          /* backdrop = field  */
+    sprites_off();
     display_on();
 }
 
@@ -371,6 +385,7 @@ static void draw_board(unsigned char roll, const char *msg)
     unsigned char row, col, pl, i, pos, rr, cc;
 
     display_off();          /* blank during the full redraw -> no tearing */
+    sprites_off();
     screen_clear();
 
     set_ink(INK_GOLD);
@@ -412,6 +427,71 @@ static void draw_board(unsigned char roll, const char *msg)
 
     if (msg) put_str(2, 22, msg);
     display_on();
+}
+
+/* ---- token glide animation (hardware sprites) -------------------------- *
+ * A move plays as a four-sprite 16x16 token sliding cell-to-cell along the path.
+ * Static pieces stay BG tiles; only the moving piece becomes a sprite, so we never
+ * approach the per-scanline sprite limit. */
+static void sprites_off(void)
+{
+    set_sprite(0, 0, 0xD0, 0);          /* y=0xD0 terminates the sprite list */
+}
+static void put_token_sprite(int x, int y, unsigned int base)
+{
+    set_sprite(0, x,     y,     base);
+    set_sprite(1, x + 8, y,     base + 1);
+    set_sprite(2, x,     y + 8, base + 2);
+    set_sprite(3, x + 8, y + 8, base + 3);
+    set_sprite(4, 0, 0xD0, 0);          /* terminator after our 4 */
+}
+static unsigned int base_for(unsigned char row, unsigned char col)
+{
+    if (is_rosette_cell(row, col)) return TILE_ROSE;
+    if (row == 1)                  return TILE_EYE;
+    return TILE_DOTS;
+}
+/* pixel position of a path cell (pos 0 = a tray slot, pos>14 = the home tray) */
+static void cell_px(unsigned char player, unsigned char pos, int *px, int *py)
+{
+    unsigned char r, c;
+    if (pos == 0 || pos > UR_PATH_LEN) {
+        *px = (pos == 0 ? 8 : 24) * 8;
+        *py = (player ? 15 : 6) * 8;
+        return;
+    }
+    pos_to_cell(player, pos, &r, &c);
+    *px = cellx(c) * 8;
+    *py = celly(r) * 8;
+}
+static void glide(int x0, int y0, int x1, int y1, unsigned int base)
+{
+    int x = x0, y = y0;
+    for (;;) {
+        put_token_sprite(x, y, base);
+        wait_vblank_noint();
+        if (x == x1 && y == y1) break;
+        if (x < x1) { x += 4; if (x > x1) x = x1; } else if (x > x1) { x -= 4; if (x < x1) x = x1; }
+        if (y < y1) { y += 4; if (y > y1) y = y1; } else if (y > y1) { y -= 4; if (y < y1) y = y1; }
+    }
+}
+/* Glide `player`'s piece from path position p0 to p1, one cell at a time. */
+static void anim_move(unsigned char player, unsigned char p0, unsigned char p1)
+{
+    unsigned int base = player ? TILE_SPRD : TILE_SPRL;
+    int x, y, nx, ny;
+    unsigned char p, r, c;
+    if (p0 >= 1 && p0 <= UR_PATH_LEN) {     /* clear the BG token at the source */
+        pos_to_cell(player, p0, &r, &c);
+        put_cell(cellx(c), celly(r), base_for(r, c));
+    }
+    cell_px(player, p0, &x, &y);
+    for (p = (unsigned char)(p0 + 1); p <= p1 && p <= UR_POS_HOME; p++) {
+        cell_px(player, p, &nx, &ny);
+        glide(x, y, nx, ny, base);
+        x = nx; y = ny;
+    }
+    sprites_off();
 }
 
 /* ---- move chooser: D-pad up/down over the legal moves, button picks ----- */
@@ -464,7 +544,7 @@ static int8_t choose_move(unsigned char player, unsigned char roll)
 
 static bool human_turn(unsigned char player)
 {
-    unsigned char roll;
+    unsigned char roll, src;
     int8_t picked;
     ur_move_result res;
 
@@ -482,7 +562,9 @@ static bool human_turn(unsigned char player)
         return false;
     }
 
+    src = game.piece[player][picked];
     ur_apply_move(&game, player, (unsigned char)picked, roll, &res);
+    anim_move(player, src, (unsigned char)(src + roll));
     sfx_for_result(&res);
     if (res.won) return true;
     if (res.captured || res.rosette) {
@@ -495,7 +577,7 @@ static bool human_turn(unsigned char player)
 
 static bool computer_turn(unsigned char player)
 {
-    unsigned char pieces[UR_PIECES], roll;
+    unsigned char pieces[UR_PIECES], roll, src;
     int8_t pick;
     ur_move_result res;
 
@@ -513,7 +595,9 @@ static bool computer_turn(unsigned char player)
     }
 
     pick = ur_ai_pick(&game, player, roll);
+    src = game.piece[player][(unsigned char)pick];
     ur_apply_move(&game, player, (unsigned char)pick, roll, &res);
+    anim_move(player, src, (unsigned char)(src + roll));
     sfx_for_result(&res);
     draw_board(roll, "Computer moved - FIRE");
     wait_press();
