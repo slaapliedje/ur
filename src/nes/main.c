@@ -62,13 +62,14 @@ static unsigned char scr[960];        /* nametable tiles  */
 static unsigned char attrb[64];       /* attribute table  */
 
 /* 4 background palettes (+ 4 unused sprite palettes). Colour 0 is the shared lapis
- * backdrop. P0 white (text/quincunx), P1 gold+white (rosette/eye), P2 cream+brown
- * (Light token), P3 brown+cream (Dark token). */
+ * backdrop. P0 white (text/quincunx), P1 gold+white (rosette/eye); the tokens use the
+ * authentic Standard-of-Ur materials — P2 shell-white Light, P3 carnelian-red Dark —
+ * which read cleanly against each other and against the gold cells. */
 static const unsigned char palette[32] = {
-    0x01, 0x30, 0x28, 0x00,   /* P0: lapis, white,  gold,  grey  */
-    0x01, 0x28, 0x30, 0x17,   /* P1: lapis, gold,   white, brown */
-    0x01, 0x37, 0x17, 0x30,   /* P2: lapis, cream,  brown, white */
-    0x01, 0x17, 0x37, 0x30,   /* P3: lapis, brown,  cream, white */
+    0x01, 0x30, 0x28, 0x0F,   /* P0: lapis, white,  gold,  black */
+    0x01, 0x28, 0x30, 0x17,   /* P1: lapis, gold,   white, brown  -> rosette/eye */
+    0x01, 0x30, 0x16, 0x16,   /* P2: lapis, shell-white, carnelian -> Light token */
+    0x01, 0x16, 0x30, 0x30,   /* P3: lapis, carnelian,  shell-white -> Dark token */
     0x01, 0x30, 0x28, 0x16,   0x01, 0,0,0,   0x01, 0,0,0,   0x01, 0,0,0
 };
 
