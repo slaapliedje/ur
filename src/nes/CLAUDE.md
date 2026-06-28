@@ -1,23 +1,25 @@
 # src/nes — NES / Famicom platform layer (6502)
 
-> **Status: playable — local (hot-seat + vs-AI), custom CHR-tile board + controller.**
+> **Status: playable — local (hot-seat + vs-AI), custom CHR-tile board + APU sound.**
 > `src/nes/main.c` reuses the shared core unchanged and renders the **horizontal
 > 3×8 Standard-of-Ur board** from **custom CHR tiles**, matching the other ports: on
 > a lapis field, **gold flower rosettes** (corners + shared centre), **gold bullseye
 > eyes** down the shared lane, **white quincunx** on the private lanes, and **round
 > two-tone tokens** (cream Light / brown Dark). Each board cell is a **2×2-tile
 > (16×16) block aligned to the attribute grid** so it gets its own palette. The HUD
-> uses an 8×8 font baked into the same CHR. The NES controller drives everything
-> (read off `$4016`). `make nes` → `build/nes/ur.nes` (an iNES NROM cart); run in
-> MAME (`nes`) / Mesen / FCEUX. **Verified in MAME `nes`:** menu, the carved board,
-> roll, the move list with a D-pad selector, and moves applying end-to-end (tokens
-> appear, the turn passes, the AI replies).
+> uses an 8×8 font baked into the same CHR. **Sound is the 2A03 APU** (`sound.c`):
+> the **Hurrian Hymn** title theme on pulse 1, plus event sfx (dice rattle on the
+> noise channel, move/rosette/score/win blips on pulse 1). The NES controller drives
+> everything (read off `$4016`). `make nes` → `build/nes/ur.nes` (an iNES NROM cart);
+> run in MAME (`nes`) / Mesen / FCEUX. **Verified in MAME `nes`:** menu, the carved
+> board, roll, the move list with a D-pad selector, moves applying end-to-end (tokens
+> appear, the turn passes, the AI replies), and audio (the hymn + per-event sfx,
+> confirmed by recording with `-wavwrite`).
 >
 > **There is NO FujiNet for the NES** (it isn't in fujinet-lib's target list), so
 > this is a **local-only** build, like the ColecoVision cartridge — no online path.
 >
-> **Still TODO:** **APU sound** (the Hurrian Hymn + sfx via the pulse channels, like
-> the other ports' chip players). The token discs are a touch muddy at NES res — a
+> **Polish left (optional):** the token discs are a touch muddy at NES res — a
 > palette tweak could sharpen Light-vs-Dark contrast.
 
 Implements the platform layer for the **NES / Famicom**.
@@ -33,7 +35,8 @@ Implements the platform layer for the **NES / Famicom**.
 - **PPU (2C02):** tile/sprite video — a 256×240 background from two pattern tables
   (CHR), 4 background + 4 sprite palettes (3 colours each + a shared backdrop), and
   64 sprites (8 per scanline). VRAM is reached through the `$2006`/`$2007` ports.
-- **APU:** 2 pulse + triangle + noise + DPCM. (No sound yet — see below.)
+- **APU:** 2 pulse + triangle + noise + DPCM. Ur uses **pulse 1** (melody/blips)
+  and **noise** (dice rattle/buzz) — see [`sound.c`](sound.c).
 - **RAM:** 2 KB internal. cc65's `nes.cfg` also uses **8 KB cartridge PRG-RAM at
   `$6000`** for `DATA`/`BSS`/heap, so an emulator that maps NROM PRG-RAM is required
   (MAME/Mesen/FCEUX all do).
@@ -92,10 +95,9 @@ Input is read directly (`$4016`), since the NES has no `cgetc`:
 
 ## When you continue this port
 
-1. The renderer + core are proven — the carved board plays through to a win.
-2. Add **APU sound** (the Hurrian Hymn + sfx) via the pulse channels, like the other
-   ports' chip players. This is the main remaining gap.
-3. Optional: sharpen the token palette (Light cream vs Dark brown read a little muddy
+1. The renderer + core + APU sound are proven — the carved board plays through to a
+   win with music + sfx.
+2. Optional: sharpen the token palette (Light cream vs Dark brown read a little muddy
    at NES resolution), and consider partial in-vblank VRAM updates to avoid the brief
    forced-blank blip on each redraw.
 4. No networking — the NES has no FujiNet; keep it local-only.

@@ -23,6 +23,8 @@
 #include <nes.h>
 
 #include "ur.h"
+#include "music.h"          /* the Hurrian Hymn title theme (shared melody) */
+#include "sound.h"
 
 #define NO_ROLL 0xFF
 
@@ -297,6 +299,7 @@ static bool human_turn(unsigned char player)
     draw_board(NO_ROLL, "PRESS A TO ROLL");
     wait_pad();
     roll = roll_dice();
+    sfx_roll();
 
     picked = choose_move(player, roll);
     if (picked < 0) {
@@ -306,6 +309,7 @@ static bool human_turn(unsigned char player)
         return false;
     }
     ur_apply_move(&game, player, (unsigned char)picked, roll, &res);
+    sfx_for_result(&res);
     if (res.won) return true;
     if (res.captured || res.rosette) {
         draw_board(roll, res.captured ? "CAPTURE - PRESS A" : "ROSETTE - AGAIN");
@@ -324,6 +328,7 @@ static bool computer_turn(unsigned char player)
     draw_board(NO_ROLL, "COMPUTER - PRESS A");
     wait_pad();
     roll = roll_dice();
+    sfx_roll();
 
     if (ur_legal_moves(&game, player, roll, pieces) == 0) {
         draw_board(roll, "COMPUTER: NO MOVE");
@@ -333,6 +338,7 @@ static bool computer_turn(unsigned char player)
     }
     pick = ur_ai_pick(&game, player, roll);
     ur_apply_move(&game, player, (unsigned char)pick, roll, &res);
+    sfx_for_result(&res);
     draw_board(roll, "COMPUTER MOVED - A");
     wait_pad();
     if (res.won) return true;
@@ -360,6 +366,21 @@ static void play_local(bool ai1)
     wait_pad();
 }
 
+/* Title music: the Hurrian Hymn, played once at boot. Skippable — returns as soon
+ * as a button is pressed (left for the menu), so the player can start immediately. */
+static bool g_played_music = false;
+static void play_hymn(void)
+{
+    uint16_t i;
+    if (g_played_music) return;
+    g_played_music = true;
+    for (i = 0; i < ur_hymn_len; i++) {
+        if (read_pad()) { snd_silence(); return; }
+        nes_music_note(ur_hymn[i].note, ur_hymn[i].dur);
+    }
+    snd_silence();
+}
+
 int main(void)
 {
     unsigned char pad;
@@ -367,6 +388,7 @@ int main(void)
     PPU.control = 0x00;            /* NMI off */
     PPU.mask = 0x00;
     vwait(); vwait();              /* PPU warm-up */
+    nes_sound_init();
 
     for (;;) {
         clear_screen();
@@ -379,6 +401,7 @@ int main(void)
         put_str(4, 26, "RULES: DR FINKEL");
         ppu_blit();
 
+        play_hymn();                       /* the Hurrian Hymn (once, skippable) */
         while (!read_pad()) g_seed++;      /* entropy from wait time */
         pad = wait_pad();
         if (pad & PAD_A)      play_local(false);
