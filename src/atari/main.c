@@ -23,14 +23,19 @@
 #include "fujinet-fuji.h"      /* fuji_*_appkey: persistent profile on the FujiNet SD */
 #endif
 
-/* Board cells: row 1..8, col 0=Light(left) 1=shared(mid) 2=Dark(right).
- * Each cell is two characters wide (8 mode-4 pixels) for detailed glyphs. */
-#define BOARD_X    16       /* 3 cells, 2 chars each + gaps, centred on 40 cols */
-#define BOARD_Y    3        /* 8 cells x 2 char-rows (16x16 boxes) -> rows 3..18 */
+/* HORIZONTAL board (like the SMS): 3 rows x 8 cols, row 0=Light(top) 1=shared(mid)
+ * 2=Dark(bottom). Each cell is 2x2 chars (16x16). Laid out inside the mode-4 board
+ * band (char rows 3..18) so the display list + DLI are unchanged. */
+#define BOARD_X    12       /* 8 cells x 2 chars = 16 wide, centred on 40 cols    */
+#define BOARD_Y    6        /* 3 cells x 2 char-rows -> rows 6..11                */
+#define LTRAY_Y    4        /* Light tray (above the board, in the mode-4 band)   */
+#define DTRAY_Y    13       /* Dark tray  (below the board, in the mode-4 band)   */
+#define TRAY_WX    12       /* waiting beads start col;  home beads at TRAY_HX    */
+#define TRAY_HX    21
 #define ROW_TURN   1
 #define ROW_ROLL   2
 #define ROW_SEAT   3        /* online: which seat you are */
-#define ROW_MOVE   19       /* move list (rows 19..22, below the board) */
+#define ROW_MOVE   19       /* move list (rows 19..22, below the mode-4 board band) */
 #define ROW_MSG    23
 
 #define LIGHT_CH '#'        /* grid marker: light piece (rendered as a PMG disc) */
@@ -76,8 +81,8 @@ static char     g_host[33] = UR_DEFAULT_HOST;  /* server host/IP (<=32, persiste
 static char     g_net_url[64];   /* built: N:TCP://<host>:1234/            */
 static char     g_top_url[64];   /* built: N:HTTP://<host>:8080/top        */
 
-static unsigned char cellx(unsigned char col) { return (unsigned char)(BOARD_X + col * 3); }
-static unsigned char celly(unsigned char row) { return (unsigned char)(BOARD_Y + (row - 1) * 2); }
+static unsigned char cellx(unsigned char col) { return (unsigned char)(BOARD_X + col * 2); }
+static unsigned char celly(unsigned char row) { return (unsigned char)(BOARD_Y + row * 2); }
 
 /* Draw a 16x16 carved cell box (2x2 chars) at board (col,row): a raised lapis
  * tile, or a gold rosette (drawn inverse). Tokens are overlaid centred on top so a
@@ -102,23 +107,35 @@ static void draw_box(unsigned char col, unsigned char row, unsigned char kind)
     if (kind != CELL_DOTS) revers(0);
 }
 
-/* Path position (1..14) -> board cell (row 1..8, col 0..2). False if off-board. */
+/* Path position (1..14) -> board cell. HORIZONTAL: row 0=Light, 1=shared, 2=Dark;
+ * cols 0..7. (Same mapping as the SMS/C64/GB ports.) False if off-board. */
 static bool pos_to_cell(unsigned char player, unsigned char pos,
                         unsigned char *row, unsigned char *col)
 {
     if (pos < 1 || pos > 14)
         return false;
-    if (pos <= 4) {                       /* private entry: rows 4,3,2,1 */
-        *col = player ? 2 : 0;
-        *row = (unsigned char)(5 - pos);
-    } else if (pos <= 12) {               /* shared middle column: rows 1..8 */
-        *col = 1;
-        *row = (unsigned char)(pos - 4);
-    } else {                              /* private exit: 13->row8, 14->row7 */
-        *col = player ? 2 : 0;
-        *row = (pos == 13) ? 8 : 7;
+    if (pos <= 4) {                       /* private entry */
+        *row = player ? 2 : 0;
+        *col = (unsigned char)(4 - pos);
+    } else if (pos <= 12) {               /* shared middle row */
+        *row = 1;
+        *col = (unsigned char)(pos - 5);
+    } else {                              /* private exit */
+        *row = player ? 2 : 0;
+        *col = (pos == 13) ? 7 : 6;
     }
     return true;
+}
+
+/* H-shape: the shared middle row spans all 8 cols; the private rows skip the
+ * bridge (cols 4-5). Rosettes at the 4 block corners + the shared centre. */
+static bool cell_exists(unsigned char row, unsigned char col)
+{
+    return row == 1 || col <= 3 || col >= 6;
+}
+static bool is_rosette_cell(unsigned char row, unsigned char col)
+{
+    return (row != 1 && (col == 0 || col == 6)) || (row == 1 && col == 3);
 }
 
 static unsigned char count_at(unsigned char player, unsigned char pos)
@@ -139,81 +156,50 @@ static unsigned char cur_cx = 0xFF, cur_cy;   /* last cursor char cell; 0xFF = n
 
 static void draw_all(unsigned char roll, const char *msg)
 {
-    char grid[9][3];
-    unsigned char row, col, pl, i, pos, rr, cc;
+    unsigned char row, col, pl, i, pos, rr, cc, k, n, x, y;
 
     clrscr();
     cur_cx = 0xFF;                    /* clrscr wiped any cursor glyph */
     cputsxy(0, 0, "The Royal Game of Ur");
 
-    /* base board: '+' playable, ' ' cut-away, '*' rosettes.
-     * Middle column is the full shared lane; the side columns skip rows 5-6. */
-    for (row = 1; row <= 8; row++)
-        for (col = 0; col < 3; col++)
-            grid[row][col] = (col == 1 || row <= 4 || row >= 7) ? '+' : ' ';
-    grid[1][0] = '*'; grid[7][0] = '*';   /* Light rosettes  (entry, exit) */
-    grid[4][1] = '*';                      /* central shared rosette */
-    grid[1][2] = '*'; grid[7][2] = '*';   /* Dark rosettes */
-
-    /* Draw every playable cell as a 16x16 carved box (lapis tile or gold rosette);
-     * pieces are then overlaid centred so a token sits INSIDE its box. */
-    for (row = 1; row <= 8; row++)
-        for (col = 0; col < 3; col++) {
-            char b = grid[row][col];
-            if (b == ' ')
+    /* Carved, inlaid board cells (skip the H-shape cut-away): gold rosette flowers
+     * at the rosette squares, a gold eye down the shared lane, carved quincunx dots
+     * on the private lanes. Every square is decorated. */
+    for (row = 0; row < 3; row++)
+        for (col = 0; col < 8; col++) {
+            if (!cell_exists(row, col))
                 continue;
-            /* rosette -> gold flower; shared middle column -> gold eye; private
-             * lanes -> carved dots. Every square is decorated. */
-            draw_box(col, row, (b == '*') ? CELL_ROSE
-                             : (col == 1)  ? CELL_EYE : CELL_DOTS);
+            draw_box(col, row, is_rosette_cell(row, col) ? CELL_ROSE
+                             : (row == 1) ? CELL_EYE : CELL_DOTS);
         }
 
-    /* Tokens, centred in their boxes (over the tiles). */
-    atari_pmg_tokens_clear();
+    /* On-board tokens: 2x2 charset discs — white Light ('#$()'), green Dark
+     * ('@[{|'). (Horizontal rows can't use PMG, which is per-column.) */
     for (pl = 0; pl < UR_NUM_PLAYERS; pl++)
         for (i = 0; i < UR_PIECES; i++) {
             pos = game.piece[pl][i];
             if (!pos_to_cell(pl, pos, &rr, &cc))
                 continue;
-#ifdef UR_A5200
-            /* 5200 (no PMG): a charset disc in the box — '#'+'$' Light, '@'+'[' Dark. */
+            x = cellx(cc); y = celly(rr);
             if (pl == 0) {
-                cputcxy(cellx(cc),     celly(rr), '#'); cputcxy(cellx(cc) + 1, celly(rr), '$');
+                cputcxy(x, y, '#'); cputcxy((unsigned char)(x+1), y, '$');
+                cputcxy(x, (unsigned char)(y+1), '('); cputcxy((unsigned char)(x+1), (unsigned char)(y+1), ')');
             } else {
-                cputcxy(cellx(cc),     celly(rr), '@'); cputcxy(cellx(cc) + 1, celly(rr), '[');
+                cputcxy(x, y, '@'); cputcxy((unsigned char)(x+1), y, '[');
+                cputcxy(x, (unsigned char)(y+1), '{'); cputcxy((unsigned char)(x+1), (unsigned char)(y+1), '|');
             }
-#else
-            /* Round PMG donut, one player per board colour-column (col0=P0 Light,
-             * col2=P1 Dark, col1=P2/P3 by colour). Light's hole shows the lapis
-             * tile (a dark pip); Dark gets a cream MISSILE pip in the hole (M0 for
-             * col2, M2 for col1) — the two-tone Ur set. */
-            atari_pmg_token((cc == 0) ? 0 : (cc == 2) ? 1 : (pl ? 3 : 2),
-                            cellx(cc), celly(rr));
-            if (pl)
-                atari_pmg_pip((cc == 2) ? 0 : 2, cellx(cc), celly(rr));
-#endif
         }
 
-    /* Off-board pieces: those waiting to enter at the top corners, those borne
-     * off ("home") at the bottom corners. Light (white discs) left, Dark (green
-     * rings) right. start+home <= 7 per side, so the stacks never collide. */
-    {
-        unsigned char k, n;
-        n = count_at(0, UR_POS_START);          /* Light waiting   -> top-left    */
-        for (k = 0; k < n; k++) { cputcxy(2, (unsigned char)(4 + k), '#'); cputcxy(3, (unsigned char)(4 + k), '$'); }
-        n = (unsigned char)ur_score(&game, 0);  /* Light borne off -> bottom-left  */
-        for (k = 0; k < n; k++) { cputcxy(2, (unsigned char)(18 - k), '#'); cputcxy(3, (unsigned char)(18 - k), '$'); }
-        n = count_at(1, UR_POS_START);          /* Dark waiting    -> top-right    */
-        for (k = 0; k < n; k++) { cputcxy(36, (unsigned char)(4 + k), '@'); cputcxy(37, (unsigned char)(4 + k), '['); }
-        n = (unsigned char)ur_score(&game, 1);  /* Dark borne off  -> bottom-right */
-        for (k = 0; k < n; k++) { cputcxy(36, (unsigned char)(18 - k), '@'); cputcxy(37, (unsigned char)(18 - k), '['); }
-    }
-
-    /* Start markers: a coloured up-arrow in the cut-away notch directly below each
-     * player's entry square (pos 1 at celly(4)=row 10; the notch is row 12).
-     * Pieces enter at the diamond above and run up their side column. */
-    cputcxy(16, 12, '{'); cputcxy(17, 12, '|'); /* white: Light starts (left)  */
-    cputcxy(22, 12, '}'); cputcxy(23, 12, '~'); /* green: Dark starts (right)  */
+    /* Trays (charset beads, inside the board band): Light above ('}' white), Dark
+     * below ('~' green); waiting clustered left, borne-off "home" to the right. */
+    n = count_at(0, UR_POS_START);
+    for (k = 0; k < n; k++) cputcxy((unsigned char)(TRAY_WX + k), LTRAY_Y, '}');
+    n = (unsigned char)ur_score(&game, 0);
+    for (k = 0; k < n; k++) cputcxy((unsigned char)(TRAY_HX + k), LTRAY_Y, '}');
+    n = count_at(1, UR_POS_START);
+    for (k = 0; k < n; k++) cputcxy((unsigned char)(TRAY_WX + k), DTRAY_Y, '~');
+    n = (unsigned char)ur_score(&game, 1);
+    for (k = 0; k < n; k++) cputcxy((unsigned char)(TRAY_HX + k), DTRAY_Y, '~');
 
     atari_board_tint(game.turn);     /* frame the board in the active player's hue */
     gotoxy(0, ROW_TURN);
@@ -389,42 +375,15 @@ static int8_t choose_move(unsigned char player, unsigned char roll)
     return (int8_t)pieces[0];
 }
 
-/* Which PMG player covers a board column for a given player's colour. */
-static unsigned char slot_for(unsigned char player, unsigned char col)
-{
-    if (col == 1) return (unsigned char)(player ? 3 : 2);   /* shared middle */
-    return (unsigned char)(player ? 1 : 0);                 /* private column */
-}
-
-/* Glide `player`'s token disc along the path from position `from` to `to` (either
- * direction), one cell per ~`frames` display frames.  On-board cells draw the
- * disc; an off-board step (entering, bearing off, or captured back to the tray)
- * clears it.  Only this disc's 4 PM bytes move, so the other pieces are left in
- * place; draw_all settles the board afterwards. */
+/* Token glide is retired with the PMG tokens (the horizontal charset board draws
+ * tokens as charset cells, which can't slide a single disc). Moves settle instantly
+ * via the next draw_all; kept as a no-op so the turn code is unchanged. A brief
+ * frame wait keeps the music heartbeat ticking. */
 static void anim_glide(unsigned char player, unsigned char from, unsigned char to,
                        unsigned char frames)
 {
-    int p, dir;
-    unsigned char rr, cc, ps = 0xFF, py = 0;   /* prev slot/y of the moving disc */
-
-    if (pos_to_cell(player, from, &rr, &cc)) { ps = slot_for(player, cc); py = celly(rr); }
-    dir = (to >= from) ? 1 : -1;
-    for (p = (int)from + dir; ; p += dir) {
-        if (dir > 0 ? (p > (int)to) : (p < (int)to))
-            break;
-        if (p >= 1 && p <= 14) {                /* on-board: move the disc here */
-            unsigned char ns, ny;
-            pos_to_cell(player, (unsigned char)p, &rr, &cc);
-            ns = slot_for(player, cc); ny = celly(rr);
-            if (ps != 0xFF) atari_pmg_token_clear(ps, py);
-            atari_pmg_token(ns, cellx(cc), ny);
-            ps = ns; py = ny;
-        } else if (ps != 0xFF) {                /* stepped off the board */
-            atari_pmg_token_clear(ps, py);
-            ps = 0xFF;
-        }
-        atari_wait_frames(frames);
-    }
+    (void)player; (void)from; (void)to;
+    atari_wait_frames(frames);
 }
 
 /* Rattle the four tetrahedral dice through random faces, then settle on `roll`.

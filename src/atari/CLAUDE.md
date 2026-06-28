@@ -11,12 +11,13 @@ vs-AI, and FujiNet online all work, with the full visual treatment in place.
 
 ## Files
 
-- [`main.c`](main.c) — game flow, the vertical board renderer (`draw_all`), move
-  selection, the glide/fly-back + dice-tumble animations, and the FujiNet online loop.
+- [`main.c`](main.c) — game flow, the horizontal board renderer (`draw_all`), move
+  selection, the dice-tumble animation, and the FujiNet online loop.
 - [`atarihw.c`](atarihw.c)/[`.h`](atarihw.h) — the hardware layer: colour registers,
-  the custom charset (carved tiles, gold-flower rosettes, dice, cursor glyphs), the
-  mode-4 board display-list patch, the in-game **DLI** field sheen, the **PMG** token
-  discs (+ glide helpers), POKEY sound effects, and joystick input.
+  the custom charset (carved/eye/dots tiles, gold-flower rosettes, charset disc
+  tokens, dice, cursor glyphs), the mode-4 board display-list patch, the in-game
+  **DLI** field sheen, POKEY sound effects, and joystick input. (The PMG token
+  helpers remain but are unused since the board went horizontal — see below.)
 - [`dli.s`](dli.s) — the display-list-interrupt handler (per-scanline `COLBK`),
   shared by the title sky and the in-game board sheen.
 - [`csp_compat.s`](csp_compat.s) — the shared cc65 `c_sp`/`oserror` shim (also used
@@ -36,29 +37,28 @@ vs-AI, and FujiNet online all work, with the full visual treatment in place.
 
 ## Display / input / sound (implemented)
 
-A **vertical** board (8 rows × 3 columns: left = Light, middle = the shared capture
-lane, right = Dark), drawn in **ANTIC mode 4** (multicolour charset) on screen rows
-4–18, with a text HUD on the mode-2 rows above/below.
+A **horizontal** board (3 rows × 8 columns: top = Light, middle = the shared capture
+lane, bottom = Dark — the authentic Standard-of-Ur orientation, matching the SMS and
+every other port), drawn in **ANTIC mode 4** (multicolour charset) inside the mode-4
+band (screen char rows 3–18), with a text HUD on the mode-2 rows above/below.
 
-- **Board:** a custom character set draws **carved, beveled lapis tiles** (a white
-  top/left bevel on a lapis face) and **gold 8-point flower rosettes** (gold petals +
-  a white pearl centre, via inverse-video → `COLOR3`). The field is a deep lapis.
+- **Board:** a custom character set draws every square as a 16×16 (2×2-char) inlaid
+  mosaic — **carved, beveled lapis tiles** with a **gold bullseye eye** down the
+  shared lane and a **white-stud quincunx** on the private lanes, plus **gold 8-point
+  flower rosettes** at the 5 rosette squares (gold + white pearl, via inverse-video →
+  `COLOR3`). The field is a deep lapis. (Glyphs: `tools/atari-mosaic-glyphs.c`.)
 - **Living-tablet sheen:** an in-game **DLI** (`atari_board_dli_on`, reusing
   `dli.s`) grades the field colour (`COLBK`) down the board band — dark-blue framed
   edges easing to a luminous lapis body — the Atari's signature per-scanline colour.
-  All field shades stay darker than the tiles so the carve keeps its relief.
-- **Tokens: player/missile graphics.** On-board pieces are round two-tone **PMG**
-  discs (cream Light, brown Dark; a centre hole shows the pip — the dark field for
-  Light, a cream charset dot for Dark). The vertical layout lets one player cover a
-  column, so no multiplexing: P0 = col0 Light, P1 = col2 Dark, P2/P3 = the shared
-  middle by colour. Off-board tray stacks stay charset glyphs.
-- **Motion:** moves **glide** cell-by-cell along the path (`anim_glide`); a capture
-  knocks the victim back along its own path to the tray. Local play only (online
-  renders server snapshots directly). Tunable via `ANIM_STEP`/`ANIM_FLY`.
+- **Tokens: charset discs.** On-board pieces are round 16×16 (2×2-char) charset
+  discs — **white** Light / **green** Dark (`tools/atari-token-glyphs.c`), drawn in
+  the cell. The horizontal board rules out the old PMG tokens (a P/M player is one
+  *vertical* column strip, so it can't render a row's several tokens at different X) —
+  so, like the C64 dropping its sprites for the dense board, the A8 now uses charset
+  tokens, unified with the 5200. Off-board tray stacks are small charset beads.
 - **Dice:** four tetrahedral dice that **tumble** through random faces (POKEY RNG)
   then settle on the roll (`dice_tumble`); monochrome on the text HUD row.
-- **Cursor:** a gold charset pointer left of the selected cell (`cursor_at`) — the
-  four players are all tokens, so the cursor isn't PMG.
+- **Cursor:** a gold charset pointer left of the selected cell (`cursor_at`).
 - **Title:** a Sumerian ziggurat with a DLI lapis→gold sky gradient.
 - **Input:** joystick (port 1) to move the cursor + FIRE to select; keys `1`–`N`
   also pick a move; keyboard for the menu.
