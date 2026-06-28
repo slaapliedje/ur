@@ -32,7 +32,7 @@ static uint8_t human_turn(uint8_t player)
     plat_draw(UR_NO_ROLL, M_ROLL);
     plat_wait();
     roll = ur_dice_roll();
-    plat_sfx_roll();
+    plat_roll(roll);
     plat_draw(roll, (const char *)0);            /* show the roll, then the moves */
 
     picked = plat_choose_move(player, roll);
@@ -66,7 +66,7 @@ static uint8_t computer_turn(uint8_t player)
     plat_draw(UR_NO_ROLL, M_CPU);
     plat_wait();
     roll = ur_dice_roll();
-    plat_sfx_roll();
+    plat_roll(roll);
 
     if (ur_legal_moves(&ur_g, player, roll, pieces) == 0) {
         plat_draw(roll, M_CPUNM);

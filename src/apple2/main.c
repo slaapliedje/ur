@@ -20,6 +20,7 @@
 #include <conio.h>
 
 #include "ur.h"
+#include "ur_game.h"        /* shared local-game controller + plat.h interface */
 #include "gr.h"
 #include "sound.h"
 #include "music.h"          /* the Hurrian Hymn title theme (shared melody)       */
@@ -66,8 +67,7 @@ static unsigned char cellx(unsigned char col) { return (unsigned char)(col * 5);
 static unsigned char celly(unsigned char row) { return (unsigned char)(1 + row * 14); }
 #endif
 
-static ur_state game;
-static uint16_t  g_seed = 0xACE1u;
+static uint16_t  g_seed = 0xACE1u;   /* RNG entropy (accumulated in the menu) */
 
 #ifdef UR_ONLINE
 #define UR_DEFAULT_HOST "localhost"   /* server host; runtime-configurable (menu 5) */
@@ -257,7 +257,7 @@ static void board_field(void)
             prev_grid[r][c] = CELL_NONE;
 }
 
-static void draw_board(unsigned char roll, const char *msg)
+void plat_draw(unsigned char roll, const char *msg)
 {
     unsigned char row, col, pl, i, pos, rr, cc;
     char grid[3][8];          /* 0 cut, 'L'/'D' piece, '*' rosette, 'E' eye, '.' dots */
@@ -276,7 +276,7 @@ static void draw_board(unsigned char roll, const char *msg)
                            : 0;
     for (pl = 0; pl < UR_NUM_PLAYERS; pl++)
         for (i = 0; i < UR_PIECES; i++) {
-            pos = game.piece[pl][i];
+            pos = ur_g.piece[pl][i];
             if (pos_to_cell(pl, pos, &rr, &cc))
                 grid[rr][cc] = pl ? 'D' : 'L';
         }
@@ -299,11 +299,11 @@ static void draw_board(unsigned char roll, const char *msg)
     {
         char buf[41], *p;
         panel_clr(PANEL_TOP);
-        panel_text(0, PANEL_TOP, game.turn ? "TURN: DARK (X)" : "TURN: LIGHT (O)");
+        panel_text(0, PANEL_TOP, ur_g.turn ? "TURN: DARK (X)" : "TURN: LIGHT (O)");
         p = put_s(buf, "LIGHT:");
-        p = put_u(p, (unsigned char)ur_score(&game, 0));
+        p = put_u(p, (unsigned char)ur_score(&ur_g, 0));
         p = put_s(p, "  DARK:");
-        p = put_u(p, (unsigned char)ur_score(&game, 1));
+        p = put_u(p, (unsigned char)ur_score(&ur_g, 1));
         if (roll != NO_ROLL) { p = put_s(p, "   ROLL:"); p = put_u(p, roll); }
         *p = 0;
         panel_clr(PANEL_TOP + 1);
@@ -316,20 +316,20 @@ static void draw_board(unsigned char roll, const char *msg)
 }
 
 /* List legal moves (deduped by source) on the panel, read a 1..N choice. */
-static int8_t choose_move(unsigned char player, unsigned char roll)
+int8_t plat_choose_move(unsigned char player, unsigned char roll)
 {
     unsigned char pieces[UR_PIECES], srcs[UR_PIECES];
     unsigned char count, nsrc, i, j, pos, dest, sel;
     bool seen;
     int c;
 
-    count = ur_legal_moves(&game, player, roll, pieces);
+    count = ur_legal_moves(&ur_g, player, roll, pieces);
     if (count == 0)
         return -1;
 
     nsrc = 0;
     for (i = 0; i < count; i++) {
-        pos = game.piece[player][pieces[i]];
+        pos = ur_g.piece[player][pieces[i]];
         seen = false;
         for (j = 0; j < nsrc; j++)
             if (srcs[j] == pos) { seen = true; break; }
@@ -363,17 +363,19 @@ static int8_t choose_move(unsigned char player, unsigned char roll)
 
     pos = srcs[sel];
     for (i = 0; i < count; i++)
-        if (game.piece[player][pieces[i]] == pos)
+        if (ur_g.piece[player][pieces[i]] == pos)
             return (int8_t)pieces[i];
     return (int8_t)pieces[0];
 }
 
-static unsigned char roll_dice(void)
-{
-    static bool seeded = false;
-    if (!seeded) { ur_rng_seed((uint16_t)(g_seed | 1u)); seeded = true; }
-    return ur_dice_roll();
-}
+/* plat.h: confirm wait, roll sound, result sound, RNG entropy. The shared
+ * controller (ur_game.c) owns the turn loop. No dice animation or token glide. */
+void plat_wait(void) { cgetc(); }
+void plat_roll(unsigned char roll) { (void)roll; sfx_roll(); }
+void plat_sfx_result(const ur_move_result *res) { sfx_for_result(res); }
+uint16_t plat_seed(void) { return g_seed; }
+void plat_animate(unsigned char player, unsigned char from, unsigned char to)
+{ (void)player; (void)from; (void)to; }
 
 /* ======================================================================== */
 #ifdef UR_ONLINE
@@ -632,28 +634,28 @@ static bool online_game(void)
     BOARD_ON();                        /* enter the colour board for play */
     board_field();
     for (;;) {
-        game = snap.state;
+        ur_g = snap.state;
         if (snap.flags & UR_FLAG_CAPTURED)      sfx_capture();
         else if (snap.flags & UR_FLAG_SCORED)   sfx_score();
         else if (snap.flags & UR_FLAG_ROSETTE)  sfx_rosette();
 
         if (snap.phase == UR_PHASE_OVER) {
-            draw_board(NO_ROLL, snap.winner == (int8_t)snap.seat
+            plat_draw(NO_ROLL, snap.winner == (int8_t)snap.seat
                                 ? "YOU WIN! KEY..." : "YOU LOSE. KEY...");
             cgetc();
             break;
         }
         if (snap.state.turn != snap.seat) {
-            draw_board(snap.phase == UR_PHASE_MOVE ? snap.roll : NO_ROLL,
+            plat_draw(snap.phase == UR_PHASE_MOVE ? snap.roll : NO_ROLL,
                        "OPPONENT'S TURN...");
         } else if (snap.phase == UR_PHASE_ROLL) {
-            draw_board(NO_ROLL, "YOUR TURN - KEY TO ROLL");
+            plat_draw(NO_ROLL, "YOUR TURN - KEY TO ROLL");
             cgetc();
             sfx_roll();
             network_write(g_net_url, cmd, ur_proto_roll(cmd));
         } else {
-            draw_board(snap.roll, (const char *)0);
-            picked = choose_move(snap.seat, snap.roll);
+            plat_draw(snap.roll, (const char *)0);
+            picked = plat_choose_move(snap.seat, snap.roll);
             if (picked >= 0)
                 network_write(g_net_url, cmd, ur_proto_move(cmd, (unsigned char)picked));
         }
@@ -668,87 +670,24 @@ static bool online_game(void)
 #endif /* UR_ONLINE */
 /* ======================================================================== */
 
-static bool human_turn(unsigned char player)
+/* Run a local game (via the shared controller) and show the result. The board is on
+ * for the controller's draws, then we switch back to text for the result screen. */
+static void run_and_show(bool ai1)
 {
-    unsigned char roll;
-    int8_t picked;
-    ur_move_result res;
+    unsigned char winner;
 
-    draw_board(NO_ROLL, "PRESS A KEY TO ROLL.");
-    cgetc();
-    roll = roll_dice();
-    sfx_roll();
-
-    picked = choose_move(player, roll);
-    if (picked < 0) {
-        draw_board(roll, "NO LEGAL MOVE. KEY...");
-        cgetc();
-        ur_advance_turn(&game, (const ur_move_result *)0);
-        return false;
-    }
-    ur_apply_move(&game, player, (unsigned char)picked, roll, &res);
-    sfx_for_result(&res);
-    if (res.won)
-        return true;
-    if (res.captured || res.rosette) {
-        draw_board(roll, res.captured ? "CAPTURE! KEY..." : "ROSETTE - AGAIN!");
-        cgetc();
-    }
-    ur_advance_turn(&game, &res);
-    return false;
-}
-
-static bool computer_turn(unsigned char player)
-{
-    unsigned char pieces[UR_PIECES], roll;
-    int8_t pick;
-    ur_move_result res;
-
-    draw_board(NO_ROLL, "COMPUTER'S TURN. KEY...");
-    cgetc();
-    roll = roll_dice();
-    sfx_roll();
-
-    if (ur_legal_moves(&game, player, roll, pieces) == 0) {
-        draw_board(roll, "COMPUTER: NO MOVE. KEY");
-        cgetc();
-        ur_advance_turn(&game, (const ur_move_result *)0);
-        return false;
-    }
-    pick = ur_ai_pick(&game, player, roll);
-    ur_apply_move(&game, player, (unsigned char)pick, roll, &res);
-    sfx_for_result(&res);
-    draw_board(roll, "COMPUTER MOVED. KEY...");
-    cgetc();
-    if (res.won)
-        return true;
-    ur_advance_turn(&game, &res);
-    return false;
-}
-
-static void play_local(bool ai1)
-{
-    unsigned char player;
-    bool over;
-
-    ur_init(&game);
     BOARD_ON();                    /* colour board for the game (lo-res or DHGR) */
     board_field();                 /* fill the field once (cells redraw each turn) */
-    for (;;) {
-        player = game.turn;
-        over = (player == 1 && ai1) ? computer_turn(player) : human_turn(player);
-        if (over)
-            break;
-    }
+    winner = ur_run_game(ai1 ? 1 : 0);
     BOARD_OFF();                   /* back to text for the result + menu */
     clrscr();
     if (ai1) {
 #ifdef UR_ONLINE
-        if (player == 0) { g_wins++; profile_save(); }   /* record the win */
+        if (winner == 0) { g_wins++; profile_save(); }   /* record the win */
 #endif
-        cputsxy(0, 2, player == 0 ? "YOU WIN!" : "YOU LOSE.");
+        cputsxy(0, 2, winner == 0 ? "YOU WIN!" : "YOU LOSE.");
     } else
-        cputsxy(0, 2, player == 0 ? "LIGHT (O) WINS!" : "DARK (X) WINS!");
+        cputsxy(0, 2, winner == 0 ? "LIGHT (O) WINS!" : "DARK (X) WINS!");
     cputsxy(0, 4, "PRESS A KEY");
     cgetc();
 }
@@ -813,14 +752,14 @@ int main(void)
         if (key == '6') { show_leaderboard(); continue; }
         if (key == '3') {                  /* online (server-authoritative) */
             if (online_game())             /* bailed out of waiting -> play the computer */
-                play_local(true);
+                run_and_show(true);
             continue;
         }
 #endif
         if (key != '1' && key != '2')
             continue;
 
-        play_local(key == '2');    /* 1 = hot-seat, 2 = vs computer */
+        run_and_show(key == '2');    /* 1 = hot-seat, 2 = vs computer */
     }
     return 0;
 }

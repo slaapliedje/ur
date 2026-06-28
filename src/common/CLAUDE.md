@@ -69,11 +69,15 @@ result, loops. The core **calls** these; platform code never calls back into pri
 core state.
 
 **Adoption is incremental.** `ur_game.c` is opt-in per port via `$(UR_GAME_SRC)` in
-the makefiles (it is *filtered out* of `COMMON_SOURCES`), so a port that hasn't been
-converted keeps its own loop and doesn't need to implement `plat.h` yet. Converted
-so far: **NES, Game Boy, SMS + Game Gear**. The FujiNet ports (Atari/Adam/C64/Apple
-II) still run their own loop (their `online_game` path is separate and not part of
-this contract — see [`src/net`](../net/CLAUDE.md)).
+the makefiles (it is *filtered out* of `COMMON_SOURCES`), so a port can keep its own
+loop until converted. **All ports now use it** — Atari (+5200), C64, Apple II, Adam
+(+ColecoVision), SMS (+Game Gear), Game Boy, NES. The four FujiNet ports keep a
+separate `online_game` loop (NOT part of this contract — see
+[`src/net`](../net/CLAUDE.md)); only their *local* play goes through the controller.
+Note `plat_roll(roll)` does the roll sound + any dice animation (e.g. the Atari/C64
+tumble); `plat_animate(player,from,to)` does any token glide (the SMS slide; the
+Atari folds in its cursor-hide + destination highlight); both are no-ops on ports
+without them.
 
 Controller strings are **UPPERCASE / `A-Z 0-9 space !` only** — the lowest common
 denominator across the ports' fonts (the NES font is uppercase-only), so they render

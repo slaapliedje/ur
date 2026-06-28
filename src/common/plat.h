@@ -40,8 +40,11 @@ int8_t   plat_choose_move(uint8_t player, uint8_t roll);
  * without token animation provide an empty stub. */
 void     plat_animate(uint8_t player, uint8_t from, uint8_t to);
 
-/* Sound effects (chip player per platform). */
-void     plat_sfx_roll(void);
+/* The dice were just rolled (value = `roll`): play the roll sound and any dice
+ * animation (e.g. a tumble settling on `roll`). Ports without a dice animation just
+ * play the sound. */
+void     plat_roll(uint8_t roll);
+/* Sound for the result of an applied move (move/capture/rosette/score/win). */
 void     plat_sfx_result(const ur_move_result *res);
 
 /* Entropy to seed the dice RNG — a hardware source (e.g. POKEY/DIV/V-counter) or an

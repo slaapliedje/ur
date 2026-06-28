@@ -292,7 +292,7 @@ int8_t plat_choose_move(unsigned char player, unsigned char roll)
 
 /* plat.h: sound + RNG entropy. The shared controller (ur_game.c) owns the turn
  * loop and calls these; g_seed is accumulated while the menu waits for input. */
-void plat_sfx_roll(void) { sfx_roll(); }
+void plat_roll(uint8_t roll) { (void)roll; sfx_roll(); }
 void plat_sfx_result(const ur_move_result *res) { sfx_for_result(res); }
 uint16_t plat_seed(void) { return g_seed; }
 void plat_animate(uint8_t player, uint8_t from, uint8_t to) { (void)player; (void)from; (void)to; }

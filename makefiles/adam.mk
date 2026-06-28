@@ -1,7 +1,7 @@
 # Coleco Adam — Z80, built with z88dk (zcc). NOT cc65.
 ADAM_OUT      := $(BUILD_DIR)/adam
 ZCC          ?= zcc
-ADAM_SOURCES := $(COMMON_SOURCES) $(NET_SOURCES) $(wildcard $(SRC_DIR)/adam/*.c)
+ADAM_SOURCES := $(COMMON_SOURCES) $(UR_GAME_SRC) $(NET_SOURCES) $(wildcard $(SRC_DIR)/adam/*.c)
 
 # fujinet-lib (downloaded release) for adam. Built with z88dk's default (classic /
 # sccz80) C library for `+coleco -subtype=adam`, so we link with matching defaults.
@@ -65,7 +65,7 @@ $(ADAM_OUT):
 # adam subtype) + -create-app packages a cartridge .rom.
 COLECO_OUT     := $(BUILD_DIR)/coleco
 COLECO_FLAGS   := +coleco -DUR_COLECO -I$(SRC_DIR)/adam $(COMMON_INC)
-COLECO_SOURCES := $(COMMON_SOURCES) $(wildcard $(SRC_DIR)/adam/*.c)
+COLECO_SOURCES := $(COMMON_SOURCES) $(UR_GAME_SRC) $(wildcard $(SRC_DIR)/adam/*.c)
 
 .PHONY: coleco
 coleco: | $(COLECO_OUT) ## Build the ColecoVision cartridge (z88dk; joystick, no FujiNet)

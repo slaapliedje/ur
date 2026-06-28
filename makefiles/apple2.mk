@@ -8,7 +8,7 @@ APPLE2_TARGET  ?= apple2
 APPLE2_CFG     ?= apple2-system.cfg
 APPLE2_DEFS    :=
 # Lo-res excludes the DHGR sources; DHGR=1 adds them (dhgr.c + the asm aux-blit).
-APPLE2_SOURCES := $(COMMON_SOURCES) $(NET_SOURCES) \
+APPLE2_SOURCES := $(COMMON_SOURCES) $(UR_GAME_SRC) $(NET_SOURCES) \
                   $(filter-out %/dhgr.c,$(wildcard $(SRC_DIR)/apple2/*.c))
 ifeq ($(DHGR),1)
 APPLE2_TARGET  := apple2enh

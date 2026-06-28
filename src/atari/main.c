@@ -15,6 +15,7 @@
 #include <conio.h>
 
 #include "ur.h"
+#include "ur_game.h"        /* shared local-game controller + plat.h interface */
 #include "proto.h"
 #include "atarihw.h"
 #include "music.h"             /* the Hurrian Hymn title theme (shared melody) */
@@ -72,8 +73,6 @@
 #define UR_LOBBY_CREATOR 0x0001u
 #define UR_LOBBY_APP     0x01
 #define UR_LOBBY_APPKEY  0x06     /* matches the server's lobby appkey (UR_APPKEY=6) */
-
-static ur_state game;
 
 static char     g_name[UR_NAME_LEN + 1] = "";  /* player name + NUL; empty = unset */
 static uint16_t g_wins    = 0;   /* games won vs the computer (persisted)  */
@@ -142,7 +141,7 @@ static unsigned char count_at(unsigned char player, unsigned char pos)
 {
     unsigned char i, n = 0;
     for (i = 0; i < UR_PIECES; i++)
-        if (game.piece[player][i] == pos)
+        if (ur_g.piece[player][i] == pos)
             n++;
     return n;
 }
@@ -154,7 +153,7 @@ static bool opp_on(unsigned char player, unsigned char pos)
 
 static unsigned char cur_cx = 0xFF, cur_cy;   /* last cursor char cell; 0xFF = none */
 
-static void draw_all(unsigned char roll, const char *msg)
+void plat_draw(unsigned char roll, const char *msg)
 {
     unsigned char row, col, pl, i, pos, rr, cc, k, n, x, y;
 
@@ -177,7 +176,7 @@ static void draw_all(unsigned char roll, const char *msg)
      * ('@[{|'). (Horizontal rows can't use PMG, which is per-column.) */
     for (pl = 0; pl < UR_NUM_PLAYERS; pl++)
         for (i = 0; i < UR_PIECES; i++) {
-            pos = game.piece[pl][i];
+            pos = ur_g.piece[pl][i];
             if (!pos_to_cell(pl, pos, &rr, &cc))
                 continue;
             x = cellx(cc); y = celly(rr);
@@ -194,16 +193,16 @@ static void draw_all(unsigned char roll, const char *msg)
      * below ('~' green); waiting clustered left, borne-off "home" to the right. */
     n = count_at(0, UR_POS_START);
     for (k = 0; k < n; k++) cputcxy((unsigned char)(TRAY_WX + k), LTRAY_Y, '}');
-    n = (unsigned char)ur_score(&game, 0);
+    n = (unsigned char)ur_score(&ur_g, 0);
     for (k = 0; k < n; k++) cputcxy((unsigned char)(TRAY_HX + k), LTRAY_Y, '}');
     n = count_at(1, UR_POS_START);
     for (k = 0; k < n; k++) cputcxy((unsigned char)(TRAY_WX + k), DTRAY_Y, '~');
-    n = (unsigned char)ur_score(&game, 1);
+    n = (unsigned char)ur_score(&ur_g, 1);
     for (k = 0; k < n; k++) cputcxy((unsigned char)(TRAY_HX + k), DTRAY_Y, '~');
 
-    atari_board_tint(game.turn);     /* frame the board in the active player's hue */
+    atari_board_tint(ur_g.turn);     /* frame the board in the active player's hue */
     gotoxy(0, ROW_TURN);
-    cprintf("Turn: %s", game.turn ? "Dark (green)" : "Light (white)");
+    cprintf("Turn: %s", ur_g.turn ? "Dark (green)" : "Light (white)");
     if (roll != NO_ROLL) {
         gotoxy(0, ROW_ROLL);
         cputs("Roll:");
@@ -218,11 +217,12 @@ static void draw_all(unsigned char roll, const char *msg)
         cputsxy(0, ROW_MSG, msg);
 }
 
-static void seed_rng(void)
+/* plat.h: RNG entropy from the POKEY hardware random register (the controller
+ * seeds the core with this on the first game). */
+uint16_t plat_seed(void)
 {
     volatile unsigned char *RANDOM = (volatile unsigned char *)POKEY_RND_ADDR;
-    uint16_t s = (uint16_t)(((uint16_t)*RANDOM << 8) ^ (uint16_t)*RANDOM);
-    ur_rng_seed(s);
+    return (uint16_t)(((uint16_t)*RANDOM << 8) ^ (uint16_t)*RANDOM);
 }
 
 /* Centre a string on a text row. */
@@ -321,20 +321,20 @@ static void show_option(unsigned char player, const unsigned char *srcs,
 /* Joystick/number-key move chooser, shared by hot-seat and online play. The
  * highlight cursor moves over the legal options; FIRE (or 1..N) selects.
  * Returns the chosen piece index, or -1 if there is no legal move. */
-static int8_t choose_move(unsigned char player, unsigned char roll)
+int8_t plat_choose_move(unsigned char player, unsigned char roll)
 {
     unsigned char pieces[UR_PIECES], srcs[UR_PIECES];
     unsigned char count, nsrc, i, j, pos, sel, centered, s;
     bool seen;
     char key;
 
-    count = ur_legal_moves(&game, player, roll, pieces);
+    count = ur_legal_moves(&ur_g, player, roll, pieces);
     if (count == 0)
         return -1;
 
     nsrc = 0;
     for (i = 0; i < count; i++) {
-        pos = game.piece[player][pieces[i]];
+        pos = ur_g.piece[player][pieces[i]];
         seen = false;
         for (j = 0; j < nsrc; j++)
             if (srcs[j] == pos) { seen = true; break; }
@@ -342,7 +342,7 @@ static int8_t choose_move(unsigned char player, unsigned char roll)
             srcs[nsrc++] = pos;
     }
 
-    draw_all(roll, "Stick: choose   FIRE/1-N: move");
+    plat_draw(roll, "Stick: choose   FIRE/1-N: move");
     sel = 0;
     show_option(player, srcs, nsrc, sel, roll);
     while (atari_trig()) { }            /* don't inherit the roll's trigger press */
@@ -370,7 +370,7 @@ static int8_t choose_move(unsigned char player, unsigned char roll)
 
     pos = srcs[sel];
     for (i = 0; i < count; i++)
-        if (game.piece[player][pieces[i]] == pos)
+        if (ur_g.piece[player][pieces[i]] == pos)
             return (int8_t)pieces[i];
     return (int8_t)pieces[0];
 }
@@ -409,102 +409,25 @@ static void dice_tumble(unsigned char roll)
     cprintf(" %u", roll);
 }
 
-static bool human_turn(unsigned char player)
+/* plat.h: the shared controller (src/common/ur_game.c) owns the turn loop and calls
+ * these. RNG entropy is plat_seed() above. The token "glide" is a no-op pause now
+ * (the horizontal charset board settles tokens instantly), but plat_animate keeps
+ * the Atari's cursor-hide + destination highlight. */
+void plat_wait(void) { wait_action(); }
+void plat_roll(unsigned char roll) { sfx_roll(); dice_tumble(roll); }
+void plat_sfx_result(const ur_move_result *res) { sfx_for_result(res); }
+void plat_animate(unsigned char player, unsigned char from, unsigned char to)
 {
-    unsigned char roll;
-    int8_t picked;
-    ur_move_result res;
-
-    draw_all(NO_ROLL, "Roll: press FIRE or a key");
-    wait_action();
-    roll = ur_dice_roll();
-    sfx_roll();
-    dice_tumble(roll);
-
-    picked = choose_move(player, roll);
-    if (picked < 0) {
-        draw_all(roll, "No legal move. FIRE/key.");
-        wait_action();
-        ur_advance_turn(&game, (const ur_move_result *)0);
-        return false;
-    }
-
-    {
-        unsigned char src = game.piece[player][(unsigned char)picked];
-        cursor_hide();                            /* the cursor isn't part of the move */
-        anim_glide(player, src, (unsigned char)(src + roll), ANIM_STEP);  /* slide to dest */
-    }
-    ur_apply_move(&game, player, (unsigned char)picked, roll, &res);
-    sfx_for_result(&res);
-    if (res.captured)                             /* knock the victim back to its tray */
-        anim_glide((unsigned char)(1 - player),
-                   game.piece[player][(unsigned char)picked], 0, ANIM_FLY);
-    highlight_dest(player, game.piece[player][(unsigned char)picked]);
-
-    if (res.won)
-        return true;
-    if (res.captured || res.rosette) {
-        draw_all(NO_ROLL, res.captured ? "Capture!  FIRE/key."
-                                       : "Rosette - roll again! FIRE/key.");
-        wait_action();
-    }
-    ur_advance_turn(&game, &res);
-    return false;
-}
-
-static bool computer_turn(unsigned char player)
-{
-    unsigned char pieces[UR_PIECES];
-    unsigned char roll, pos, dest;
-    int8_t pick;
-    ur_move_result res;
-
-    draw_all(NO_ROLL, "Computer's turn - FIRE/key.");
-    wait_action();
-    roll = ur_dice_roll();
-    sfx_roll();
-    dice_tumble(roll);
-
-    if (ur_legal_moves(&game, player, roll, pieces) == 0) {
-        draw_all(roll, "Computer has no move. FIRE/key.");
-        wait_action();
-        ur_advance_turn(&game, (const ur_move_result *)0);
-        return false;
-    }
-
-    pick = ur_ai_pick(&game, player, roll);
-    pos  = game.piece[player][(unsigned char)pick];
-    dest = (unsigned char)(pos + roll);
     cursor_hide();
-    anim_glide(player, pos, dest, ANIM_STEP);            /* slide the piece to its dest */
-    ur_apply_move(&game, player, (unsigned char)pick, roll, &res);
-    sfx_for_result(&res);
-    if (res.captured)                            /* knock the victim back to its tray */
-        anim_glide((unsigned char)(1 - player), dest, 0, ANIM_FLY);
-    highlight_dest(player, game.piece[player][(unsigned char)pick]);
-
-    draw_all(roll, "Computer moved - FIRE/key.");
-    gotoxy(0, ROW_MOVE);
-    if (pos == UR_POS_START)
-        cprintf("CPU: enter -> %u", dest);
-    else
-        cprintf("CPU: %u -> %u", pos, dest);
-    if (res.captured)      cprintf("  capture!");
-    else if (res.scored)   cprintf("  home!");
-    else if (res.rosette)  cprintf("  rosette!");
-    wait_action();
-
-    if (res.won)
-        return true;
-    ur_advance_turn(&game, &res);
-    return false;
+    anim_glide(player, from, to, ANIM_STEP);
+    highlight_dest(player, to);
 }
 
 /* End-of-game screen: the finished board (the winner's seven pieces sit borne-off
  * in the corner tray) under a result banner, with a play-again prompt. */
 static void show_result(const char *banner)
 {
-    draw_all(NO_ROLL, "");
+    plat_draw(NO_ROLL, "");
     cclearxy(0, ROW_TURN, 40);          /* wipe the "Turn:" / roll lines so the */
     cclearxy(0, ROW_ROLL, 40);          /* banner sits on a clean row           */
     revers(1); center(ROW_TURN, banner); revers(0);
@@ -586,10 +509,10 @@ static bool online_game(void)
     int8_t picked, rc;
 
     if (network_init() != FN_ERR_OK) {
-        draw_all(NO_ROLL, "network_init failed. FIRE/key."); wait_action(); return false;
+        plat_draw(NO_ROLL, "network_init failed. FIRE/key."); wait_action(); return false;
     }
     if (network_open(g_net_url, OPEN_MODE_RW, 0) != FN_ERR_OK) {
-        draw_all(NO_ROLL, "connect failed. FIRE/key."); wait_action(); return false;
+        plat_draw(NO_ROLL, "connect failed. FIRE/key."); wait_action(); return false;
     }
     network_write(g_net_url, cmd, ur_proto_join(cmd, g_name));
 
@@ -603,12 +526,12 @@ static bool online_game(void)
     rc = online_wait(&snap);
     if (rc == -1) { network_close(g_net_url); return true; }   /* play computer locally */
     if (rc == 0) {
-        draw_all(NO_ROLL, "Disconnected. FIRE/key."); wait_action();
+        plat_draw(NO_ROLL, "Disconnected. FIRE/key."); wait_action();
         network_close(g_net_url); return false;
     }
 
     for (;;) {
-        game = snap.state;
+        ur_g = snap.state;
         if (snap.flags & UR_FLAG_CAPTURED)      sfx_capture();
         else if (snap.flags & UR_FLAG_SCORED)   sfx_score();
         else if (snap.flags & UR_FLAG_ROSETTE)  sfx_rosette();
@@ -618,22 +541,22 @@ static bool online_game(void)
             break;
         }
         if (snap.state.turn != snap.seat) {
-            draw_all(snap.phase == UR_PHASE_MOVE ? snap.roll : NO_ROLL, "Opponent's turn...");
+            plat_draw(snap.phase == UR_PHASE_MOVE ? snap.roll : NO_ROLL, "Opponent's turn...");
             show_seat(&snap);
         } else if (snap.phase == UR_PHASE_ROLL) {
-            draw_all(NO_ROLL, "Your turn - FIRE/key to roll");
+            plat_draw(NO_ROLL, "Your turn - FIRE/key to roll");
             show_seat(&snap);
             wait_action();
             sfx_roll();
             network_write(g_net_url, cmd, ur_proto_roll(cmd));
         } else {
-            picked = choose_move(snap.seat, snap.roll);
+            picked = plat_choose_move(snap.seat, snap.roll);
             if (picked >= 0)
                 network_write(g_net_url, cmd, ur_proto_move(cmd, (unsigned char)picked));
         }
         rc = read_state(&snap);
         if (rc == -1) break;                  /* player quit to the menu */
-        if (rc == 0) { draw_all(NO_ROLL, "Disconnected. FIRE/key."); wait_action(); break; }
+        if (rc == 0) { plat_draw(NO_ROLL, "Disconnected. FIRE/key."); wait_action(); break; }
     }
     network_close(g_net_url);
     return false;
@@ -1134,29 +1057,23 @@ static void show_leaderboard(void)
 
 /* Run a local game to completion and show the result. ai1 = player 1 (Dark) is
  * the computer; otherwise hot-seat. */
-static void play_local(bool ai1)
+/* Run a local game (via the shared controller) and show the result. */
+static void run_and_show(bool ai1)
 {
-    unsigned char player;
-    bool over;
+    unsigned char winner;
 
-    ur_init(&game);
     atari_board_dli_on();               /* living-lapis board sheen during play */
-    for (;;) {
-        player = game.turn;
-        over = (player == 1 && ai1) ? computer_turn(player) : human_turn(player);
-        if (over)
-            break;
-    }
+    winner = ur_run_game(ai1 ? 1 : 0);  /* shared controller turn loop */
     if (ai1) {
-        if (player == 0) {              /* you beat the computer: record it */
+        if (winner == 0) {              /* you beat the computer: record it */
             g_wins++;
 #ifndef UR_A5200
             profile_save();             /* persisted to the FujiNet appkey (A8) */
 #endif
         }
-        show_result(player == 0 ? " YOU WIN! " : " YOU LOSE ");
+        show_result(winner == 0 ? " YOU WIN! " : " YOU LOSE ");
     } else {
-        show_result(player == 0 ? " LIGHT (WHITE) WINS! " : " DARK (GREEN) WINS! ");
+        show_result(winner == 0 ? " LIGHT (WHITE) WINS! " : " DARK (GREEN) WINS! ");
     }
     atari_board_dli_off();              /* flat field back for the menu/title */
     atari_pmg_tokens_clear();           /* no stray token discs over the menu */
@@ -1166,7 +1083,6 @@ int main(void)
 {
     char key;
 
-    seed_rng();
 
 #ifdef UR_A5200
     atari_screen_init();        /* 5200: build our own 40-col display (no OS) */
@@ -1202,11 +1118,11 @@ int main(void)
 #ifndef UR_A5200
         if (key == '3') {
             if (online_game())  /* bailed out of waiting -> play the computer */
-                play_local(true);
+                run_and_show(true);
             continue;
         }
 #endif
-        play_local(key == '2'); /* 1 = hot-seat, 2 = vs computer */
+        run_and_show(key == '2'); /* 1 = hot-seat, 2 = vs computer */
     }
     return 0;                   /* not reached: the play-again loop never exits */
 }

@@ -48,15 +48,16 @@ committable state.
       board sheen, round two-tone **PMG** token pieces, piece glide + capture
       fly-back animation, and a dice tumble. (Atari is the visual reference for the
       other ports — see [`docs/visual-design.md`](docs/visual-design.md).)
-- [~] Lift the game loop into a shared controller behind `plat.h`. **Done for the
-      local-only ports** (NES, Game Boy, SMS + Game Gear): `src/common/ur_game.c`
-      owns the turn loop and drives it through the real `plat.h` interface
-      (`plat_draw` / `plat_wait` / `plat_choose_move` / `plat_animate` / `plat_sfx_*`
-      / `plat_seed`); each port shrank to implementing those + its menu. The
-      controller is opt-in per port (`$(UR_GAME_SRC)`) so the rest can adopt it
-      incrementally. **Remaining:** convert the FujiNet ports' LOCAL path
-      (Atari/5200, Adam/Coleco, C64, Apple II) — their `online_game` loop stays
-      separate.
+- [x] Lift the game loop into a shared controller behind `plat.h`. **Done for ALL
+      ports.** `src/common/ur_game.c` owns the turn loop and drives it through the
+      real `plat.h` interface (`plat_draw` / `plat_wait` / `plat_choose_move` /
+      `plat_roll` / `plat_animate` / `plat_sfx_result` / `plat_seed`); each port
+      shrank to implementing those + its menu, and deleted its own
+      human_turn/computer_turn/play_local. The four FujiNet ports keep their separate
+      `online_game` loop (not part of this contract). The controller is opt-in per
+      port (`$(UR_GAME_SRC)`). Verified playing via the controller on NES, SMS,
+      **Atari**, and ColecoVision; all 10 targets build, `make test` + `make
+      core-check` pass.
 
 ## Phase 4 — Networking + game server
 - [x] Wire protocol — `src/common/proto.{h,c}` + `docs/protocol.md`, host-tested.

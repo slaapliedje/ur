@@ -379,7 +379,7 @@ int8_t plat_choose_move(uint8_t player, uint8_t roll)
 
 /* plat.h: wait for one confirm press; sound + RNG entropy. */
 void plat_wait(void) { wait_press(); }
-void plat_sfx_roll(void) { sfx_roll(); }
+void plat_roll(uint8_t roll) { (void)roll; sfx_roll(); }
 void plat_sfx_result(const ur_move_result *res) { sfx_for_result(res); }
 uint16_t plat_seed(void) { return (uint16_t)(g_seed ^ ((uint16_t)rDIV << 3)); }
 void plat_animate(uint8_t player, uint8_t from, uint8_t to) { (void)player; (void)from; (void)to; }

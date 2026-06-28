@@ -2,7 +2,7 @@
 C64_OUT     := $(BUILD_DIR)/c64
 CL65        ?= cl65
 # C (game) + .s (the sprite multiplexer, src/c64/mux.s).
-C64_SOURCES := $(COMMON_SOURCES) $(NET_SOURCES) \
+C64_SOURCES := $(COMMON_SOURCES) $(UR_GAME_SRC) $(NET_SOURCES) \
                $(wildcard $(SRC_DIR)/c64/*.c) $(wildcard $(SRC_DIR)/c64/*.s)
 
 C64_FLAGS   := -t c64 -O -I$(SRC_DIR)/c64 $(COMMON_INC)
