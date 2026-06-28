@@ -334,9 +334,52 @@ static int wait_press(void)
     }
 }
 
-/* ---- board geometry: horizontal H-board, 3 rows x 8 cols, 16x16 cells --- */
-#define BX 8                         /* board tile origin (cols 8..23) */
-#define BY 8                         /* board tile origin (rows 8..13) */
+/* ---- layout: horizontal H-board, 3 rows x 8 cols, 16x16 cells ----------- *
+ * Two layouts from one renderer. The SMS shows the full 32x24 name table; the
+ * Game Gear (`-DUR_GG`, the gamegear subtype) only shows the top-left 20x18 tiles,
+ * so everything is compacted into cols 0..19 / rows 0..17. The board art, tokens,
+ * palette and animation are identical — only positions differ. */
+#ifdef UR_GG
+#  define BX 2          /* board origin: cols 2..17, rows 4..9 */
+#  define BY 4
+#  define TITLE_X 0
+#  define TITLE_Y 0
+#  define HUD_Y 1
+#  define HUD_TURN_X 5
+#  define HUD_ROLL_X 11
+#  define HUD_ROLLV_X 14
+#  define LTRAY_Y 2
+#  define DTRAY_Y 10
+#  define TRAY_WX 2     /* waiting-bead start col */
+#  define TRAY_HX 11    /* home-bead start col    */
+#  define LIST_X 0
+#  define LIST_Y 11
+#  define MSG_X 0
+#  define MSG_Y 17
+#  define LBL_X 0
+#  define LBL_L "L"
+#  define LBL_D "D"
+#else                   /* SMS: full 32x24 screen */
+#  define BX 8          /* board origin: cols 8..23, rows 8..13 */
+#  define BY 8
+#  define TITLE_X 6
+#  define TITLE_Y 1
+#  define HUD_Y 3
+#  define HUD_TURN_X 8
+#  define HUD_ROLL_X 18
+#  define HUD_ROLLV_X 24
+#  define LTRAY_Y 6
+#  define DTRAY_Y 15
+#  define TRAY_WX 8
+#  define TRAY_HX 24
+#  define LIST_X 1
+#  define LIST_Y 18
+#  define MSG_X 2
+#  define MSG_Y 22
+#  define LBL_X 2
+#  define LBL_L "Light"
+#  define LBL_D "Dark"
+#endif
 static unsigned char cellx(unsigned char col) { return (unsigned char)(BX + (col << 1)); }
 static unsigned char celly(unsigned char row) { return (unsigned char)(BY + (row << 1)); }
 
@@ -389,12 +432,12 @@ static void draw_board(unsigned char roll, const char *msg)
     screen_clear();
 
     set_ink(INK_GOLD);
-    put_str(6, 1, "THE ROYAL GAME OF UR");
+    put_str(TITLE_X, TITLE_Y, "THE ROYAL GAME OF UR");
     set_ink(INK_WHITE);
-    put_str(2, 3, "Turn:");
-    put_str(8, 3, game.turn ? "DARK " : "LIGHT");
-    put_str(18, 3, "Roll:");
-    if (roll != NO_ROLL) put_u(24, 3, roll);
+    put_str(0, HUD_Y, "Turn:");
+    put_str(HUD_TURN_X, HUD_Y, game.turn ? "DARK " : "LIGHT");
+    put_str(HUD_ROLL_X, HUD_Y, "Rl:");
+    if (roll != NO_ROLL) put_u(HUD_ROLLV_X, HUD_Y, roll);
 
     /* carved, inlaid board cells (skip the H-shape cut-away corners): gold
      * rosette stars at the 5 rosette squares, a bullseye "eye" down the shared
@@ -418,14 +461,14 @@ static void draw_board(unsigned char roll, const char *msg)
         }
 
     /* trays: Light above the board, Dark below; waiting (left) + home (right) */
-    put_str(2, 6, "Light");
-    draw_tray(8,  6, count_at(0, UR_POS_START), TILE_TRYL);
-    draw_tray(24, 6, ur_score(&game, 0),        TILE_TRYL);
-    put_str(2, 15, "Dark");
-    draw_tray(8,  15, count_at(1, UR_POS_START), TILE_TRYD);
-    draw_tray(24, 15, ur_score(&game, 1),        TILE_TRYD);
+    put_str(LBL_X, LTRAY_Y, LBL_L);
+    draw_tray(TRAY_WX, LTRAY_Y, count_at(0, UR_POS_START), TILE_TRYL);
+    draw_tray(TRAY_HX, LTRAY_Y, ur_score(&game, 0),        TILE_TRYL);
+    put_str(LBL_X, DTRAY_Y, LBL_D);
+    draw_tray(TRAY_WX, DTRAY_Y, count_at(1, UR_POS_START), TILE_TRYD);
+    draw_tray(TRAY_HX, DTRAY_Y, ur_score(&game, 1),        TILE_TRYD);
 
-    if (msg) put_str(2, 22, msg);
+    if (msg) put_str(MSG_X, MSG_Y, msg);
     display_on();
 }
 
@@ -456,8 +499,8 @@ static void cell_px(unsigned char player, unsigned char pos, int *px, int *py)
 {
     unsigned char r, c;
     if (pos == 0 || pos > UR_PATH_LEN) {
-        *px = (pos == 0 ? 8 : 24) * 8;
-        *py = (player ? 15 : 6) * 8;
+        *px = (pos == 0 ? TRAY_WX : TRAY_HX) * 8;
+        *py = (player ? DTRAY_Y : LTRAY_Y) * 8;
         return;
     }
     pos_to_cell(player, pos, &r, &c);
@@ -495,8 +538,6 @@ static void anim_move(unsigned char player, unsigned char p0, unsigned char p1)
 }
 
 /* ---- move chooser: D-pad up/down over the legal moves, button picks ----- */
-#define LIST_X 1
-#define LIST_Y 18
 static int8_t choose_move(unsigned char player, unsigned char roll)
 {
     unsigned char pieces[UR_PIECES], srcs[UR_PIECES];
@@ -516,7 +557,7 @@ static int8_t choose_move(unsigned char player, unsigned char roll)
         if (!seen) srcs[nsrc++] = pos;
     }
 
-    put_str(2, 22, "U/D pick  FIRE go ");
+    put_str(MSG_X, MSG_Y, "U/D pick FIRE go ");
     sel = 0;
     for (;;) {
         for (i = 0; i < nsrc; i++) {
@@ -581,7 +622,7 @@ static bool computer_turn(unsigned char player)
     int8_t pick;
     ur_move_result res;
 
-    draw_board(NO_ROLL, "Computer's turn - FIRE");
+    draw_board(NO_ROLL, "Dark's turn - FIRE");   /* the computer is Dark */
     wait_press();
     roll = ur_dice_roll();
     sfx_roll();
@@ -599,7 +640,7 @@ static bool computer_turn(unsigned char player)
     ur_apply_move(&game, player, (unsigned char)pick, roll, &res);
     anim_move(player, src, (unsigned char)(src + roll));
     sfx_for_result(&res);
-    draw_board(roll, "Computer moved - FIRE");
+    draw_board(roll, "Dark moved - FIRE");
     wait_press();
     if (res.won) return true;
     ur_advance_turn(&game, &res);
@@ -630,20 +671,35 @@ static bool title_menu(void)         /* returns ai1 (true = vs computer) */
     display_off();
     screen_clear();
     set_ink(INK_GOLD);
-    put_str(6, 3, "THE ROYAL GAME OF UR");
+    put_str(TITLE_X, TITLE_Y, "THE ROYAL GAME OF UR");
     set_ink(INK_WHITE);
+#ifdef UR_GG
+    put_str(3, 2, "Mesopotamia");
+    put_cell(0, 5, TILE_ROSE);
+    put_cell(18, 5, TILE_ROSE);
+    put_str(5, 6, "Two Players");
+    put_str(5, 8, "Vs Computer");
+    put_str(2, 11, "D-pad: pick");
+    put_str(2, 12, "FIRE: start");
+#  define MENU_SEL_X 3
+#  define MENU_A_Y 6
+#  define MENU_B_Y 8
+#else
     put_str(4, 5, "Mesopotamia - c.2600 BCE");
-    /* two decorative rosettes flanking the menu */
-    put_cell(6, 9, TILE_ROSE);
+    put_cell(6, 9, TILE_ROSE);          /* two decorative rosettes flanking */
     put_cell(24, 9, TILE_ROSE);
     put_str(11, 10, "Two Players");
     put_str(11, 12, "Vs Computer");
     put_str(4, 18, "D-pad to choose");
     put_str(4, 19, "FIRE to start");
+#  define MENU_SEL_X 9
+#  define MENU_A_Y 10
+#  define MENU_B_Y 12
+#endif
     display_on();
     for (;;) {
-        put_ch(9, 10, sel == 0 ? '>' : ' ');
-        put_ch(9, 12, sel == 1 ? '>' : ' ');
+        put_ch(MENU_SEL_X, MENU_A_Y, sel == 0 ? '>' : ' ');
+        put_ch(MENU_SEL_X, MENU_B_Y, sel == 1 ? '>' : ' ');
         k = wait_press();
         if (k & JOY_UP)   sel = 0;
         if (k & JOY_DOWN) sel = 1;

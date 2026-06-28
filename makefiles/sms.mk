@@ -16,10 +16,11 @@ sms: | $(SMS_OUT) ## Build the Sega Master System ROM (z88dk +sms, SMSlib)
 	$(ZCC) $(SMS_FLAGS) $(SMS_SOURCES) -o $(SMS_OUT)/ur -create-app
 	@echo "[sms] built $(SMS_OUT)/ur.sms — run in MAME (sms driver) / Emulicious"
 
-# Game Gear falls out of the same code via the gamegear subtype (SMS-family VDP).
+# Game Gear: same SMS-family VDP + code, but only a 160x144 (20x18-tile) centre
+# window is visible, so -DUR_GG selects a compacted layout (src/sms/main.c).
 .PHONY: gamegear
 gamegear: | $(SMS_OUT) ## Build the Game Gear ROM (same code, gamegear subtype)
-	$(ZCC) $(SMS_FLAGS) -subtype=gamegear $(SMS_SOURCES) -o $(SMS_OUT)/ur-gg -create-app
+	$(ZCC) $(SMS_FLAGS) -subtype=gamegear -DUR_GG $(SMS_SOURCES) -o $(SMS_OUT)/ur-gg -create-app
 	@echo "[gamegear] built $(SMS_OUT)/ur-gg.gg — run in MAME (gamegear driver)"
 
 $(SMS_OUT):

@@ -14,8 +14,10 @@
 > boot** (a 16×16 colour grid → four 4bpp tiles), not stored as art. **SN76489
 > sound**: the Hurrian Hymn at boot (skippable) + roll/move/capture/rosette/score/win
 > effects. Control-pad input (D-pad + button 1). No FujiNet (a cartridge console).
-> `make sms` → `build/sms/ur.sms` (run in MAME `sms` / Emulicious). `make gamegear`
-> builds the same code for the Game Gear (SMS-family VDP).
+> `make sms` → `build/sms/ur.sms` (run in MAME `sms` / Emulicious). **`make gamegear`**
+> → `build/sms/ur-gg.gg` builds the **same renderer** for the Game Gear: identical
+> art/palette/tokens/animation, just a **compacted layout** (`-DUR_GG`) because the GG
+> only shows a 160×144 (20×18-tile) window — see "Game Gear layout" below.
 >
 > Design direction (horizontal board, sprite-token plan, materials) is recorded in
 > the project memory; see also the per-platform `CLAUDE.md` files for the other ports.
@@ -74,6 +76,23 @@ Pipeline in `main.c`:
   `BKG_ATTR_SPRPAL` bit, which makes a tile use palette **bank 1** — so the same
   white font tiles render **gold** (the title + rosettes) without a second font copy.
   The disc tokens get true cream/red from their own colour indices (2/3) in bank 0.
+
+## Game Gear layout (`-DUR_GG`)
+
+The Game Gear uses the **same VDP, palette, tiles, tokens and animation** — the only
+difference is the visible area. The GG LCD shows just a **160×144 window = the
+top-left 20×18 tiles** of the name table (verified empirically with a ruler probe:
+visible columns 0–19, rows 0–17 under MAME's `gamegear` driver). The full SMS layout
+(32×24) would clip the title's right end and the board's right block.
+
+So one renderer drives two layouts via `#ifdef UR_GG`: a block of layout constants
+(`BX/BY`, `TITLE_*`, `HUD_*`, `LTRAY_Y/DTRAY_Y`, `TRAY_WX/TRAY_HX`, `LIST_*`,
+`MSG_*`, `LBL_*`) chosen at compile time, used everywhere in `draw_board` /
+`choose_move` / `title_menu` / `cell_px`. The GG build compacts the board to cols
+2–17 / rows 4–9, single-letter tray labels, a one-line HUD (`Turn:LIGHT Rl:N`), and
+keeps every message ≤ 20 chars. `makefiles/sms.mk` adds `-DUR_GG` to the `gamegear`
+target. **To re-find the visible window** (e.g. on another emulator), build with
+`-DUR_GGPROBE`-style rulers and read which row/column digits are on screen.
 
 ## Gotchas (SMS-specific, non-obvious — all hit during bring-up)
 
