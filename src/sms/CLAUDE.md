@@ -1,14 +1,23 @@
 # src/sms — Sega Master System platform layer (offline port)
 
-> **Status: renders + playable, with colour + sound — local hot-seat + vs-AI.**
-> `src/sms/main.c` reuses the shared core and draws the H-shaped 3×8 board via VDP
-> **Mode 4**: **gold** title + rosettes, **two-tone disc tokens** (cream Light, red
-> Dark with a cream pip), white lane (`.`) cells, Light/Dark tray stacks, a Turn/Roll
-> HUD, and a D-pad move chooser. **SN76489 sound**: the Hurrian Hymn at boot
-> (skippable) + roll/move/capture/rosette/score/win effects. Control-pad input
-> (D-pad + button 1). No FujiNet (a cartridge console). `make sms` →
-> `build/sms/ur.sms` (run in MAME `sms` / Emulicious). `make gamegear` builds the
-> same code for the Game Gear (SMS-family VDP).
+> **Status: the graphical showpiece — playable, "Standard of Ur" art + sound.**
+> The SMS is the most capable hardware of all the ports, so it gets the richest
+> look. `src/sms/main.c` reuses the shared core and draws the **authentic horizontal
+> H-board** (3 rows × 8 columns) via VDP **Mode 4** with a Standard-of-Ur palette
+> (lapis field, gold, shell-white, carnelian): **carved beveled stone cells**, every
+> square an inlaid mosaic — gold **8-point rosette** stars at the 5 rosette squares,
+> bullseye **"eyes"** down the shared lane, **five-dot quincunx** studs on the private
+> lanes — plus shaded round **tokens** (shell-white Light, lapis Dark with a shell
+> rim + gold pip), shell/lapis bead **trays**, a gold title, a Turn/Roll HUD, and a
+> D-pad move chooser. The board/token/rosette tiles are **generated procedurally at
+> boot** (a 16×16 colour grid → four 4bpp tiles), not stored as art. **SN76489
+> sound**: the Hurrian Hymn at boot (skippable) + roll/move/capture/rosette/score/win
+> effects. Control-pad input (D-pad + button 1). No FujiNet (a cartridge console).
+> `make sms` → `build/sms/ur.sms` (run in MAME `sms` / Emulicious). `make gamegear`
+> builds the same code for the Game Gear (SMS-family VDP).
+>
+> Design direction (horizontal board, sprite-token plan, materials) is recorded in
+> the project memory; see also the per-platform `CLAUDE.md` files for the other ports.
 
 > Parent context: [`/CLAUDE.md`](../../CLAUDE.md). This layer implements the
 > `plat_*` contract from [`src/common`](../common/CLAUDE.md). Like the Adam, this is
@@ -40,14 +49,26 @@ is installed (no `zsdcc`/SDCC). So `-clib=new`/`-clib=sdcc_iy` fail to link
 Mode-4 CRT. `makefiles/sms.mk` therefore uses plain `+sms` (default clib/startup).
 
 Pipeline in `main.c`:
-- `video_init()` — `clear_vram`; load **two CRAM palettes** (bank 0: field / white /
-  cream / red; bank 1: field / gold); `load_tiles(font8, 0, 96, 1)` expands our 8×8
-  **1bpp** font (`font8.h`, the printable slice of z88dk's `FONT8.BIN`) into 4bpp
-  tiles (tile N = ASCII 0x20+N); then `load_tiles(disc_tiles, 96, 2, 4)` loads two
-  hand-authored **4bpp disc tokens** (cream Light, red+cream-pip Dark); enable display.
+- `video_init()` — `clear_vram`; load **two CRAM palettes** (bank 0 = the Standard
+  of Ur palette: field / white / lapis-face / highlight / shadow / gold / shell /
+  carnelian / grey / dark-gold; bank 1 = field / gold for the gold ink);
+  `load_tiles(font8, 0, 96, 1)` expands the 8×8 **1bpp** font (`font8.h`) into 4bpp
+  text tiles (tile N = ASCII 0x20+N); then **procedurally builds** the board art.
+- **Procedural tiles.** Each board cell is 16×16 = four 4bpp tiles. A builder fills a
+  256-byte `grid[]` (16×16 colour indices) by maths — `build_carved` (beveled face),
+  `build_rosette` (8-point gold star clipped to a radius), `build_dots` (quincunx via
+  `stamp_dot`), `build_eye` (concentric ring), `build_token16` (shaded disc with a
+  rim/highlight/shadow/pip), `build_bead8` (8×8 tray bead) — then `load_cell16`
+  packs each 8×8 quadrant into a planar 4bpp tile (`load_quad`) and `load_tiles`-es
+  it. This keeps the ROM tiny (no stored art) and makes the look easy to tune.
+- **Layout.** Horizontal board, 16×16 cells at `cellx/celly` (tile origin BX=8,
+  BY=8). `pos_to_cell` maps a path position to (row,col) with Light=row 0, shared=row
+  1, Dark=row 2; `cell_exists` carves the H-shape; `is_rosette_cell` marks the 5
+  rosette squares. `put_cell(x,y,first)` lays a 4-tile cell; `put_tile` a single tile.
 - `put_ch`/`put_str`/`put_u` build name-table words (tile = char − 0x20, OR'd with
-  the current `ink`) and `set_bkg_map(...)` them at (x,y); `put_tile` places a raw
-  tile (the disc tokens). `screen_clear()` fills the name table row by row.
+  the current `ink`) and `set_bkg_map(...)` them; `set_ink(INK_GOLD)` flips the
+  `BKG_ATTR_SPRPAL` bit so the white font renders gold (the title). `screen_clear()`
+  fills the name table with the space tile (= field colour) row by row.
 - **Two inks from one font.** `set_ink(INK_GOLD)` ORs the name-table
   `BKG_ATTR_SPRPAL` bit, which makes a tile use palette **bank 1** — so the same
   white font tiles render **gold** (the title + rosettes) without a second font copy.
