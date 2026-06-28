@@ -737,6 +737,21 @@ static void draw_dice(unsigned char roll) { (void)roll; }   /* online: number on
  * `roll` is then unused). */
 void plat_roll(unsigned char roll) { (void)roll; sfx_roll(); dice_tumble(roll); }
 
+/* plat.h: choose the AI difficulty (keyboard 1/2/3). */
+uint8_t plat_pick_level(void)
+{
+    int c;
+    clrscr();
+    textcolor(COL_TITLE); cputsxy(0, 2, "Difficulty:");
+    textcolor(COL_LABEL);
+    cputsxy(2, 5, "1) Easy");
+    cputsxy(2, 6, "2) Normal");
+    cputsxy(2, 7, "3) Hard");
+    textcolor(COL_TITLE); cputsxy(0, 9, "Select (1-3):");
+    do { c = cgetc(); } while (c < '1' || c > '3');
+    return (uint8_t)(c - '1');
+}
+
 /* ======================================================================== */
 #ifdef UR_ONLINE
 /* ---- FujiNet online play (N:TCP, server-authoritative) ----------------- */

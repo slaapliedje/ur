@@ -423,6 +423,20 @@ void plat_animate(unsigned char player, unsigned char from, unsigned char to)
     highlight_dest(player, to);
 }
 
+/* plat.h: choose the AI difficulty (keyboard 1/2/3). */
+uint8_t plat_pick_level(void)
+{
+    char c;
+    clrscr();
+    cputsxy(0, 1, "Difficulty:");
+    cputsxy(2, 4, "1) Easy");
+    cputsxy(2, 5, "2) Normal");
+    cputsxy(2, 6, "3) Hard");
+    cputsxy(0, 8, "Press 1-3");
+    do { c = cgetc(); } while (c < '1' || c > '3');
+    return (uint8_t)(c - '1');
+}
+
 /* End-of-game screen: the finished board (the winner's seven pieces sit borne-off
  * in the corner tray) under a result banner, with a play-again prompt. */
 static void show_result(const char *banner)

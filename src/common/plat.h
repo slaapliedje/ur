@@ -51,4 +51,9 @@ void     plat_sfx_result(const ur_move_result *res);
  * input-timing accumulator. Called once, at the first game. */
 uint16_t plat_seed(void);
 
+/* Let the player choose the AI difficulty for a vs-computer game. Return one of
+ * UR_AI_EASY / UR_AI_NORMAL / UR_AI_HARD. Called by the controller at the start of
+ * each vs-AI game (not for hot-seat). */
+uint8_t  plat_pick_level(void);
+
 #endif /* UR_PLAT_H */

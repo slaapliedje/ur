@@ -14,6 +14,8 @@
 
 ur_state ur_g;
 
+static uint8_t g_level = UR_AI_NORMAL;   /* AI difficulty for the current vs-AI game */
+
 static const char M_ROLL[]   = "ROLL THE DICE";
 static const char M_CPU[]    = "COMPUTER TURN";
 static const char M_NOMOVE[] = "NO LEGAL MOVE";
@@ -74,7 +76,7 @@ static uint8_t computer_turn(uint8_t player)
         ur_advance_turn(&ur_g, (const ur_move_result *)0);
         return 0;
     }
-    pick = ur_ai_pick(&ur_g, player, roll);
+    pick = ur_ai_pick(&ur_g, player, roll, g_level);
     src = ur_g.piece[player][(uint8_t)pick];
     ur_apply_move(&ur_g, player, (uint8_t)pick, roll, &res);
     plat_animate(player, src, (uint8_t)(src + roll));
@@ -93,6 +95,7 @@ uint8_t ur_run_game(uint8_t vs_ai)
     uint8_t player;
 
     if (!seeded) { ur_rng_seed((uint16_t)(plat_seed() | 1u)); seeded = 1; }
+    if (vs_ai) g_level = plat_pick_level();   /* Easy / Normal / Hard */
 
     ur_init(&ur_g);
     for (;;) {

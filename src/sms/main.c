@@ -597,6 +597,26 @@ void plat_roll(uint8_t roll) { (void)roll; sfx_roll(); }
 void plat_sfx_result(const ur_move_result *res) { sfx_for_result(res); }
 uint16_t plat_seed(void) { return g_seed; }
 
+/* plat.h: choose the AI difficulty (D-pad Up = Easy, Down = Hard, FIRE = Normal). */
+uint8_t plat_pick_level(void)
+{
+    int k;
+    display_off();
+    sprites_off();
+    screen_clear();
+    set_ink(INK_GOLD); put_str(TITLE_X, 2, "DIFFICULTY"); set_ink(INK_WHITE);
+    put_str(2, 6,  "Up:   Easy");
+    put_str(2, 8,  "Fire: Normal");
+    put_str(2, 10, "Down: Hard");
+    display_on();
+    for (;;) {
+        k = wait_press();
+        if (k & JOY_UP)                 return UR_AI_EASY;
+        if (k & JOY_DOWN)               return UR_AI_HARD;
+        if (k & (JOY_FIREA | JOY_FIREB)) return UR_AI_NORMAL;
+    }
+}
+
 /* ---- title music: the Hurrian Hymn, once at boot (skippable) ------------ */
 static bool played_music = false;
 static void play_hymn(void)

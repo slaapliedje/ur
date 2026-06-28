@@ -178,7 +178,7 @@ static void test_ai_no_move(void)
 {
     ur_state s;
     ur_init(&s);
-    CHECK(ur_ai_pick(&s, 0, 0) == -1);   /* roll of 0 -> no move */
+    CHECK(ur_ai_pick(&s, 0, 0, UR_AI_NORMAL) == -1);   /* roll of 0 -> no move */
 }
 
 static void test_ai_prefers_capture(void)
@@ -189,7 +189,7 @@ static void test_ai_prefers_capture(void)
     ur_init(&s);
     s.piece[0][0] = 5;
     s.piece[1][0] = 7;                   /* capturable opponent at 5+2 */
-    pick = ur_ai_pick(&s, 0, 2);
+    pick = ur_ai_pick(&s, 0, 2, UR_AI_NORMAL);
     CHECK(pick >= 0);
     CHECK(ur_apply_move(&s, 0, (uint8_t)pick, 2, &r));
     CHECK(r.captured);                   /* AI takes the capture */
@@ -202,7 +202,7 @@ static void test_ai_prefers_bear_off(void)
     int8_t pick;
     ur_init(&s);
     s.piece[0][0] = 14;                  /* one roll from home */
-    pick = ur_ai_pick(&s, 0, 1);
+    pick = ur_ai_pick(&s, 0, 1, UR_AI_NORMAL);
     CHECK(pick >= 0);
     CHECK(ur_apply_move(&s, 0, (uint8_t)pick, 1, &r));
     CHECK(r.scored);
@@ -216,7 +216,7 @@ static void test_ai_prefers_rosette(void)
     ur_init(&s);
     s.piece[0][0] = 2;                   /* 2+2 = 4 rosette */
     s.piece[0][1] = 9;                   /* 9+2 = 11 plain shared */
-    pick = ur_ai_pick(&s, 0, 2);
+    pick = ur_ai_pick(&s, 0, 2, UR_AI_NORMAL);
     CHECK(pick >= 0);
     CHECK(ur_apply_move(&s, 0, (uint8_t)pick, 2, &r));
     CHECK(r.rosette);
@@ -231,7 +231,7 @@ static void test_ai_always_legal(void)
     s.piece[0][0] = 3; s.piece[0][1] = 8;
     s.piece[1][0] = 6; s.piece[1][1] = 11;
     for (roll = 1; roll <= 4; roll++) {
-        pick = ur_ai_pick(&s, 0, roll);
+        pick = ur_ai_pick(&s, 0, roll, UR_AI_NORMAL);
         if (pick >= 0)
             CHECK(ur_move_legal(&s, 0, (uint8_t)pick, roll));
     }
@@ -249,7 +249,7 @@ static void test_ai_selfplay(void)
     ur_init(&s);
     while (ur_winner(&s) < 0 && plies < 5000) {
         roll = ur_dice_roll();
-        pick = ur_ai_pick(&s, s.turn, roll);
+        pick = ur_ai_pick(&s, s.turn, roll, UR_AI_NORMAL);
         if (pick < 0) {
             ur_advance_turn(&s, (const ur_move_result *)0);
         } else {
@@ -261,6 +261,47 @@ static void test_ai_selfplay(void)
     }
     CHECK(ur_winner(&s) >= 0);   /* AI vs AI runs to a real finish */
     CHECK(plies < 5000);
+}
+
+/* Run one full game with player 0 at level `lvl0` and player 1 at `lvl1`; return
+ * the winner. */
+static uint8_t ai_match(uint8_t lvl0, uint8_t lvl1, uint16_t seed)
+{
+    ur_state s;
+    ur_move_result r;
+    int8_t pick;
+    uint8_t roll;
+    uint16_t plies = 0;
+
+    ur_rng_seed(seed);
+    ur_init(&s);
+    while (ur_winner(&s) < 0 && plies < 5000) {
+        roll = ur_dice_roll();
+        pick = ur_ai_pick(&s, s.turn, roll, s.turn == 0 ? lvl0 : lvl1);
+        if (pick < 0) {
+            ur_advance_turn(&s, (const ur_move_result *)0);
+        } else {
+            ur_apply_move(&s, s.turn, (uint8_t)pick, roll, &r);
+            if (!r.won)
+                ur_advance_turn(&s, &r);
+        }
+        plies++;
+    }
+    return (uint8_t)ur_winner(&s);
+}
+
+/* The difficulty levels must actually differ in strength: a Hard AI should beat an
+ * Easy (random) AI a clear majority of the time. Ur is luck-heavy, so we only
+ * require a solid edge, not dominance. */
+static void test_ai_levels_strength(void)
+{
+    uint16_t g, hard_wins = 0, normal_wins = 0;
+    for (g = 0; g < 50; g++) {
+        if (ai_match(UR_AI_HARD,   UR_AI_EASY, (uint16_t)(0x1100 + g * 7)) == 0) hard_wins++;
+        if (ai_match(UR_AI_NORMAL, UR_AI_EASY, (uint16_t)(0x2200 + g * 7)) == 0) normal_wins++;
+    }
+    CHECK(hard_wins   >= 33);   /* Hard beats random >= ~66% of 50 games   */
+    CHECK(normal_wins >= 30);   /* Normal beats random too (a bit weaker)  */
 }
 
 static void test_proto_state_roundtrip(void)
@@ -339,6 +380,7 @@ int main(void)
     test_ai_prefers_rosette();
     test_ai_always_legal();
     test_ai_selfplay();
+    test_ai_levels_strength();
     test_proto_state_roundtrip();
     test_proto_winner();
     test_proto_commands();

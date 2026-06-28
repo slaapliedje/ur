@@ -187,6 +187,24 @@ uint16_t plat_seed(void) { return g_seed; }
 void plat_animate(unsigned char player, unsigned char from, unsigned char to)
 { (void)player; (void)from; (void)to; }
 
+/* plat.h: choose the AI difficulty (keypad 1/2/3, or FIRE = Normal). (Colour
+ * macros are defined later in the file, so this prompt is plain text.) */
+uint8_t plat_pick_level(void)
+{
+    unsigned char k;
+    clrscr();
+    gotoxy(0, 1); cputs("Difficulty");
+    gotoxy(0, 4); cputs("1) Easy");
+    gotoxy(0, 5); cputs("2) Normal");
+    gotoxy(0, 6); cputs("3) Hard");
+    gotoxy(0, 8); cputs("Keypad 1-3");
+    for (;;) {
+        k = get_key();
+        if (k >= '1' && k <= '3') return (unsigned char)(k - '1');
+        if (k == '\r')            return UR_AI_NORMAL;
+    }
+}
+
 /* Path position (1..14) -> board cell. HORIZONTAL (like the SMS/Atari/C64): row
  * 0=Light, 1=shared, 2=Dark; cols 0..7. False if off-board. */
 static bool pos_to_cell(unsigned char player, unsigned char pos,

@@ -38,7 +38,11 @@ Z80-based Coleco Adam via `z88dk`/SDCC. This is where the actual rules of Ur liv
   bear-off, win detection (all 7 pieces home).
 - **Turn state machine** — whose turn, awaiting-roll vs awaiting-move, extra-roll
   handling, game-over.
-- **AI opponent** — single-player bot(s); pure functions over board state.
+- **AI opponent** — `ur_ai_pick(s, player, roll, level)`, a pure function over board
+  state, at three difficulties: `UR_AI_EASY` (random legal move), `UR_AI_NORMAL`
+  (1-ply greedy on the positional eval), `UR_AI_HARD` (greedy + capture/rosette/
+  bear-off bonuses and a shared-lane capture-risk penalty). The shared controller
+  asks `plat_pick_level()` per vs-AI game; ports implement the chooser.
 - **Protocol codec** — pure encode/decode between game state/moves and the wire
   bytes defined in [`docs/protocol.md`](../../docs/protocol.md). Only serialization
   lives here; the actual send/receive (FujiNet transport) is in

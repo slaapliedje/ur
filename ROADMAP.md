@@ -179,7 +179,14 @@ FujiNet, so no online path — like the ColecoVision cartridge).
       extracting the pitch sequence** on Atari/C64/ColecoVision (exact melody, right
       octave + tempo ~110bpm); Adam shares the CV code; Apple II plays via the
       speaker (clean pitch capture inconclusive in-harness — verify on real hw).
-- [ ] More sound/music per chip (in-game underscore?); animation polish; AI levels.
+- [x] **AI difficulty levels** — `ur_ai_pick(s, player, roll, level)` with
+      `UR_AI_EASY` (random legal move), `UR_AI_NORMAL` (1-ply greedy positional eval),
+      and `UR_AI_HARD` (greedy + capture/rosette/bear-off bonuses and a shared-lane
+      capture-risk penalty). The shared controller asks `plat_pick_level()` at the
+      start of each vs-AI game; every port implements the chooser (keyboard 1/2/3,
+      or D-pad Up/Down + button on the console ports). Host-tested: Hard/Normal beat
+      Easy by a clear margin (`test_ai_levels_strength`).
+- [ ] More sound/music per chip (in-game underscore?); animation polish.
 - [ ] Packaging: `.atr` / `.dsk` / `.ddp` / `.d64` / `.po`; GitHub Releases.
 - [ ] Distribution (itch.io / AtariAge / FujiNet game listing).
 

@@ -377,6 +377,19 @@ uint16_t plat_seed(void) { return g_seed; }
 void plat_animate(unsigned char player, unsigned char from, unsigned char to)
 { (void)player; (void)from; (void)to; }
 
+/* plat.h: choose the AI difficulty (keyboard 1/2/3). Shown on the mixed-mode panel
+ * since the board graphics are already on when the controller asks. */
+uint8_t plat_pick_level(void)
+{
+    int c;
+    panel_clr(PANEL_TOP);     panel_text(0, PANEL_TOP,     "DIFFICULTY:");
+    panel_clr(PANEL_TOP + 1); panel_text(0, PANEL_TOP + 1, "1 EASY 2 NORMAL 3 HARD");
+    panel_clr(PANEL_TOP + 2);
+    board_show();
+    do { c = cgetc(); } while (c < '1' || c > '3');
+    return (uint8_t)(c - '1');
+}
+
 /* ======================================================================== */
 #ifdef UR_ONLINE
 /* ---- FujiNet online play (N:TCP, server-authoritative) ----------------- */

@@ -297,6 +297,24 @@ void plat_sfx_result(const ur_move_result *res) { sfx_for_result(res); }
 uint16_t plat_seed(void) { return g_seed; }
 void plat_animate(uint8_t player, uint8_t from, uint8_t to) { (void)player; (void)from; (void)to; }
 
+/* plat.h: choose the AI difficulty (D-pad Up = Easy, Down = Hard, A = Normal). */
+uint8_t plat_pick_level(void)
+{
+    unsigned char p;
+    clear_screen();
+    put_str(8, 4, "DIFFICULTY");
+    put_str(6, 9,  "UP   - EASY");
+    put_str(6, 11, "A    - NORMAL");
+    put_str(6, 13, "DOWN - HARD");
+    ppu_blit();
+    for (;;) {
+        p = wait_pad();
+        if (p & PAD_UP)               return UR_AI_EASY;
+        if (p & PAD_DOWN)             return UR_AI_HARD;
+        if (p & (PAD_A | PAD_B | PAD_START)) return UR_AI_NORMAL;
+    }
+}
+
 /* Show the end-of-game result on the board, then wait. */
 static void show_win(uint8_t winner, bool ai1)
 {

@@ -384,6 +384,25 @@ void plat_sfx_result(const ur_move_result *res) { sfx_for_result(res); }
 uint16_t plat_seed(void) { return (uint16_t)(g_seed ^ ((uint16_t)rDIV << 3)); }
 void plat_animate(uint8_t player, uint8_t from, uint8_t to) { (void)player; (void)from; (void)to; }
 
+/* plat.h: choose the AI difficulty (D-pad Up = Easy, Down = Hard, A = Normal). */
+uint8_t plat_pick_level(void)
+{
+    uint8_t k;
+    DISPLAY_OFF;
+    screen_clear();
+    put_str(2, 2, "DIFFICULTY");
+    put_str(1, 6,  "Up:   Easy");
+    put_str(1, 8,  "A:    Normal");
+    put_str(1, 10, "Down: Hard");
+    DISPLAY_ON;
+    for (;;) {
+        k = wait_press();
+        if (k & J_UP)                  return UR_AI_EASY;
+        if (k & J_DOWN)                return UR_AI_HARD;
+        if (k & (J_A | J_B | J_START)) return UR_AI_NORMAL;
+    }
+}
+
 /* Title music: the Hurrian Hymn, once, skippable. The per-note loop is also where
  * we gather RNG entropy — the GB's blocking waitpad gives no idle loop to count in,
  * so we mix the free-running DIV timer per note and let the player's skip timing add

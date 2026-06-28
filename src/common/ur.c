@@ -201,7 +201,27 @@ static int16_t ur_eval(const ur_state *s, uint8_t player)
     return (int16_t)(me - them);
 }
 
-int8_t ur_ai_pick(const ur_state *s, uint8_t player, uint8_t roll)
+/* Expected loss if our piece sits exposed at shared-lane square `dest`: how likely
+ * an opponent piece behind it captures next turn (weighted by the 1/4/6/4/1 roll
+ * distribution), times what the piece is worth. Rosette squares are safe. Used by
+ * the Hard AI to avoid leaving pieces in harm's way. */
+static int16_t ur_capture_risk(const ur_state *s, uint8_t player, uint8_t dest)
+{
+    static const uint8_t prob[5] = { 0, 4, 6, 4, 1 };   /* ways to roll 1..4 of 16 */
+    uint8_t opp = (uint8_t)(1 - player), i, oppos;
+    uint16_t risk = 0;
+
+    if (dest < 5 || dest > 12) return 0;     /* only the shared middle row is contested */
+    if (ur_is_rosette(dest))   return 0;     /* the shared rosette is safe */
+    for (i = 0; i < UR_PIECES; i++) {
+        oppos = s->piece[opp][i];
+        if (oppos >= 5 && oppos < dest && (uint8_t)(dest - oppos) <= 4)
+            risk += prob[dest - oppos];
+    }
+    return (int16_t)((risk * (uint16_t)piece_value(dest)) / 16u);
+}
+
+int8_t ur_ai_pick(const ur_state *s, uint8_t player, uint8_t roll, uint8_t level)
 {
     uint8_t pieces[UR_PIECES];
     uint8_t count, i;
@@ -212,6 +232,10 @@ int8_t ur_ai_pick(const ur_state *s, uint8_t player, uint8_t roll)
     if (count == 0)
         return -1;
 
+    /* Easy: just play a random legal move. */
+    if (level == UR_AI_EASY)
+        return (int8_t)pieces[ur_rand() % count];
+
     for (i = 0; i < count; i++) {
         ur_state tmp;            /* cc65 won't aggregate-init from a runtime value */
         ur_move_result r;
@@ -220,7 +244,14 @@ int8_t ur_ai_pick(const ur_state *s, uint8_t player, uint8_t roll)
         ur_apply_move(&tmp, player, pieces[i], roll, &r);
         score = ur_eval(&tmp, player);
         if (r.rosette)
-            score += 4;                /* the extra roll is worth a little more */
+            score += (level == UR_AI_HARD) ? 8 : 4;   /* the extra roll is valuable */
+        if (level == UR_AI_HARD) {
+            if (r.captured) score += 15;              /* press the attack */
+            if (r.scored)   score += 10;              /* bear a piece off */
+            /* avoid ending exposed in the shared lane */
+            score -= ur_capture_risk(s, player,
+                         (uint8_t)(s->piece[player][pieces[i]] + roll));
+        }
         if (score > best_score) {
             best_score = score;
             best = (int8_t)pieces[i];
