@@ -19,6 +19,13 @@ FujiNet**.
 free — same Z80 / TMS9928A / SN76489 core, controller (keypad + FIRE) input, no
 FujiNet. See [`src/adam/CLAUDE.md`](src/adam/CLAUDE.md).
 
+…and a family of **console / handheld ports** that reuse the shared core and the
+horizontal *Standard-of-Ur* look, all **local-only** (these machines have no FujiNet,
+so no online): **Sega Master System** (`make sms`) and its **Game Gear** sibling
+(`make gamegear`), a dual-mode **Game Boy / Game Boy Color** cart (`make gb`), the
+**Atari 5200** (`make a5200`), and the **NES / Famicom** (`make nes`). See each
+`src/<platform>/CLAUDE.md` and [`ROADMAP.md`](ROADMAP.md).
+
 All four targets now have a working platform layer with local play **and FujiNet
 online**: **Atari** (carved board + PMG two-tone tokens + DLI sheen + POKEY),
 **Adam** (carved Graphics-II board + sprite tokens + SN76489), **C64** (carved

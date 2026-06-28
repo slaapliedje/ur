@@ -32,7 +32,8 @@ committable state.
 - [x] Host unit tests (`make test`) + core compiles on both toolchains (`make core-check`).
 - [x] AI opponent — positional heuristic (`ur_ai_pick`), host-tested incl. an
       AI-vs-AI self-play game. (Expectimax lookahead is a future upgrade.)
-- [ ] Protocol codec (encode/decode) per [`docs/protocol.md`](docs/protocol.md).
+- [x] Protocol codec (encode/decode) per [`docs/protocol.md`](docs/protocol.md) —
+      `src/common/proto.{h,c}`, host-tested (round-trip). (See Phase 4.)
 
 ## Phase 3 — Atari single-player
 - [x] Atari board / piece / dice rendering + input (conio text UI) in
@@ -122,11 +123,41 @@ committable state.
       lo-res board (DHGR+ONLINE don't fit). Builds + boots + fails the network
       gracefully in MAME; full cross-play needs FujiNet + the Ur server.
 - [ ] Richer speaker sound (optional polish).
-- [ ] FujiNet online over **SmartPort** (apple2 `fujinet-lib`; same wire protocol).
+
+## Additional console & handheld ports (bonus)
+
+Added after the original Atari→Apple II plan; each reuses the shared core + the
+horizontal **Standard-of-Ur** look. All are **local-only** (these machines have no
+FujiNet, so no online path — like the ColecoVision cartridge).
+
+- [x] **Sega Master System** (`make sms`; z88dk, VDP Mode 4 + SN76489) — the
+      graphical showpiece: carved tile board, two-tone tokens, SFX + the Hurrian
+      Hymn. Verified in MAME (`sms`).
+- [x] **Game Gear** (`make gamegear`, `-DUR_GG`) — the SMS code with a compact
+      20×18 layout for the smaller screen; shares the SMS sound.
+- [x] **Game Boy / Game Boy Color** (`make gb`; z88dk gbz80) — ONE dual-mode cart:
+      colour on GBC, four greys on DMG; carved board + two-tone tokens. Verified in
+      MAME (`gameboy`/`gbcolor`).
+- [x] **Atari 5200** (`make a5200`, `-DUR_A5200`) — the Atari layer carved into a
+      5200 cartridge (controller-keypad input); POKEY sound + hardware RNG. Verified
+      in atari800.
+- [x] **NES / Famicom** (`make nes`; cc65) — custom CHR-tile board (gold rosette/eye,
+      white quincunx, shell-white/carnelian tokens) via direct PPU; 2A03 APU sound
+      (Hurrian Hymn + SFX); controller input. iNES NROM cart, verified in MAME (`nes`).
+
+**Known gaps in these ports (tracked):**
+- [ ] **Game Boy / GBC has no sound** — needs a GB APU player (Hurrian Hymn + SFX).
+- [ ] **SMS + Game Boy use a fixed RNG seed (`0xA537`)** — the dice repeat every
+      game; fold in entropy (frame counter / input timing) like the Adam/C64/Apple
+      II/NES do. (Game Gear inherits the SMS fix; the 5200 already uses the Atari's
+      hardware RNG.)
+- [ ] Game Boy token glide animation (deferred).
 
 ## Phase 8 — Polish & release
-- [ ] **Visual parity across platforms** — one shared look, each to its machine's
-      strengths (see [`docs/future-enhancements.md`](docs/future-enhancements.md)).
+- [x] **Visual parity across platforms** — all 11 targets now share the horizontal
+      Standard-of-Ur board (carved cells, gold rosette/eye, white quincunx, two-tone
+      tokens), each rendered to its machine's strengths
+      (see [`docs/future-enhancements.md`](docs/future-enhancements.md)).
 - [ ] Asset pipeline (charsets, sprites/PM shapes, palettes, SFX/music).
 - [x] **Title music — the Hurrian Hymn** (h.6, Ugarit c.1400 BCE, the oldest
       notated melody; Dumbrill/Levy reconstruction). One shared melody table

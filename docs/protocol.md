@@ -1,16 +1,19 @@
-# Ur multiplayer wire protocol (seed spec)
+# Ur multiplayer wire protocol
 
-> **Status: draft / placeholder.** This is the seed for the cross-platform
-> multiplayer contract. It will be filled in as the networking work begins. The
-> guiding decisions below are firm; the concrete message byte layouts are not yet
-> finalized.
+> **Status: implemented (protocol version 1).** The byte layouts below match the
+> codec in [`src/common/proto.{h,c}`](../src/common/proto.c) and are covered by
+> round-trip tests in `tests/`. Keep this doc and `proto.h` in lockstep.
 
-This document defines the bytes exchanged between the Ur **game client** (running
-on Atari / Apple II / C64) and the **game server**. It is the single source of
-truth that makes cross-platform play work: every client, on every machine, speaks
-exactly this protocol. See [`src/net/CLAUDE.md`](../src/net/CLAUDE.md) for how it
-fits into the FujiNet Game System, and [`src/common/CLAUDE.md`](../src/common/CLAUDE.md)
-for where the encode/decode codec lives.
+This document defines the bytes exchanged between the Ur **game client** and the
+**game server**. It is the single source of truth that makes cross-platform play
+work: every client, on every machine, speaks exactly this protocol. The clients
+that use it are the **FujiNet-capable** ports — **Atari, Apple II, C64, and the
+Coleco Adam** — which reach the server over FujiNet's `N:` device. (The console /
+handheld ports — SMS, Game Gear, Game Boy / GBC, Atari 5200, NES — have no FujiNet
+and are local-only, so they do not speak this protocol.) See
+[`src/net/CLAUDE.md`](../src/net/CLAUDE.md) for how it fits into the FujiNet Game
+System, and [`src/common/CLAUDE.md`](../src/common/CLAUDE.md) for where the
+encode/decode codec lives.
 
 ## Design principles
 
@@ -42,7 +45,7 @@ message is its type.
 
 | Msg    | Byte | Bytes                          | Purpose                         |
 |--------|------|--------------------------------|---------------------------------|
-| `JOIN` | 0x01 | `[0]=0x01 [1]=version(1) [2..4]=name` | Join; `name` = 3 chars A-Z, space-padded (leaderboard) |
+| `JOIN` | 0x01 | `[0]=0x01 [1]=version(1) [2..9]=name` (10 bytes) | Join; `name` = `UR_NAME_LEN` (8) chars, `A-Z`/`0-9`/space, space-padded (leaderboard) |
 | `ROLL` | 0x02 | `[0]=0x02`                     | Request a dice roll             |
 | `MOVE` | 0x03 | `[0]=0x03 [1]=piece index 0..6`| Move one of your pieces         |
 
@@ -80,12 +83,20 @@ from `turn`/`roll`/positions (`ur_legal_moves`); the server need not send them.
 Separate from the game wire protocol, the server also exposes the persistent
 leaderboard over HTTP (default `:8080`): `GET /` (HTML), `GET /leaderboard.json`
 (JSON), and `GET /top` — a compact body for 8-bit clients: one count byte, then up
-to ten records of `name[3]` + `wins` (uint16, little-endian). The Atari client's
-Leaderboard screen fetches `/top` over `N:HTTP`. Players are keyed by the name
-sent in `JOIN`. See [`docs/hosting.md`](hosting.md).
+to ten records of `name[8]` (`UR_NAME_LEN`) + `wins` (uint16, little-endian), i.e.
+10 bytes per record. The clients' Leaderboard screen fetches `/top` over `N:HTTP`.
+Players are keyed by the name sent in `JOIN`. See [`docs/hosting.md`](hosting.md).
 
-## Open questions
+## Resolved / open
 
-- Polling cadence and timeouts over the `N:` device.
-- Reconnect / resume semantics if a client drops mid-game.
-- How the server registers with the FGS Lobby (mount info, player counts).
+Resolved since the seed spec:
+- **FGS Lobby registration** is implemented server-side (`server/lobby.go`, opt-in
+  via `UR_LOBBY=1`): it POSTs the `GameServer` JSON and sends heartbeat + player-count
+  updates. See [`src/net/CLAUDE.md`](../src/net/CLAUDE.md).
+- **Polling** is a simple between-turns loop: the off-turn client calls
+  `network_status` until `UR_STATE_MSG_LEN` bytes are ready, then `network_read`.
+
+Still open:
+- Reconnect / resume semantics if a client drops mid-game (today a lone player is
+  covered by the server's ~60s AI fallback, not a true resume).
+- Tuning polling cadence/timeouts over the `N:` device on real hardware.

@@ -3,18 +3,18 @@
 How to set up tools, build each platform, and run/test the game. See
 [`/CLAUDE.md`](../CLAUDE.md) for the architecture this guide builds.
 
-> **Status:** the toolchain/build/CI scaffolding exists, but there is **no game
-> code yet**, so the build targets currently do nothing useful. The first real
-> milestone is a "hello, FujiNet" Atari build (see [`ROADMAP.md`](../ROADMAP.md)).
+> **Status:** the game is **playable on every target** (local hot-seat + vs-AI),
+> with FujiNet online on the four FujiNet platforms. See [`ROADMAP.md`](../ROADMAP.md)
+> for the per-phase / per-port status.
 
 ## The two-toolchain reality
 
-Three targets are 6502 and one is Z80, so there are **two C toolchains**:
+Some targets are 6502 and some are Z80-family, so there are **two C toolchains**:
 
 | Toolchain | CPU | Targets | Notes |
 |-----------|-----|---------|-------|
-| [cc65](https://cc65.github.io/) | 6502 | Atari, C64, Apple II | `cl65` drives compile+link |
-| [z88dk](https://github.com/z88dk/z88dk) | Z80 | Coleco Adam | `zcc` (zsdcc/sccz80) + `z88dk-appmake` |
+| [cc65](https://cc65.github.io/) | 6502 | Atari, Atari 5200, C64, Apple II, NES | `cl65` drives compile+link |
+| [z88dk](https://github.com/z88dk/z88dk) | Z80 / Z80-like | Coleco Adam, ColecoVision, SMS, Game Gear, Game Boy | `zcc` (zsdcc/sccz80) + `z88dk-appmake` |
 
 The shared `src/common/` C core must compile under **both** — keep it
 toolchain-neutral (see [`src/common/CLAUDE.md`](../src/common/CLAUDE.md)).
@@ -96,11 +96,19 @@ git-ignored under `lib/`.
 ```sh
 make deps          # fetch fujinet-lib for all targets (one-time / on update)
 make test          # build & run the host unit tests for src/common (uses host gcc)
+# --- FujiNet platforms (local + online) ---
 make atari         # -> build/atari/ur.xex / ur.atr   (cc65)
-make adam          # -> build/adam/ur.dsk             (z88dk)
+make adam          # -> build/adam/ur.ddp             (z88dk)
 make c64           # -> build/c64/ur.prg / ur.d64     (cc65)
-make apple2        # -> build/apple2/ur.po            (cc65)
-make all           # all four platforms
+make apple2        # -> build/apple2/ur.system / ur.po (cc65)
+# --- bonus console / handheld ports (local only) ---
+make coleco        # -> build/coleco/ur.rom           (z88dk; ColecoVision cart)
+make sms           # -> build/sms/ur.sms              (z88dk)
+make gamegear      # -> build/sms/ur-gg.gg            (z88dk; -DUR_GG)
+make gb            # -> build/gb/ur.gb                (z88dk; GB + GBC dual-mode)
+make a5200         # -> build/a5200/ur.a52            (cc65; -DUR_A5200)
+make nes           # -> build/nes/ur.nes              (cc65; iNES NROM)
+make all           # the four primary platforms
 make clean
 ```
 
