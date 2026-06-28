@@ -1,31 +1,40 @@
 # src/c64 — Commodore 64 platform layer (3rd target)
 
-> **Status: local play + SID sound + the VIC-II sprite colour showcase + FujiNet
+> **Status: the dense "Standard of Ur" board (SMS-style) + SID sound + FujiNet
 > online.** Build variants of `src/c64/main.c`, picked with make flags:
 >
-> - **`make c64` (default) — multicolor SPRITE tokens.** The traditional
->   **horizontal 3×8 board** (Light row on top, shared lane in the middle, Dark row
->   on the bottom; rosettes + lane dots drawn with the custom charset). Pieces are
->   **VIC-II multicolor sprites** — a multicolor sprite has 4 colours, so the tokens
->   are genuinely **two-tone**: a **bone body with a brown pip** (Light) and a
->   **brown body with a bone pip** (Dark), exactly like a real Ur set. The C64 has
->   only 8 hardware sprites but the board holds up to 14 pieces, so a **raster-
->   interrupt sprite multiplexer** ([`mux.s`](mux.s)) reuses the 8 sprites across
->   the 3 rows (8 × 3 = 24 token slots; a single row never holds more than 8
->   pieces). This is the C64 colour showcase — see
->   [`docs/future-enhancements.md`](../../docs/future-enhancements.md).
-> - **`make c64 CHARSET=1` — charset fallback (no sprites, no raster IRQ).** The
->   earlier vertical board drawn entirely with a custom charset: round disc tokens,
->   shaped (8-point) rosettes, lane dots, coloured from colour RAM (white Light /
->   brown Dark). The known-good baseline; handy if the multiplexer ever misbehaves.
-> - **`make c64 ONLINE=1` — FujiNet online.** Adds `N:TCP` server-authoritative play
->   (same wire protocol + server as the Atari/Adam): the lobby/profile menu (set
->   name, set server host, leaderboard), the AppKey profile, and lobby host pickup.
->   Combine with `CHARSET=1` for the vertical board. See **FujiNet** below.
+> - **`make c64` (default, local) — DENSE multicolor-charset mosaic.** Matches the
+>   SMS showpiece: the **horizontal 3×8 H-board** drawn as **chunky 2×2 carved
+>   cells** — gold **rosette stars** at the 5 rosette squares, bullseye **eyes** down
+>   the shared lane, five-dot **quincunx** studs on the private lanes — with round
+>   **two-tone tokens** (shell-white Light, carnelian-red Dark) and shell/red tray
+>   beads, in the Standard-of-Ur palette (lapis field, light-blue cell body, black
+>   shadow, gold/white/red inlay). Everything is the **custom multicolor charset**
+>   (`$3800`); **no sprites/raster IRQ** (the dense rows are adjacent, which is
+>   incompatible with the sprite multiplexer — see below). Glyphs (codes `0xC4..0xD3`)
+>   are **precomputed** (`dense_chars[]`, regenerate with the host tool
+>   [`tools/c64-dense-glyphs.c`](../../tools/c64-dense-glyphs.c)) and memcpy'd in,
+>   keeping the binary clear of the charset RAM.
+> - **`make c64 ONLINE=1` — FujiNet online + the sprite-token board.** The earlier
+>   **VIC-II multicolor SPRITE tokens** (two-tone bone/brown) via the **raster-
+>   interrupt multiplexer** ([`mux.s`](mux.s)) on a ROM-charset board (fujinet-lib
+>   fills VIC bank 0, so no custom charset). Adds `N:TCP` server-authoritative play
+>   (same wire protocol + server as the Atari/Adam): the lobby/profile menu, the
+>   AppKey profile, lobby host pickup. See **FujiNet** below.
+> - **`make c64 CHARSET=1` — charset fallback (vertical board).** The earlier
+>   vertical layout drawn with a custom charset; the known-good baseline.
 >
 > All reuse the shared core, the menu/turn loop, and **SID sound** (`src/c64/sound.c`).
 > `cgetc`/`kbhit` work natively. `make c64` → `build/c64/ur.prg` (run in VICE
 > `x64sc`; online needs FujiNet). Builds clean under cc65 2.18.
+>
+> **Why the local board drops the sprite multiplexer:** the SMS-dense look needs the
+> three rows adjacent (2×2 cells), but the 8-sprite multiplexer needs them ~56 raster
+> lines apart (a sprite is 21 px tall, 8 reused per row) — the two are incompatible.
+> The user chose the dense mosaic for the local showcase; the multiplexer lives on in
+> the online build. **Watch the binary size:** the program loads at `$0801` and grows
+> up toward the charset at `$3800` — keep it under `$3800` (the dense build ends
+> ~`$3549`) or `install_dense_glyphs`/`setup_charset` will overwrite the program.
 
 ## Sprite multiplexer (`mux.s`)
 

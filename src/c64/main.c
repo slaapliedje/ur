@@ -269,9 +269,58 @@ static void draw_board(unsigned char roll, const char *msg)
 
 /* ======================================================================== */
 #else
-/* ---- Sprite board (default): horizontal 3x8 layout, multiplexed tokens. - */
+/* ---- Horizontal 3x8 board. -----------------------------------------------
+ * LOCAL build (CUSTOM_CHARSET): a DENSE multicolor-charset mosaic matching the
+ * SMS — chunky 2x2 carved cells, gold rosette stars, bullseye eyes, five-dot
+ * quincunx studs, and round two-tone tokens, all drawn as the custom charset (no
+ * sprites). ONLINE build (ROM charset): the earlier sprite-token board (kept).   */
 
+#if CUSTOM_CHARSET
+#define INFO_COL 22
+#else
 #define INFO_COL 28
+#endif
+
+#if CUSTOM_CHARSET
+/* ---- Dense multicolor charset cells (Standard of Ur). --------------------
+ * Each 16x16 board cell = four multicolor chars (TL,TR / BL,BR). A multicolor
+ * char is 4 fat-pixels x 8 rows, 2 bits each: 00 = field ($D021 lapis), 01 =
+ * body ($D022 light-blue), 10 = shadow/outline ($D023 black), 11 = the per-cell
+ * colour from colour RAM (gold/white/red). The glyphs (ROSE/EYE/DOTS/TOKEN, 4
+ * chars each at the contiguous codes 0xC4..0xD3) are PRECOMPUTED on the host
+ * (scratch/gen.c, the SMS-style motif maths) and just memcpy'd in — keeping the
+ * binary clear of the charset RAM at $3800. Light & Dark tokens share the TOKEN
+ * shape, differing only by colour RAM (white vs carnelian). */
+#define DC_ROSE 0xC4   /* gold rosette star  */
+#define DC_EYE  0xC8   /* bullseye eye       */
+#define DC_DOTS 0xCC   /* five-dot quincunx  */
+#define DC_TOKL 0xD0   /* token shape (shell = white colour RAM)     */
+#define DC_TOKD 0xD0   /* same shape (carnelian = red colour RAM)    */
+#define DC_BEAD 0xD8   /* 1-char tray bead */
+/* Multicolor cell colour RAM: bit 3 set = the char is multicolor; low 3 bits =
+ * the "11" colour. (Bit 3 CLEAR would draw the char hi-res = wrong.) */
+#define CRAM_GOLD  0x0F   /* MC, "11" = yellow (gold)    */
+#define CRAM_WHITE 0x09   /* MC, "11" = white            */
+#define CRAM_RED   0x0A   /* MC, "11" = red (carnelian)  */
+
+static const unsigned char dense_chars[] = {
+    /* ROSE  C4-C7 */
+    0x55,0x57,0x57,0x57,0x57,0x77,0x5F,0xFF,0x56,0xD6,0xD6,0xD6,0xD6,0xD6,0xDE,0xFF,0xFF,0x57,0x5F,0x77,0x57,0x57,0x57,0xAB,0xFF,0xF6,0xDE,0xD6,0xD6,0xD6,0xD6,0xEA,
+    /* EYE   C8-CB */
+    0x55,0x55,0x5F,0x5F,0x7D,0x75,0x75,0x77,0x56,0x56,0xF6,0xF6,0x7E,0x5E,0x5E,0xDE,0x77,0x77,0x75,0x75,0x7D,0x5F,0x5F,0xAA,0xDE,0xDE,0x5E,0x5E,0x7E,0xF6,0xF6,0xAA,
+    /* DOTS  CC-CF */
+    0x55,0x55,0x55,0x55,0x5D,0x55,0x55,0x57,0x56,0x56,0x56,0x56,0x76,0x56,0x56,0xD6,0x57,0x55,0x55,0x5D,0x55,0x55,0x55,0xAA,0xD6,0x56,0x56,0x76,0x56,0x56,0x56,0xAA,
+    /* TOKEN D0-D3 */
+    0x00,0x02,0x0A,0x2F,0x2F,0x3F,0x3F,0xBE,0x00,0x80,0xA0,0xF8,0xF8,0xFC,0xFC,0xBE,0xBE,0xBE,0x3F,0x3F,0x2F,0x2F,0x0A,0x02,0xBE,0xBE,0xFC,0xFC,0xF8,0xF8,0xA0,0x80,
+};
+static const unsigned char g_bead[8] = { 0x3C, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x3C };
+
+static void install_dense_glyphs(void)
+{
+    memcpy((void *)(CHARSET + DC_ROSE * 8), dense_chars, sizeof dense_chars);
+    memcpy((void *)(CHARSET + DC_BEAD * 8), g_bead, 8);
+}
+#endif  /* CUSTOM_CHARSET */
 
 /* The multiplexer (src/c64/mux.s) owns these band tables; we fill them. */
 extern unsigned char band_n[3];      /* active sprite count per band  */
@@ -289,6 +338,7 @@ extern void mux_stop(void);
 #define SPR_DARK  14                 /* block 14 -> $0380 */
 #define SPR_ADDR(blk) ((unsigned char *)((unsigned int)(blk) * 64u))
 
+#if !CUSTOM_CHARSET   /* sprite tokens are the ONLINE build only (local = charset) */
 /* 12x21 multicolor token: 'B' body, 'P' pip, ' ' transparent. */
 static const char *const g_tokmap[21] = {
     "    BBBB    ",
@@ -340,6 +390,7 @@ static void build_token(unsigned char *dest, unsigned char pipval)
     }
     dest[63] = 0;
 }
+#endif  /* !CUSTOM_CHARSET */
 
 /* Path position (1..14) -> board cell (row 0=Light, 1=shared, 2=Dark; col 0..7). */
 static bool pos_to_cell(unsigned char player, unsigned char pos,
@@ -367,11 +418,61 @@ static bool cell_exists(unsigned char row, unsigned char col)
     return col <= 3 || col >= 6;
 }
 
+#if CUSTOM_CHARSET
+/* Dense layout: 2x2-char cells, adjacent rows (cols 2..17, rows 3..8). */
+static unsigned char tcol(unsigned char col) { return (unsigned char)(2 + col * 2); }
+static unsigned char trow(unsigned char row) { return (unsigned char)(3 + row * 2); }
+#else
+/* Online (sprite) layout: 1-char cells spread for the raster multiplexer. */
 static unsigned char tcol(unsigned char col) { return (unsigned char)(2 + col * 3); }
 static unsigned char trow(unsigned char row) { return (unsigned char)(3 + row * 7); }
 /* Centre the 24px sprite over the 8px cell glyph (see mux.s for the geometry). */
 static unsigned char spr_x(unsigned char col) { return (unsigned char)(32 + col * 24); }
+#endif
 
+#if CUSTOM_CHARSET
+/* ---- Dense local build: no sprites/multiplexer; tokens are charset cells. -- */
+static void board_setup(void) { setup_charset(); install_dense_glyphs(); }
+static void board_enter(void)
+{
+    /* Standard-of-Ur multicolor palette: 00 field = lapis ($D021), 01 body =
+     * light blue, 10 shadow/outline = black; per-cell "11" = gold/white/red. */
+    *(unsigned char *)0xD021 = C_BLUE;
+    *(unsigned char *)0xD022 = C_LBLUE;
+    *(unsigned char *)0xD023 = C_BLACK;
+    *(unsigned char *)0xD016 |= 0x10;          /* MC char mode ON */
+}
+static void board_leave(void)
+{
+    *(unsigned char *)0xD016 &= (unsigned char)~0x10;  /* hi-res text for the menu */
+    *(unsigned char *)0xD021 = COL_BG;
+}
+
+/* Place a 16x16 cell (four consecutive charset codes) with one colour RAM value. */
+static void put_cell(unsigned char x, unsigned char y, unsigned char first,
+                     unsigned char color)
+{
+    put_glyph(x, y, first, color);
+    put_glyph((unsigned char)(x + 1), y, (unsigned char)(first + 1), color);
+    put_glyph(x, (unsigned char)(y + 1), (unsigned char)(first + 2), color);
+    put_glyph((unsigned char)(x + 1), (unsigned char)(y + 1), (unsigned char)(first + 3), color);
+}
+
+/* Draw on-board pieces as two-tone disc cells (shell = white, dark = red). */
+static void draw_pieces(void)
+{
+    unsigned char pl, i, pos, row, col;
+    for (pl = 0; pl < UR_NUM_PLAYERS; pl++)
+        for (i = 0; i < UR_PIECES; i++) {
+            pos = game.piece[pl][i];
+            if (!pos_to_cell(pl, pos, &row, &col))
+                continue;
+            put_cell(tcol(col), trow(row), pl ? DC_TOKD : DC_TOKL,
+                     pl ? CRAM_RED : CRAM_WHITE);
+        }
+}
+#else
+/* ---- Online build: multicolor SPRITE tokens via the raster multiplexer. ---- */
 static void sprite_hw_init(void)
 {
     POKE(0xD01C, 0xFF);   /* all sprites multicolor      */
@@ -396,23 +497,9 @@ static void board_setup(void) { setup_charset(); sprite_hw_init(); }
 static void board_enter(void)
 {
     band_en[0] = band_en[1] = band_en[2] = 0;  /* no stray tokens until drawn */
-#if CUSTOM_CHARSET
-    /* Carved board: multicolor character mode. Shared cell colours — 01=light blue
-     * (tile body), 10=black (shadow); 00 stays the blue field ($D021); the per-cell
-     * "11" colour is white (tile highlight) or gold (rosette), set in colour RAM. */
-    *(unsigned char *)0xD022 = C_LBLUE;
-    *(unsigned char *)0xD023 = C_BLACK;
-    *(unsigned char *)0xD016 |= 0x10;          /* MC char mode ON */
-#endif
     mux_install();
 }
-static void board_leave(void)
-{
-#if CUSTOM_CHARSET
-    *(unsigned char *)0xD016 &= (unsigned char)~0x10;  /* hi-res text for the menu */
-#endif
-    mux_stop();
-}
+static void board_leave(void) { mux_stop(); }
 
 /* Populate the multiplexer's per-row sprite tables from the game state. */
 static void draw_pieces(void)
@@ -439,6 +526,7 @@ static void draw_pieces(void)
         band_en[b] = (unsigned char)((1u << idx[b]) - 1u);
     }
 }
+#endif  /* CUSTOM_CHARSET */
 
 /* Cell colour RAM. With the custom charset the cells are MULTICOLOR (bit 3 set =
  * MC; low 3 bits = the "11" colour): gold rosette, white-highlight lapis tile.
@@ -461,6 +549,43 @@ static unsigned char count_start(unsigned char pl)
     return n;
 }
 
+#if CUSTOM_CHARSET
+/* Dense mosaic board: 2x2 carved cells — gold rosette stars at the 5 rosette
+ * squares, bullseye eyes down the shared lane, quincunx studs on the private
+ * lanes — with shell/carnelian tray beads above & below. */
+static void draw_static_board(void)
+{
+    unsigned char row, col, k, n;
+    bgcolor(COL_BG);
+    bordercolor(COL_BG);
+    clrscr();
+    select_board_charset();
+    textcolor(COL_TITLE); cputsxy(2, 0, "Royal Game of Ur");
+
+    for (row = 0; row < 3; row++)
+        for (col = 0; col < 8; col++) {
+            if (!cell_exists(row, col))
+                continue;
+            if (is_rosette_cell(row, col))
+                put_cell(tcol(col), trow(row), DC_ROSE, CRAM_GOLD);
+            else if (row == 1)
+                put_cell(tcol(col), trow(row), DC_EYE,  CRAM_GOLD);
+            else
+                put_cell(tcol(col), trow(row), DC_DOTS, CRAM_WHITE);
+        }
+
+    /* Trays: Light above the board (white beads), Dark below (red beads);
+     * waiting clustered left, borne-off "home" to the right of them. */
+    n = count_start(0);
+    for (k = 0; k < n; k++) put_glyph((unsigned char)(2 + k),  2, DC_BEAD, CRAM_WHITE);
+    n = (unsigned char)ur_score(&game, 0);
+    for (k = 0; k < n; k++) put_glyph((unsigned char)(11 + k), 2, DC_BEAD, CRAM_WHITE);
+    n = count_start(1);
+    for (k = 0; k < n; k++) put_glyph((unsigned char)(2 + k),  10, DC_BEAD, CRAM_RED);
+    n = (unsigned char)ur_score(&game, 1);
+    for (k = 0; k < n; k++) put_glyph((unsigned char)(11 + k), 10, DC_BEAD, CRAM_RED);
+}
+#else
 static void draw_static_board(void)
 {
     unsigned char row, col, k, n;
@@ -480,10 +605,8 @@ static void draw_static_board(void)
                 put_glyph(tcol(col), trow(row), G_LANE, CRAM_LANE);
         }
 
-    /* Off-board trays — the whole 7-piece journey at a glance: pieces still waiting
-     * to enter (clustered left) and borne off "home" (clustered right), as discs on
-     * Light's row (above, white) and Dark's row (below, black). Char cells can't be
-     * bone/brown under multicolor mode, so Light/Dark is shown by white vs black. */
+    /* Off-board trays (white/black discs; the multicolor sprite tokens carry the
+     * bone/brown colour). */
     n = count_start(0);
     for (k = 0; k < n; k++)              put_glyph((unsigned char)(2 + k),  1, G_DISC, C_WHITE);
     n = (unsigned char)ur_score(&game, 0);
@@ -493,6 +616,7 @@ static void draw_static_board(void)
     n = (unsigned char)ur_score(&game, 1);
     for (k = 0; k < n; k++)              put_glyph((unsigned char)(37 - k), 21, G_DISC, C_BLACK);
 }
+#endif  /* CUSTOM_CHARSET */
 
 static void draw_board(unsigned char roll, const char *msg)
 {

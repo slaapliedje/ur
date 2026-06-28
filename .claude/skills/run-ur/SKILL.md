@@ -77,7 +77,10 @@ your terminal — a backgrounded atari800 spawned from the agent's shell gets ki
 
 - **Coleco Adam** `make adam` → `build/adam/ur.ddp` — run in `mame adam`.
 - **ColecoVision** `make coleco` → `build/coleco/ur.rom` — `mame coleco -cart …`.
-- **C64** `make c64` → `build/c64/ur.prg` — run in VICE (`x64sc`).
+- **C64** `make c64` → `build/c64/ur.prg` — the dense "Standard of Ur" board (SMS-
+  style); run in VICE: `x64sc -warp -autostart build/c64/ur.prg`. Drive with xdotool
+  (`xset r off` first): menu keys `1`/`2`, then keys to roll/pick. See
+  [`src/c64/CLAUDE.md`](../../../src/c64/CLAUDE.md). (`ONLINE=1` keeps the sprite board.)
 - **Apple II** `make apple2` → `build/apple2/ur.po` — `mame apple2ee` (ProDOS disk).
 - **SMS** `make sms` → `build/sms/ur.sms` — the graphical showpiece; run in `mame sms`
   (D-pad = arrows, button 1 = Left Ctrl). Drive like the Atari path but `xset r off`
