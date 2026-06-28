@@ -5,10 +5,15 @@
 > reuses the shared core unchanged and draws the board in **lo-res graphics (GR)**:
 > the Apple II's hi-res mode has only 6 position-dependent artifact colours (no
 > brown/gold), but lo-res gives **16 solid colours**, so the board uses the same
-> lapis/gold/cream palette as the C64/Adam. Traditional **horizontal 3×8** layout
-> on a lapis field, **gold (orange) rosette tiles**, grey lane tiles, and **two-tone
-> tokens** (white body + dark pip = Light, the inverse = Dark). **MIXED mode** keeps
-> 4 text lines at the bottom for the turn / roll / move panel; the title menu and win
+> lapis/gold/cream palette as the C64/Adam. The board is the **horizontal 3×8
+> Standard-of-Ur layout shared by every port** (the SMS showpiece look): a lapis
+> field with an **inlaid mosaic** in every square — **gold flower rosettes** (a gold
+> tile, brighter petals, a white pearl), **gold bullseye eyes** down the shared lane,
+> and **white quincunx studs** on the private lanes — plus **round two-tone tokens**
+> (an oval body + a centre pip: white body = Light, brown body = Dark). The motifs
+> are drawn as filled-rectangle runs (no sprites/charset — the Apple II is a pure
+> bitmap), so they're computed, not generated glyph tables. **MIXED mode** keeps 4
+> text lines at the bottom for the turn / roll / move panel; the title menu and win
 > screen use plain text mode. GR lives in [`gr.c`](gr.c)/[`gr.h`](gr.h). Hot-seat +
 > vs-AI; `cgetc`/`kbhit` native. Sound is the **1-bit speaker**
 > (`src/apple2/sound.c`, $C030). `make apple2` → `build/apple2/ur.system` (+ `ur.po`
@@ -31,11 +36,16 @@
 >   reads clearly as the dark side, so we keep it.
 >
 > **Double-hi-res — playable build (`make apple2 DHGR=1`).** A 140×192, 16-colour
-> board, verified in MAME `apple2ee` on real ProDOS: deep **lapis field**, gold
-> (orange) rosette tiles, grey lanes, **round two-tone tokens** (a tapered disc:
-> white body + olive pip = Light, the inverse = Dark) on black cells, with the tiles
-> **black-bordered** to hide DHGR's edge fringing, plus a clean narrow 80-col panel.
-> How it fits together:
+> board, verified in MAME `apple2ee` on real ProDOS: deep **lapis field** with the
+> same **inlaid Standard-of-Ur mosaic** as lo-res, at much higher resolution —
+> **gold diamond flower rosettes** with white pearls, **gold bullseye eyes** down the
+> shared lane, **white quincunx** on the private lanes (lane tiles **black-bordered**
+> to hide DHGR's edge fringing), and **round two-tone tokens** (a tapered disc: white
+> body + olive pip = Light, the inverse = Dark) on black cells, plus a clean narrow
+> 80-col panel. The fixed-colour motifs are **table-driven** (a flat
+> `{l,r,ya,yb,colour}` rect list run through one loop) rather than three unrolled
+> functions — the DHGR layout pins CODE at `$6000`, so code that grows squeezes BSS;
+> the table keeps it inside the budget. How it fits together:
 > - **Page 2 (`$4000-$5FFF`)** + a custom SYSTEM config
 >   ([`apple2-dhgr.cfg`](apple2-dhgr.cfg): startup `$2000`, code pinned `$6000`,
 >   `$4000-$5FFF` page-2 hole) → keeps the clean `UR.SYSTEM` boot (no BASIC.SYSTEM;

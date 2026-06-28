@@ -114,24 +114,50 @@ static bool cell_exists(unsigned char row, unsigned char col)
 /* Cell/token drawing in (col,row) terms — palette + geometry differ per renderer,
  * the board logic is shared. A two-tone token = body fill + a centred pip. */
 #ifdef UR_DHGR
-#define C_ROSE 12
-#define C_LANE 5
+#define C_FIELD 1                /* lapis field nibble */
+#define C_ROSE 12                /* gold/orange */
+#define C_LANE 5                 /* grey stone lane */
+#define C_GOLD 12                /* eye ring / petals */
+#define C_PEARL 15               /* white inlay */
 #define C_LIGHT 15
 #define C_LPIP 4
 #define C_DARK 4
 #define C_DPIP 15
 static const unsigned char dh_ry[3] = { 4, 56, 108 };   /* row tops (mixed, y<160) */
-static void draw_tile(unsigned char col, unsigned char row, unsigned char nib)
-{
-    unsigned char g0 = (unsigned char)(col * 10), y0 = dh_ry[row];
-    dhgr_fill(g0, (unsigned char)(g0 + 7), y0, (unsigned char)(y0 + 43), 0); /* border */
-    dhgr_fill((unsigned char)(g0 + 1), (unsigned char)(g0 + 6),
-              (unsigned char)(y0 + 3), (unsigned char)(y0 + 40), nib);
-}
-/* A ROUND token: a black cell, then a tapered disc of the body colour (narrow at
- * top/bottom, full 6 groups in the middle), then the centre pip. */
+/* Each square is an 8-group (~56px) x 44-scanline carved cell, built from filled
+ * rectangles (DROW). The inlaid mosaic mirrors the SMS showpiece: gold flower
+ * rosettes, a gold bullseye eye down the shared lane, a white quincunx on the
+ * private lanes, and round two-tone disc tokens. */
 #define DROW(l, r, ya, yb, c) dhgr_fill((unsigned char)(g0 + (l)), (unsigned char)(g0 + (r)), \
                                         (unsigned char)(y0 + (ya)), (unsigned char)(y0 + (yb)), (c))
+/* The fixed-colour motifs (rosette/eye/dots) are TABLE-driven — a flat list of
+ * {l,r,ya,yb,colour} rectangles run through one small loop. This is far smaller
+ * than three unrolled functions (the DHGR layout pins CODE at $6000, so code that
+ * grows squeezes BSS), at the cost of a few bytes of RODATA. */
+static const unsigned char m_rose[] = {       /* gold flower bloom on lapis */
+    0,7,  0,43, C_FIELD,  3,4,  2, 7, C_GOLD,  2,5,  8,13, C_GOLD,
+    0,7, 14,29, C_GOLD,   2,5, 30,35, C_GOLD,  3,4, 36,41, C_GOLD,
+    3,4, 18,25, C_PEARL };
+static const unsigned char m_eye[] = {        /* gold bullseye on a grey lane tile */
+    0,7,  0,43, 0,        1,6,  3,40, C_LANE,  2,5,  8,12, C_GOLD,
+    1,2, 13,30, C_GOLD,   5,6, 13,30, C_GOLD,  2,5, 31,35, C_GOLD,
+    3,4, 18,25, C_PEARL };
+static const unsigned char m_dots[] = {       /* white quincunx on a grey lane tile */
+    0,7,  0,43, 0,        1,6,  3,40, C_LANE,  1,2,  8,13, C_PEARL,
+    5,6,  8,13, C_PEARL,  3,4, 19,24, C_PEARL, 1,2, 30,35, C_PEARL,
+    5,6, 30,35, C_PEARL };
+static void dh_motif(unsigned char col, unsigned char row,
+                     const unsigned char *r, unsigned char n)
+{
+    unsigned char g0 = (unsigned char)(col * 10), y0 = dh_ry[row], i;
+    for (i = 0; i < n; i++, r += 5)
+        DROW(r[0], r[1], r[2], r[3], r[4]);
+}
+#define draw_rosette(c, r) dh_motif((c), (r), m_rose, 7)
+#define draw_eye(c, r)     dh_motif((c), (r), m_eye,  7)
+#define draw_dots(c, r)    dh_motif((c), (r), m_dots, 7)
+/* A ROUND token: a black cell, then a tapered disc of the body colour (narrow at
+ * top/bottom, full 6 groups in the middle), then the centre pip. */
 static void draw_token(unsigned char col, unsigned char row,
                        unsigned char body, unsigned char pip)
 {
@@ -146,26 +172,55 @@ static void draw_token(unsigned char col, unsigned char row,
 }
 #undef DROW
 #else
-#define C_ROSE COL_ROSE
-#define C_LANE COL_LANE
 #define C_LIGHT COL_LIGHT
 #define C_LPIP COL_LPIP
 #define C_DARK COL_DARK
 #define C_DPIP COL_DPIP
-static void draw_tile(unsigned char col, unsigned char row, unsigned char color)
+/* Lo-res cells are 4 blocks wide x 10 tall (~28x40 px). The same inlaid-mosaic
+ * motifs as the SMS/DHGR, drawn chunky: a filled-rect run within the cell. */
+#define LBAR(a, b, ya, yb, c) gr_bar((unsigned char)(x0 + (a)), (unsigned char)(y0 + (ya)), \
+                                     (unsigned char)(x0 + (b)), (unsigned char)(y0 + (yb)), (c))
+/* Gold flower rosette: a gold tile with a brighter cross of petals + white pearl. */
+static void draw_rosette(unsigned char col, unsigned char row)
 {
     unsigned char x0 = cellx(col), y0 = celly(row);
-    gr_bar(x0, y0, (unsigned char)(x0 + CELL_W - 1),
-                   (unsigned char)(y0 + CELL_H - 1), color);
+    LBAR(0, 3, 0, 9, COL_ROSE);   /* gold tile        */
+    LBAR(1, 2, 0, 9, GR_YELLOW);  /* N-S petals       */
+    LBAR(0, 3, 4, 5, GR_YELLOW);  /* E-W petals       */
+    LBAR(1, 2, 4, 5, GR_WHITE);   /* pearl centre     */
 }
+/* Gold bullseye eye on a grey lane tile (shared capture lane). */
+static void draw_eye(unsigned char col, unsigned char row)
+{
+    unsigned char x0 = cellx(col), y0 = celly(row);
+    LBAR(0, 3, 0, 9, COL_LANE);   /* grey tile        */
+    LBAR(1, 2, 1, 1, COL_ROSE);   /* ring top         */
+    LBAR(0, 0, 2, 7, COL_ROSE);   /* ring left        */
+    LBAR(3, 3, 2, 7, COL_ROSE);   /* ring right       */
+    LBAR(1, 2, 8, 8, COL_ROSE);   /* ring bottom      */
+    LBAR(1, 2, 4, 5, GR_WHITE);   /* pearl centre     */
+}
+/* White quincunx on a grey lane tile (private lanes). */
+static void draw_dots(unsigned char col, unsigned char row)
+{
+    unsigned char x0 = cellx(col), y0 = celly(row);
+    LBAR(0, 3, 0, 9, COL_LANE);   /* grey tile        */
+    LBAR(0, 0, 1, 1, GR_WHITE); LBAR(3, 3, 1, 1, GR_WHITE);   /* top studs    */
+    LBAR(1, 2, 4, 5, GR_WHITE);                               /* centre stud  */
+    LBAR(0, 0, 8, 8, GR_WHITE); LBAR(3, 3, 8, 8, GR_WHITE);   /* bottom studs */
+}
+/* Round two-tone token: an oval body on the lapis field with a centre pip. */
 static void draw_token(unsigned char col, unsigned char row,
                        unsigned char body, unsigned char pip)
 {
     unsigned char x0 = cellx(col), y0 = celly(row);
-    draw_tile(col, row, body);
-    gr_bar((unsigned char)(x0 + 1), (unsigned char)(y0 + 4),
-           (unsigned char)(x0 + 2), (unsigned char)(y0 + 5), pip);
+    LBAR(0, 3, 0, 9, COL_FIELD);  /* lapis footprint  */
+    LBAR(1, 2, 0, 0, body);       /* top cap          */
+    LBAR(0, 3, 1, 8, body);       /* middle           */
+    LBAR(1, 2, 9, 9, body);       /* bottom cap       */
+    LBAR(1, 2, 4, 5, pip);        /* centre pip       */
 }
+#undef LBAR
 #endif
 
 /* Tiny string/number builders (no conio: in GR mode we poke text directly). */
@@ -205,7 +260,7 @@ static void board_field(void)
 static void draw_board(unsigned char roll, const char *msg)
 {
     unsigned char row, col, pl, i, pos, rr, cc;
-    char grid[3][8];          /* 0 cut, 'L'/'D' piece, '*' rosette, '.' lane */
+    char grid[3][8];          /* 0 cut, 'L'/'D' piece, '*' rosette, 'E' eye, '.' dots */
 
     /* The field (gaps) never changes and is slow to fill in DHGR, so it's drawn
      * once per game in play_local; here only the cells overwrite it. And since
@@ -216,7 +271,9 @@ static void draw_board(unsigned char roll, const char *msg)
     for (row = 0; row < 3; row++)
         for (col = 0; col < 8; col++)
             grid[row][col] = cell_exists(row, col)
-                           ? (is_rosette_cell(row, col) ? '*' : '.') : 0;
+                           ? (is_rosette_cell(row, col) ? '*'
+                              : (row == 1 ? 'E' : '.'))      /* eye on the shared lane */
+                           : 0;
     for (pl = 0; pl < UR_NUM_PLAYERS; pl++)
         for (i = 0; i < UR_PIECES; i++) {
             pos = game.piece[pl][i];
@@ -231,8 +288,9 @@ static void draw_board(unsigned char roll, const char *msg)
                 continue;                       /* unchanged -> skip the slow redraw */
             prev_grid[row][col] = (unsigned char)g;
             if (g == 0) continue;               /* cut-away cell: field shows through */
-            if (g == '*')      draw_tile(col, row, C_ROSE);
-            else if (g == '.') draw_tile(col, row, C_LANE);
+            if (g == '*')      draw_rosette(col, row);
+            else if (g == 'E') draw_eye(col, row);
+            else if (g == '.') draw_dots(col, row);
             else if (g == 'L') draw_token(col, row, C_LIGHT, C_LPIP);
             else               draw_token(col, row, C_DARK, C_DPIP);
         }
