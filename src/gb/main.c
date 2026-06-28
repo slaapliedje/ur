@@ -21,9 +21,12 @@
 #include <arch/gb/cgb.h>
 
 #include "ur.h"
+#include "music.h"          /* the Hurrian Hymn title theme (shared melody) */
+#include "sound.h"
 #include "font8.h"          /* shared 1bpp font (from src/sms; -I in gb.mk) */
 
 #define rBGP (*(volatile uint8_t *)0xFF47)   /* DMG bg palette register */
+#define rDIV (*(volatile uint8_t *)0xFF04)   /* free-running timer (entropy) */
 
 /* ---- palette: one 4-colour palette does the whole board ---------------- *
  * 0 field (dark lapis)  1 face (lapis)  2 shell (cream/white)  3 gold.
@@ -270,6 +273,9 @@ static bool is_rosette_cell(uint8_t row, uint8_t col)
 
 static ur_state game;
 static bool ai1;
+static uint16_t g_seed = 0xACE1u;     /* RNG seed accumulator (entropy) */
+static bool g_played_music = false;
+static bool g_seeded = false;
 
 static uint8_t count_at(uint8_t pl, uint8_t pos)
 {
@@ -379,6 +385,7 @@ static bool human_turn(uint8_t player)
     draw_board(NO_ROLL, "Press A to roll");
     wait_press();
     roll = ur_dice_roll();
+    sfx_roll();
     draw_board(roll, "");
 
     picked = choose_move(player, roll);
@@ -389,6 +396,7 @@ static bool human_turn(uint8_t player)
         return false;
     }
     ur_apply_move(&game, player, (uint8_t)picked, roll, &res);
+    sfx_for_result(&res);
     if (res.won) return true;
     if (res.captured || res.rosette) {
         draw_board(roll, res.captured ? "Capture! - A" : "Rosette - again!");
@@ -407,6 +415,7 @@ static bool computer_turn(uint8_t player)
     draw_board(NO_ROLL, "Dark's turn - A");
     wait_press();
     roll = ur_dice_roll();
+    sfx_roll();
     draw_board(roll, "");
     if (ur_legal_moves(&game, player, roll, pieces) == 0) {
         draw_board(roll, "Dark: no move");
@@ -416,11 +425,29 @@ static bool computer_turn(uint8_t player)
     }
     pick = ur_ai_pick(&game, player, roll);
     ur_apply_move(&game, player, (uint8_t)pick, roll, &res);
+    sfx_for_result(&res);
     draw_board(roll, "Dark moved - A");
     wait_press();
     if (res.won) return true;
     ur_advance_turn(&game, &res);
     return false;
+}
+
+/* Title music: the Hurrian Hymn, once, skippable. The per-note loop is also where
+ * we gather RNG entropy — the GB's blocking waitpad gives no idle loop to count in,
+ * so we mix the free-running DIV timer per note and let the player's skip timing add
+ * variance. (The final seed in main() also samples DIV at menu-confirm time.) */
+static void play_hymn(void)
+{
+    uint16_t i;
+    if (g_played_music) return;
+    g_played_music = true;
+    for (i = 0; i < ur_hymn_len; i++) {
+        if (joypad()) break;                          /* any button skips */
+        g_seed = (uint16_t)((g_seed << 1) ^ rDIV);
+        gb_music_note(ur_hymn[i].note, ur_hymn[i].dur);
+    }
+    snd_silence();
 }
 
 static bool title_menu(void)
@@ -435,6 +462,7 @@ static bool title_menu(void)
     put_str(5, 8, "Vs Computer");
     put_str(2, 11, "D-pad: pick");
     put_str(2, 12, "A: start");
+    play_hymn();                /* the Hurrian Hymn (once at boot, skippable) */
     for (;;) {
         put_tile(3, 6, (uint8_t)((sel == 0 ? '>' : ' ') - 0x20));
         put_tile(3, 8, (uint8_t)((sel == 1 ? '>' : ' ') - 0x20));
@@ -452,10 +480,17 @@ void main(void)
     bool over;
 
     video_init();
-    ur_rng_seed(0xA537);
+    gb_sound_init();
 
     for (;;) {
         ai1 = title_menu();
+        /* Seed once from gathered entropy: the hymn's DIV mix + DIV sampled at the
+         * (human-timed) moment the player confirmed the menu. Later games continue
+         * the RNG sequence, so each game differs. */
+        if (!g_seeded) {
+            ur_rng_seed((uint16_t)((g_seed ^ ((uint16_t)rDIV << 3)) | 1u));
+            g_seeded = true;
+        }
         ur_init(&game);
         over = false;
         for (;;) {

@@ -146,11 +146,15 @@ FujiNet, so no online path — like the ColecoVision cartridge).
       (Hurrian Hymn + SFX); controller input. iNES NROM cart, verified in MAME (`nes`).
 
 **Known gaps in these ports (tracked):**
-- [ ] **Game Boy / GBC has no sound** — needs a GB APU player (Hurrian Hymn + SFX).
-- [ ] **SMS + Game Boy use a fixed RNG seed (`0xA537`)** — the dice repeat every
-      game; fold in entropy (frame counter / input timing) like the Adam/C64/Apple
-      II/NES do. (Game Gear inherits the SMS fix; the 5200 already uses the Atari's
-      hardware RNG.)
+- [x] **Game Boy / GBC sound** — done: GB APU player (Hurrian Hymn on channel 1 +
+      noise/square SFX), `src/gb/sound.c`. Verified by recording in MAME.
+- [x] **Game Boy entropy-seeded dice** — done: seeds from the DIV timer + the
+      title-hymn/menu timing (replaced the fixed `0xA537`).
+- [ ] **SMS still uses a fixed RNG seed (`0xA537`)** — the dice repeat every game;
+      fold in entropy like the Adam/C64/Apple II/NES/Game Boy do. (Game Gear shares
+      the SMS code, so it gets the fix too; the 5200 already uses the Atari hardware
+      RNG.) Best done as the standard `plat_` entropy hook when the game loop is
+      lifted behind `plat.h` (Phase 3).
 - [ ] Game Boy token glide animation (deferred).
 
 ## Phase 8 — Polish & release

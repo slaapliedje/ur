@@ -6,9 +6,10 @@
 > design — the authentic horizontal H-board (3 rows × 8 cols), procedurally drawn
 > carved cells, gold **rosette stars**, bullseye **"eyes"**, five-dot **quincunx**
 > studs, and two-tone **tokens** — on the GB's 160×144 (20×18-tile) screen. Local
-> hot-seat + vs-AI; D-pad + A button. No FujiNet. `make gb` → `build/gb/ur.gb`.
-> Run: `mame gameboy` (grey) / `mame gbcolor` (colour). Sound and token glide
-> animation are follow-ups (see below).
+> hot-seat + vs-AI; D-pad + A button. **APU sound** (the Hurrian Hymn title theme +
+> event SFX) and entropy-seeded dice are in; token glide animation is the remaining
+> follow-up. No FujiNet. `make gb` → `build/gb/ur.gb`.
+> Run: `mame gameboy` (grey) / `mame gbcolor` (colour).
 
 > Parent context: [`/CLAUDE.md`](../../CLAUDE.md). The shared `src/common` core drops
 > in unchanged. This is a **Sharp LR35902** (gbz80) — a third CPU/toolchain after the
@@ -22,7 +23,8 @@
   visible at scroll 0). DMG: one 4-grey BG palette. **GBC: 8 BG + 8 sprite palettes**,
   4 colours each from a 32768-colour (15-bit RGB) master, per-tile palette via BG
   attributes (VRAM bank 1). 40 sprites (8×8/8×16), 10/scanline.
-- **Sound:** 4-channel APU (different from the SN76489) — not wired up yet here.
+- **Sound:** 4-channel APU (regs `$FF10`+) — `src/gb/sound.c` uses channel 1
+  (square) for the melody + melodic blips and channel 4 (noise) for the dice rattle.
 - **Input:** D-pad + A/B + Start/Select (`joypad()` → `J_A`/`J_B`/`J_UP`/…).
 
 ## Toolchain (z88dk `+gb`)
@@ -85,10 +87,28 @@ GBC/DMG boot ROM refuses to start. (0xC0 would be CGB-only; we want 0x80 for bot
   emulated: sound" warning** that `-skip_gameinfo` doesn't dismiss — send one key
   (e.g. `Return`) after boot before driving the game.
 
+## Sound (the LR35902 APU)
+
+`src/gb/sound.c` drives the APU directly (regs `$FF10`–`$FF26`): **channel 1**
+(square) plays the shared **Hurrian Hymn** (`gb_music_note`, an 11-entry frequency
+table for the B4–A5 melody range) + the melodic blips, and **channel 4** (noise)
+the dice rattle / capture buzz. Constant volume (no envelope); a channel is silenced
+by turning its DAC off + retrigger. Durations are counted in frames by polling the
+**LY** scanline register (`$FF44`) for vblank — so the **LCD must be on** while
+sound plays, which it is on the menu/board (`draw_board` leaves it on). Same event
+hooks as the other ports: `gb_sound_init()` at boot, a skippable `play_hymn()` on
+the title, `sfx_roll()` after a roll, `sfx_for_result()` after a move.
+
+**RNG seeding:** the dice are seeded once from entropy gathered in `play_hymn`
+(mixing the free-running **DIV** timer `$FF04` per note) plus DIV sampled at the
+human-timed moment the player confirms the menu — replacing the old fixed seed
+(which made every game roll the same). The GB's blocking `waitpad` offers no idle
+loop to count in, so the hymn loop is the GB's equivalent of the other ports'
+input-timing accumulator. (When the game loop is lifted behind `plat.h`, this
+becomes a standard `plat_` entropy hook.)
+
 ## Still to do
 
-1. **Sound** — the GB APU (4 channels, regs at 0xFF10+); the hymn + SFX, a fresh
-   layer (the SN76489 `src/sms/sound.c` doesn't apply).
-2. **Token glide animation** — GB hardware sprites (`set_sprite_*`/`move_sprite`),
+1. **Token glide animation** — GB hardware sprites (`set_sprite_*`/`move_sprite`),
    like the SMS; would also enable a colour token sprite palette on GBC.
-3. The core + protocol are unchanged; FujiNet isn't applicable to a GB cart.
+2. The core + protocol are unchanged; FujiNet isn't applicable to a GB cart.
