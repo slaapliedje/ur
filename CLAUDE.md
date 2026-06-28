@@ -162,6 +162,7 @@ src/
   adam/CLAUDE.md     ← Coleco Adam platform layer (2nd target, Z80 / z88dk)
   c64/CLAUDE.md      ← Commodore 64 platform layer (3rd target, 6502)
   apple2/CLAUDE.md   ← Apple II platform layer (4th target, 6502)
+  nes/CLAUDE.md      ← NES / Famicom platform layer (6502 / cc65, local-only, no FujiNet)
 tests/               ← host unit tests for src/common
 server/              ← modern game server (future); see src/net/CLAUDE.md
 lib/                 ← fetched deps (fujinet-lib); git-ignored

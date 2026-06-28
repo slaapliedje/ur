@@ -14,6 +14,7 @@ include makefiles/a5200.mk
 include makefiles/adam.mk
 include makefiles/sms.mk
 include makefiles/gb.mk
+include makefiles/nes.mk
 include makefiles/c64.mk
 include makefiles/apple2.mk
 include makefiles/host-test.mk
