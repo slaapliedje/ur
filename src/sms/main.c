@@ -20,31 +20,67 @@
 
 #include "ur.h"
 #include "font8.h"
+#include "sound.h"
+#include "music.h"          /* the Hurrian Hymn melody (shared) */
 
 /* ---- video: font tiles + palette + positioned text --------------------- */
-/* tile N == ASCII (0x20+N); tile 0 = space. Font pixels use CRAM colour 1 on 0. */
-static unsigned char palette[16] = {
-    0x10, 0x3F, 0x0F, 0x30,   /* 0 field(dk blue) 1 white 2 gold 3 light blue */
+/* Two CRAM banks. Font/disc pixels are colour index 1..3; the name-table
+ * "use-sprite-palette" bit (BKG_ATTR_SPRPAL) picks bank 1 per tile, giving a
+ * second ink (gold) for the title + rosettes without re-baking the font. */
+#define INK_WHITE 0x0000
+#define INK_GOLD  BKG_ATTR_SPRPAL          /* -> bank 1, entry 17 = gold */
+
+#define TILE_LIGHT  FONT8_COUNT             /* cream disc token (index 2)        */
+#define TILE_DARK   (FONT8_COUNT + 1)       /* red disc + cream pip (index 3/2)  */
+
+/* bank 0: 0 field, 1 white, 2 cream (Light token), 3 red (Dark token) */
+static unsigned char palette0[16] = {
+    0x10, 0x3F, 0x2F, 0x03,
     0,0,0,0, 0,0,0,0, 0,0,0,0
+};
+/* bank 1 (reached via INK_GOLD): 16 field, 17 gold/amber */
+static unsigned char palette1[16] = {
+    0x10, 0x0B, 0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0
+};
+
+/* Two custom 4bpp token tiles (32 bytes each = 8 rows x 4 bitplanes). A filled
+ * 8x8 disc with a 2x2 centre hole; Light = cream body (index 2), Dark = red body
+ * (index 3) with a cream pip (index 2) — the "Ur set" two-tone look as one tile. */
+static const unsigned char disc_tiles[2 * 32] = {
+    /* TILE_LIGHT: index 2 => plane1 only; pip hole = field (index 0) */
+    0x00,0x3C,0x00,0x00,  0x00,0x7E,0x00,0x00,  0x00,0xFF,0x00,0x00,  0x00,0xE7,0x00,0x00,
+    0x00,0xE7,0x00,0x00,  0x00,0xFF,0x00,0x00,  0x00,0x7E,0x00,0x00,  0x00,0x3C,0x00,0x00,
+    /* TILE_DARK: body index 3 (plane0+plane1); pip index 2 (plane1 only) */
+    0x3C,0x3C,0x00,0x00,  0x7E,0x7E,0x00,0x00,  0xFF,0xFF,0x00,0x00,  0xE7,0xFF,0x00,0x00,
+    0xE7,0xFF,0x00,0x00,  0xFF,0xFF,0x00,0x00,  0x7E,0x7E,0x00,0x00,  0x3C,0x3C,0x00,0x00
 };
 
 /* SMS VDP R1: bit6 = display enable, bit7 = (legacy, kept set); no frame IRQ. */
 #define display_on()   vdp_set_reg(0x01, 0xC0)
 #define display_off()  vdp_set_reg(0x01, 0x80)
 
+static unsigned int ink = INK_WHITE;        /* current text ink (OR'd into words) */
+static void set_ink(unsigned int a) { ink = a; }
+
 static void video_init(void)
 {
     clear_vram();
-    load_palette(palette, 0, 16);                       /* BG palette 0..15  */
-    load_palette(palette, 16, 16);                      /* sprite/backdrop   */
+    load_palette(palette0, 0, 16);                      /* BG palette bank 0 */
+    load_palette(palette1, 16, 16);                     /* alt palette bank 1 */
     load_tiles(font8, 0, FONT8_COUNT, 1);               /* 1bpp font -> tiles */
+    load_tiles((unsigned char *)disc_tiles, TILE_LIGHT, 2, 4);  /* 4bpp tokens */
     display_on();
 }
 
-/* set_bkg_map writes a w*h block of 16-bit map words (= tile index) at (x,y). */
+/* set_bkg_map writes a w*h block of 16-bit map words (= tile | attr) at (x,y). */
+static void put_tile(unsigned char x, unsigned char y, unsigned int word)
+{
+    set_bkg_map(&word, x, y, 1, 1);
+}
+
 static void put_ch(unsigned char x, unsigned char y, char c)
 {
-    unsigned int w = (unsigned int)((unsigned char)c - 0x20);
+    unsigned int w = (unsigned int)((unsigned char)c - 0x20) | ink;
     set_bkg_map(&w, x, y, 1, 1);
 }
 
@@ -52,7 +88,7 @@ static void put_str(unsigned char x, unsigned char y, const char *s)
 {
     unsigned int w[32];
     unsigned char n = 0;
-    while (s[n] && n < 32) { w[n] = (unsigned int)((unsigned char)s[n] - 0x20); n++; }
+    while (s[n] && n < 32) { w[n] = ((unsigned int)((unsigned char)s[n] - 0x20)) | ink; n++; }
     if (n) set_bkg_map(w, x, y, n, 1);
 }
 
@@ -134,34 +170,41 @@ static void draw_board(unsigned char roll, const char *msg)
 
     display_off();          /* blank during the full redraw -> no tearing */
     screen_clear();
+    set_ink(INK_GOLD);
     put_str(6, 0, "THE ROYAL GAME OF UR");
+    set_ink(INK_WHITE);
     put_str(0, 2, "Turn:");
-    put_str(6, 2, game.turn ? "DARK (X)" : "LIGHT (O)");
+    put_str(6, 2, game.turn ? "DARK" : "LIGHT");
 
-    /* base board cells (skip the H-shape cut-away corners) */
+    /* base board cells (skip the H-shape cut-away corners): gold rosettes,
+     * white lane dots. */
     for (row = 1; row <= 8; row++)
         for (col = 0; col < 3; col++) {
             if (!(col == 1 || row <= 4 || row >= 7)) continue;
-            put_ch(cellx(col), celly(row), is_rosette_cell(row, col) ? '*' : '.');
+            if (is_rosette_cell(row, col)) {
+                set_ink(INK_GOLD); put_ch(cellx(col), celly(row), '*'); set_ink(INK_WHITE);
+            } else {
+                put_ch(cellx(col), celly(row), '.');
+            }
         }
 
-    /* pieces on the board */
+    /* pieces on the board: two-tone disc tokens */
     for (pl = 0; pl < UR_NUM_PLAYERS; pl++)
         for (i = 0; i < UR_PIECES; i++) {
             pos = game.piece[pl][i];
             if (pos_to_cell(pl, pos, &rr, &cc))
-                put_ch(cellx(cc), celly(rr), pl ? 'X' : 'O');
+                put_tile(cellx(cc), celly(rr), pl ? TILE_DARK : TILE_LIGHT);
         }
 
     /* trays: waiting (upper) + home (lower); Light left, Dark right */
     n = count_at(0, UR_POS_START);
-    for (i = 0; i < n; i++) put_ch(4, (unsigned char)(BY + i), 'O');
+    for (i = 0; i < n; i++) put_tile(4, (unsigned char)(BY + i), TILE_LIGHT);
     n = ur_score(&game, 0);
-    for (i = 0; i < n; i++) put_ch(4, (unsigned char)(BY + 9 + i), 'O');
+    for (i = 0; i < n; i++) put_tile(4, (unsigned char)(BY + 9 + i), TILE_LIGHT);
     n = count_at(1, UR_POS_START);
-    for (i = 0; i < n; i++) put_ch(27, (unsigned char)(BY + i), 'X');
+    for (i = 0; i < n; i++) put_tile(27, (unsigned char)(BY + i), TILE_DARK);
     n = ur_score(&game, 1);
-    for (i = 0; i < n; i++) put_ch(27, (unsigned char)(BY + 9 + i), 'X');
+    for (i = 0; i < n; i++) put_tile(27, (unsigned char)(BY + 9 + i), TILE_DARK);
 
     put_str(0, 3, "Roll:");
     if (roll != NO_ROLL) put_u(6, 3, roll);
@@ -225,6 +268,7 @@ static bool human_turn(unsigned char player)
     draw_board(NO_ROLL, "Press FIRE to roll");
     wait_press();
     roll = ur_dice_roll();
+    sfx_roll();
     draw_board(roll, "");
 
     picked = choose_move(player, roll);
@@ -236,6 +280,7 @@ static bool human_turn(unsigned char player)
     }
 
     ur_apply_move(&game, player, (unsigned char)picked, roll, &res);
+    sfx_for_result(&res);
     if (res.won) return true;
     if (res.captured || res.rosette) {
         draw_board(roll, res.captured ? "Capture! - FIRE" : "Rosette - again!");
@@ -254,6 +299,7 @@ static bool computer_turn(unsigned char player)
     draw_board(NO_ROLL, "Computer's turn - FIRE");
     wait_press();
     roll = ur_dice_roll();
+    sfx_roll();
     draw_board(roll, "");
 
     if (ur_legal_moves(&game, player, roll, pieces) == 0) {
@@ -265,11 +311,27 @@ static bool computer_turn(unsigned char player)
 
     pick = ur_ai_pick(&game, player, roll);
     ur_apply_move(&game, player, (unsigned char)pick, roll, &res);
+    sfx_for_result(&res);
     draw_board(roll, "Computer moved - FIRE");
     wait_press();
     if (res.won) return true;
     ur_advance_turn(&game, &res);
     return false;
+}
+
+/* ---- title music: the Hurrian Hymn, once at boot (skippable) ------------ */
+static bool played_music = false;
+static void play_hymn(void)
+{
+    uint16_t i;
+    if (played_music) return;
+    played_music = true;
+    snd_silence();
+    for (i = 0; i < ur_hymn_len; i++) {
+        if (read_joypad1() & JOY_ANY) break;     /* any press skips */
+        sms_music_note(ur_hymn[i].note, ur_hymn[i].dur);
+    }
+    snd_silence();
 }
 
 /* ---- title / menu ------------------------------------------------------ */
@@ -280,7 +342,9 @@ static bool title_menu(void)         /* returns ai1 (true = vs computer) */
 
     display_off();
     screen_clear();
+    set_ink(INK_GOLD);
     put_str(6, 2, "THE ROYAL GAME OF UR");
+    set_ink(INK_WHITE);
     put_str(3, 4, "Mesopotamia - c.2600 BCE");
     put_str(8, 9,  "Two Players");
     put_str(8, 11, "Vs Computer");
@@ -304,10 +368,12 @@ int main(void)
     bool over;
 
     video_init();
+    snd_silence();
 
     ur_rng_seed(0xA537);             /* TODO: fold in a frame counter for variety */
 
     for (;;) {
+        play_hymn();                 /* the Hurrian Hymn (once at boot, skippable) */
         ai1 = title_menu();
         ur_init(&game);
         over = false;
@@ -323,8 +389,8 @@ int main(void)
             if (over)
                 break;
         }
-        draw_board(NO_ROLL, player == 0 ? "LIGHT (O) WINS! - FIRE"
-                                        : "DARK (X) WINS! - FIRE");
+        draw_board(NO_ROLL, player == 0 ? "LIGHT WINS! - FIRE"
+                                        : "DARK WINS! - FIRE");
         wait_press();
     }
     return 0;
