@@ -50,20 +50,36 @@ Z80-based Coleco Adam via `z88dk`/SDCC. This is where the actual rules of Ur liv
   touches hardware. `ur_hymn_len` is a literal (sccz80 rejects `sizeof` in a
   file-scope const initializer), so keep it in sync with the array.
 
-## The platform interface (the boundary)
+## The platform interface + shared controller (the boundary)
 
-`common/` declares an abstract interface that each platform layer implements. The
-core **calls** these; platform code never calls back up into private core state.
-Expected families (names indicative — finalize when the first code lands):
+The local game flow is owned by a **shared controller**, `ur_game.c`, so ports no
+longer copy the turn loop. It calls a small, real interface declared in
+[`plat.h`](plat.h); each platform layer implements it:
 
-- `plat_draw_*` — render board, pieces, dice, UI.
-- `plat_input_*` — read joystick/keyboard, return abstract actions.
-- `plat_sound_*` — play effects/music.
-- `plat_net_*` — open/read/write/close a connection (thin shim over `fujinet-lib`).
-- `plat_rng_seed()` / timing — entropy and frame/timing hooks.
+- `plat_draw(roll, msg)` — render the board + HUD + a status line for `ur_g`.
+- `plat_wait()` — block until one confirm press.
+- `plat_choose_move(player, roll)` — render the move list and return the pick (−1 = none).
+- `plat_animate(player, from, to)` — slide the moving token (empty stub if no animation).
+- `plat_sfx_roll()` / `plat_sfx_result(res)` — sound.
+- `plat_seed()` — RNG entropy (hardware source, or input-timing accumulator).
 
-Keep this interface small and stable; it is the contract the three platform layers
-must each satisfy.
+`ur_run_game(vs_ai)` runs one game over `ur_g` (the controller-owned `ur_state`) and
+returns the winner; the port's `main()` does its title/menu, calls it, shows the
+result, loops. The core **calls** these; platform code never calls back into private
+core state.
+
+**Adoption is incremental.** `ur_game.c` is opt-in per port via `$(UR_GAME_SRC)` in
+the makefiles (it is *filtered out* of `COMMON_SOURCES`), so a port that hasn't been
+converted keeps its own loop and doesn't need to implement `plat.h` yet. Converted
+so far: **NES, Game Boy, SMS + Game Gear**. The FujiNet ports (Atari/Adam/C64/Apple
+II) still run their own loop (their `online_game` path is separate and not part of
+this contract — see [`src/net`](../net/CLAUDE.md)).
+
+Controller strings are **UPPERCASE / `A-Z 0-9 space !` only** — the lowest common
+denominator across the ports' fonts (the NES font is uppercase-only), so they render
+everywhere.
+
+Keep this interface small and stable; it is the contract the platform layers satisfy.
 
 ## Testing
 

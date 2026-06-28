@@ -23,6 +23,7 @@
 #include <nes.h>
 
 #include "ur.h"
+#include "ur_game.h"        /* shared local-game controller + plat.h interface */
 #include "music.h"          /* the Hurrian Hymn title theme (shared melody) */
 #include "sound.h"
 
@@ -173,8 +174,7 @@ static bool cell_exists(unsigned char row, unsigned char col)
     return col <= 3 || col >= 6;
 }
 
-static ur_state game;
-static uint16_t  g_seed = 0xACE1u;
+static uint16_t g_seed = 0xACE1u;   /* RNG entropy (accumulated during the menu) */
 
 /* Build the board + HUD into the screen buffer (no blit). */
 static void build_board(unsigned char roll, const char *msg)
@@ -193,7 +193,7 @@ static void build_board(unsigned char roll, const char *msg)
                            : 0;
     for (pl = 0; pl < UR_NUM_PLAYERS; pl++)
         for (i = 0; i < UR_PIECES; i++) {
-            pos = game.piece[pl][i];
+            pos = ur_g.piece[pl][i];
             if (pos_to_cell(pl, pos, &rr, &cc))
                 grid[rr][cc] = pl ? 'D' : 'L';
         }
@@ -209,18 +209,19 @@ static void build_board(unsigned char roll, const char *msg)
             else               put_cell(col, row, T_DARK,  P_DARK);
         }
 
-    put_str(2, 16, game.turn ? "TURN: DARK" : "TURN: LIGHT");
+    put_str(2, 16, ur_g.turn ? "TURN: DARK" : "TURN: LIGHT");
     p = put_s(buf, "LIGHT:");
-    p = put_u(p, (unsigned char)ur_score(&game, 0));
+    p = put_u(p, (unsigned char)ur_score(&ur_g, 0));
     p = put_s(p, " DARK:");
-    p = put_u(p, (unsigned char)ur_score(&game, 1));
+    p = put_u(p, (unsigned char)ur_score(&ur_g, 1));
     *p = 0;
     put_str(2, 17, buf);
     if (roll != NO_ROLL) { p = put_s(buf, "ROLL:"); p = put_u(p, roll); *p = 0; put_str(2, 18, buf); }
     if (msg) put_str(2, 27, msg);
 }
 
-static void draw_board(unsigned char roll, const char *msg)
+/* plat.h: draw the board + HUD + message for the active game. */
+void plat_draw(unsigned char roll, const char *msg)
 {
     build_board(roll, msg);
     ppu_blit();
@@ -234,26 +235,31 @@ static unsigned char wait_pad(void)
     for (;;) { p = read_pad(); if (p) return p; }
 }
 
-/* List legal moves (deduped by source); pick one with Up/Down + A. */
+/* plat.h: wait for one confirm press. */
+void plat_wait(void) { wait_pad(); }
+
+/* plat.h: list legal moves (deduped by source); pick one with Up/Down + A. The
+ * board for `roll` is already drawn (by the controller), so we add the prompt +
+ * list on top (the screen buffer persists between blits). */
 #define MLY 20
-static int8_t choose_move(unsigned char player, unsigned char roll)
+int8_t plat_choose_move(unsigned char player, unsigned char roll)
 {
     unsigned char pieces[UR_PIECES], srcs[UR_PIECES];
     unsigned char count, nsrc, i, j, pos, dest, sel, pad;
     bool seen;
 
-    count = ur_legal_moves(&game, player, roll, pieces);
+    count = ur_legal_moves(&ur_g, player, roll, pieces);
     if (count == 0) return -1;
 
     nsrc = 0;
     for (i = 0; i < count; i++) {
-        pos = game.piece[player][pieces[i]];
+        pos = ur_g.piece[player][pieces[i]];
         seen = false;
         for (j = 0; j < nsrc; j++) if (srcs[j] == pos) { seen = true; break; }
         if (!seen) srcs[nsrc++] = pos;
     }
 
-    build_board(roll, "UP DOWN + A");
+    put_str(2, 27, "UP DOWN + A");
     for (i = 0; i < nsrc; i++) {                   /* move list lines */
         char buf[12], *p = buf;
         pos = srcs[i];
@@ -280,88 +286,23 @@ static int8_t choose_move(unsigned char player, unsigned char roll)
 
     pos = srcs[sel];
     for (i = 0; i < count; i++)
-        if (game.piece[player][pieces[i]] == pos) return (int8_t)pieces[i];
+        if (ur_g.piece[player][pieces[i]] == pos) return (int8_t)pieces[i];
     return (int8_t)pieces[0];
 }
 
-static unsigned char roll_dice(void)
+/* plat.h: sound + RNG entropy. The shared controller (ur_game.c) owns the turn
+ * loop and calls these; g_seed is accumulated while the menu waits for input. */
+void plat_sfx_roll(void) { sfx_roll(); }
+void plat_sfx_result(const ur_move_result *res) { sfx_for_result(res); }
+uint16_t plat_seed(void) { return g_seed; }
+void plat_animate(uint8_t player, uint8_t from, uint8_t to) { (void)player; (void)from; (void)to; }
+
+/* Show the end-of-game result on the board, then wait. */
+static void show_win(uint8_t winner, bool ai1)
 {
-    static bool seeded = false;
-    if (!seeded) { ur_rng_seed((uint16_t)(g_seed | 1u)); seeded = true; }
-    return ur_dice_roll();
-}
-
-static bool human_turn(unsigned char player)
-{
-    unsigned char roll;
-    int8_t picked;
-    ur_move_result res;
-
-    draw_board(NO_ROLL, "PRESS A TO ROLL");
-    wait_pad();
-    roll = roll_dice();
-    sfx_roll();
-
-    picked = choose_move(player, roll);
-    if (picked < 0) {
-        draw_board(roll, "NO MOVE - PRESS A");
-        wait_pad();
-        ur_advance_turn(&game, (const ur_move_result *)0);
-        return false;
-    }
-    ur_apply_move(&game, player, (unsigned char)picked, roll, &res);
-    sfx_for_result(&res);
-    if (res.won) return true;
-    if (res.captured || res.rosette) {
-        draw_board(roll, res.captured ? "CAPTURE - PRESS A" : "ROSETTE - AGAIN");
-        wait_pad();
-    }
-    ur_advance_turn(&game, &res);
-    return false;
-}
-
-static bool computer_turn(unsigned char player)
-{
-    unsigned char pieces[UR_PIECES], roll;
-    int8_t pick;
-    ur_move_result res;
-
-    draw_board(NO_ROLL, "COMPUTER - PRESS A");
-    wait_pad();
-    roll = roll_dice();
-    sfx_roll();
-
-    if (ur_legal_moves(&game, player, roll, pieces) == 0) {
-        draw_board(roll, "COMPUTER: NO MOVE");
-        wait_pad();
-        ur_advance_turn(&game, (const ur_move_result *)0);
-        return false;
-    }
-    pick = ur_ai_pick(&game, player, roll);
-    ur_apply_move(&game, player, (unsigned char)pick, roll, &res);
-    sfx_for_result(&res);
-    draw_board(roll, "COMPUTER MOVED - A");
-    wait_pad();
-    if (res.won) return true;
-    ur_advance_turn(&game, &res);
-    return false;
-}
-
-static void play_local(bool ai1)
-{
-    unsigned char player;
-    bool over = false;
-
-    ur_init(&game);
-    for (;;) {
-        player = game.turn;
-        over = (player == 1 && ai1) ? computer_turn(player) : human_turn(player);
-        if (over) break;
-    }
-
     build_board(NO_ROLL, (const char *)0);
-    if (ai1) put_str(2, 22, player == 0 ? "YOU WIN" : "YOU LOSE");
-    else     put_str(2, 22, player == 0 ? "LIGHT WINS" : "DARK WINS");
+    if (ai1) put_str(2, 22, winner == 0 ? "YOU WIN" : "YOU LOSE");
+    else     put_str(2, 22, winner == 0 ? "LIGHT WINS" : "DARK WINS");
     put_str(2, 24, "PRESS A");
     ppu_blit();
     wait_pad();
@@ -403,10 +344,10 @@ int main(void)
         ppu_blit();
 
         play_hymn();                       /* the Hurrian Hymn (once, skippable) */
-        while (!read_pad()) g_seed++;      /* entropy from wait time */
+        while (!read_pad()) g_seed++;      /* entropy from wait time -> plat_seed() */
         pad = wait_pad();
-        if (pad & PAD_A)      play_local(false);
-        else if (pad & PAD_B) play_local(true);
+        if (pad & (PAD_A | PAD_B))         /* A = two players, B = vs computer */
+            show_win(ur_run_game((pad & PAD_B) ? 1 : 0), (pad & PAD_B) != 0);
     }
     return 0;
 }

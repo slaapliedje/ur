@@ -9,7 +9,7 @@
 # Output: build/sms/ur.sms. Uses $(ZCC) + exported ZCCCFG from adam.mk.
 SMS_OUT     := $(BUILD_DIR)/sms
 SMS_FLAGS   := +sms -DUR_SMS -I$(SRC_DIR)/sms $(COMMON_INC)
-SMS_SOURCES := $(COMMON_SOURCES) $(wildcard $(SRC_DIR)/sms/*.c)
+SMS_SOURCES := $(COMMON_SOURCES) $(UR_GAME_SRC) $(wildcard $(SRC_DIR)/sms/*.c)
 
 .PHONY: sms
 sms: | $(SMS_OUT) ## Build the Sega Master System ROM (z88dk +sms, SMSlib)

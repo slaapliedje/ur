@@ -7,7 +7,7 @@
 NES_OUT     := $(BUILD_DIR)/nes
 CL65        ?= cl65
 # C (game) + any .s (hand-tuned asm) under src/nes.
-NES_SOURCES := $(COMMON_SOURCES) \
+NES_SOURCES := $(COMMON_SOURCES) $(UR_GAME_SRC) \
                $(wildcard $(SRC_DIR)/nes/*.c) $(wildcard $(SRC_DIR)/nes/*.s)
 NES_FLAGS   := -t nes -O -I$(SRC_DIR)/nes $(COMMON_INC)
 

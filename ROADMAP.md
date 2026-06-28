@@ -48,8 +48,15 @@ committable state.
       board sheen, round two-tone **PMG** token pieces, piece glide + capture
       fly-back animation, and a dice tumble. (Atari is the visual reference for the
       other ports — see [`docs/visual-design.md`](docs/visual-design.md).)
-- [ ] Lift the game loop into a shared controller behind `plat.h` so the Adam/C64/
-      Apple ports reuse it instead of re-implementing.
+- [~] Lift the game loop into a shared controller behind `plat.h`. **Done for the
+      local-only ports** (NES, Game Boy, SMS + Game Gear): `src/common/ur_game.c`
+      owns the turn loop and drives it through the real `plat.h` interface
+      (`plat_draw` / `plat_wait` / `plat_choose_move` / `plat_animate` / `plat_sfx_*`
+      / `plat_seed`); each port shrank to implementing those + its menu. The
+      controller is opt-in per port (`$(UR_GAME_SRC)`) so the rest can adopt it
+      incrementally. **Remaining:** convert the FujiNet ports' LOCAL path
+      (Atari/5200, Adam/Coleco, C64, Apple II) — their `online_game` loop stays
+      separate.
 
 ## Phase 4 — Networking + game server
 - [x] Wire protocol — `src/common/proto.{h,c}` + `docs/protocol.md`, host-tested.
@@ -150,11 +157,10 @@ FujiNet, so no online path — like the ColecoVision cartridge).
       noise/square SFX), `src/gb/sound.c`. Verified by recording in MAME.
 - [x] **Game Boy entropy-seeded dice** — done: seeds from the DIV timer + the
       title-hymn/menu timing (replaced the fixed `0xA537`).
-- [ ] **SMS still uses a fixed RNG seed (`0xA537`)** — the dice repeat every game;
-      fold in entropy like the Adam/C64/Apple II/NES/Game Boy do. (Game Gear shares
-      the SMS code, so it gets the fix too; the 5200 already uses the Atari hardware
-      RNG.) Best done as the standard `plat_` entropy hook when the game loop is
-      lifted behind `plat.h` (Phase 3).
+- [x] **SMS + Game Gear fixed-seed bug fixed** — done as part of the Phase-3
+      controller refactor: `plat_seed()` (entropy folded from the menu's input timing
+      in `wait_press`) replaced the fixed `0xA537`. The standardized hook means every
+      converted port seeds the same way.
 - [ ] Game Boy token glide animation (deferred).
 
 ## Phase 8 — Polish & release

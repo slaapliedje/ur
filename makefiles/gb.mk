@@ -6,7 +6,7 @@
 # Uses $(ZCC) + the exported ZCCCFG from adam.mk (include after it). No FujiNet.
 GB_OUT     := $(BUILD_DIR)/gb
 GB_FLAGS   := +gb -DUR_GB -I$(SRC_DIR)/gb -I$(SRC_DIR)/sms $(COMMON_INC)
-GB_SOURCES := $(COMMON_SOURCES) $(wildcard $(SRC_DIR)/gb/*.c)
+GB_SOURCES := $(COMMON_SOURCES) $(UR_GAME_SRC) $(wildcard $(SRC_DIR)/gb/*.c)
 
 .PHONY: gb
 gb: | $(GB_OUT) ## Build the Game Boy / Game Boy Color ROM (z88dk +gb)

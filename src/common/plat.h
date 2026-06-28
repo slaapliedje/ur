@@ -1,74 +1,51 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 /*
- * plat.h — the platform interface for Ur.
+ * plat.h — the platform interface for Ur's shared game controller.
  *
- * The portable core (src/common) CALLS these functions; each platform layer
- * (src/atari, src/adam, src/c64, src/apple2) IMPLEMENTS them. The core never
- * includes platform headers and never touches hardware — this header is the
- * entire contract between the two sides. The core calls the platform, never the
- * reverse.
+ * The portable controller (src/common/ur_game.c) CALLS these; each platform layer
+ * (src/atari, src/nes, src/gb, …) IMPLEMENTS them. The controller owns the game
+ * flow (the turn loop, rolls, AI, win); the platform owns rendering, input, sound,
+ * and its RNG entropy source. The core never includes platform headers and never
+ * touches hardware — this header is the entire contract between the two sides.
  *
- * Must stay TOOLCHAIN-NEUTRAL: this compiles under cc65 (6502: Atari/C64/Apple II)
- * and z88dk/SDCC (Z80: Coleco Adam). Use only portable standard C here.
+ * Must stay TOOLCHAIN-NEUTRAL: it compiles under cc65 (6502) and z88dk/SDCC (Z80 /
+ * gbz80). Use only portable standard C here.
  *
- * NOTE: this is an initial sketch of the interface. Refine the signatures as the
- * core takes shape (see docs/architecture.md). Keep it small and stable.
+ * (Networking is NOT part of this contract: the FujiNet ports drive fujinet-lib
+ * directly in their own online loop — see src/net. This interface covers the
+ * shared LOCAL game only.)
  */
 #ifndef UR_PLAT_H
 #define UR_PLAT_H
 
 #include <stdint.h>
+#include "ur.h"
 
-/* Opaque game state, defined by the core. The platform receives the pointer and
- * passes it to core read-only helpers for rendering; it does not poke inside. */
-struct game_state;
+#define UR_NO_ROLL 0xFFu      /* "no current roll" sentinel for plat_draw()/choose */
 
-/* ---- Lifecycle ---------------------------------------------------------- */
-void     plat_init(void);          /* set up display, input, sound, RNG */
-void     plat_shutdown(void);
+/* Draw the board + HUD for the active game (ur_g). `roll` is 0..4 or UR_NO_ROLL;
+ * `msg` is a short status line (may be NULL). */
+void     plat_draw(uint8_t roll, const char *msg);
 
-/* ---- Timing / RNG ------------------------------------------------------- */
-void     plat_wait_frame(void);    /* block until the next display frame (VBI) */
-uint16_t plat_rng_seed(void);      /* hardware entropy to seed the core's RNG */
+/* Block until the player presses a confirm/continue button (one tap). */
+void     plat_wait(void);
 
-/* ---- Display ------------------------------------------------------------ */
-void     plat_draw_board(void);                        /* static board, drawn once */
-void     plat_draw_state(const struct game_state *gs); /* pieces, dice, scores */
-void     plat_present(void);                           /* flush back buffer, if any */
+/* With the board already drawn for `roll`, render the legal-move list and let the
+ * player pick one. Returns the chosen piece index (0..UR_PIECES-1), or -1 if there
+ * is no legal move. */
+int8_t   plat_choose_move(uint8_t player, uint8_t roll);
 
-/* ---- Input -------------------------------------------------------------- */
-typedef enum {
-    PLAT_INPUT_NONE = 0,
-    PLAT_INPUT_LEFT,
-    PLAT_INPUT_RIGHT,
-    PLAT_INPUT_UP,
-    PLAT_INPUT_DOWN,
-    PLAT_INPUT_SELECT,   /* roll dice / confirm the highlighted move */
-    PLAT_INPUT_CANCEL,
-    PLAT_INPUT_MENU
-} plat_input_t;
+/* Animate the moving piece sliding from path position `from` to `to` (the move has
+ * just been applied to ur_g; the board still shows the pre-move frame). Ports
+ * without token animation provide an empty stub. */
+void     plat_animate(uint8_t player, uint8_t from, uint8_t to);
 
-plat_input_t plat_input_poll(void);  /* non-blocking; returns an abstract action */
+/* Sound effects (chip player per platform). */
+void     plat_sfx_roll(void);
+void     plat_sfx_result(const ur_move_result *res);
 
-/* ---- Sound -------------------------------------------------------------- */
-typedef enum {
-    PLAT_SFX_ROLL = 0,
-    PLAT_SFX_MOVE,
-    PLAT_SFX_CAPTURE,
-    PLAT_SFX_ROSETTE,
-    PLAT_SFX_WIN,
-    PLAT_SFX_ILLEGAL
-} plat_sfx_t;
-
-void     plat_sound_play(plat_sfx_t sfx);
-
-/* ---- Networking --------------------------------------------------------- */
-/* Thin shim over fujinet-lib's N: device (see src/net). Connections use a
- * devicespec such as "N:TCP://host:port/". Functions return < 0 on error. */
-int8_t   plat_net_open(const char *devicespec);
-int16_t  plat_net_read(uint8_t *buf, uint16_t len);   /* bytes read, or < 0 */
-int16_t  plat_net_write(const uint8_t *buf, uint16_t len);
-int8_t   plat_net_status(uint16_t *bytes_waiting);    /* 0 ok; sets *bytes_waiting */
-void     plat_net_close(void);
+/* Entropy to seed the dice RNG — a hardware source (e.g. POKEY/DIV/V-counter) or an
+ * input-timing accumulator. Called once, at the first game. */
+uint16_t plat_seed(void);
 
 #endif /* UR_PLAT_H */

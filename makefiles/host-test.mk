@@ -4,7 +4,10 @@
 HOST_CC   ?= cc
 TEST_DIR  := tests
 TEST_OUT  := $(BUILD_DIR)/host-test
-TEST_SRCS := $(wildcard $(TEST_DIR)/*.c) $(wildcard $(COMMON_DIR)/*.c)
+# The controller (ur_game.c) needs a platform (plat_*); the tests exercise the pure
+# rules/proto core directly, so exclude it (it's integration-tested on the emulators).
+TEST_SRCS := $(wildcard $(TEST_DIR)/*.c) \
+             $(filter-out %ur_game.c,$(wildcard $(COMMON_DIR)/*.c))
 
 .PHONY: test
 test: | $(TEST_OUT) ## Build & run host unit tests for src/common

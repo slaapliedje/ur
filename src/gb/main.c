@@ -21,6 +21,7 @@
 #include <arch/gb/cgb.h>
 
 #include "ur.h"
+#include "ur_game.h"        /* shared local-game controller + plat.h interface */
 #include "music.h"          /* the Hurrian Hymn title theme (shared melody) */
 #include "sound.h"
 #include "font8.h"          /* shared 1bpp font (from src/sms; -I in gb.mk) */
@@ -271,16 +272,13 @@ static bool is_rosette_cell(uint8_t row, uint8_t col)
     return (row != 1 && (col == 0 || col == 6)) || (row == 1 && col == 3);
 }
 
-static ur_state game;
-static bool ai1;
-static uint16_t g_seed = 0xACE1u;     /* RNG seed accumulator (entropy) */
+static uint16_t g_seed = 0xACE1u;     /* RNG entropy accumulator (the menu/hymn) */
 static bool g_played_music = false;
-static bool g_seeded = false;
 
 static uint8_t count_at(uint8_t pl, uint8_t pos)
 {
     uint8_t i, n = 0;
-    for (i = 0; i < UR_PIECES; i++) if (game.piece[pl][i] == pos) n++;
+    for (i = 0; i < UR_PIECES; i++) if (ur_g.piece[pl][i] == pos) n++;
     return n;
 }
 
@@ -292,7 +290,8 @@ static void draw_tray(uint8_t x, uint8_t y, uint8_t n, uint8_t tile)
     for (i = 0; i < n; i++) put_tile((uint8_t)(x + i), y, tile);
 }
 
-static void draw_board(uint8_t roll, const char *msg)
+/* plat.h: draw the board + HUD + message for the active game. */
+void plat_draw(uint8_t roll, const char *msg)
 {
     uint8_t row, col, pl, i, pos, rr, cc;
 
@@ -302,7 +301,7 @@ static void draw_board(uint8_t roll, const char *msg)
     screen_clear();
     put_str(0, TITLE_Y, "THE ROYAL GAME OF UR");
     put_str(0, HUD_Y, "Turn:");
-    put_str(HUD_TURN_X, HUD_Y, game.turn ? "DARK " : "LIGHT");
+    put_str(HUD_TURN_X, HUD_Y, ur_g.turn ? "DARK " : "LIGHT");
     put_str(HUD_ROLL_X, HUD_Y, "Rl:");
     if (roll != NO_ROLL) put_u(HUD_ROLLV_X, HUD_Y, roll);
 
@@ -318,34 +317,36 @@ static void draw_board(uint8_t roll, const char *msg)
 
     for (pl = 0; pl < UR_NUM_PLAYERS; pl++)
         for (i = 0; i < UR_PIECES; i++) {
-            pos = game.piece[pl][i];
+            pos = ur_g.piece[pl][i];
             if (pos_to_cell(pl, pos, &rr, &cc))
                 put_cell(cellx(cc), celly(rr), pl ? TILE_TOKD : TILE_TOKL);
         }
 
     put_str(0, LTRAY_Y, "L");
     draw_tray(TRAY_WX, LTRAY_Y, count_at(0, UR_POS_START), TILE_TRYL);
-    draw_tray(TRAY_HX, LTRAY_Y, ur_score(&game, 0), TILE_TRYL);
+    draw_tray(TRAY_HX, LTRAY_Y, ur_score(&ur_g, 0), TILE_TRYL);
     put_str(0, DTRAY_Y, "D");
     draw_tray(TRAY_WX, DTRAY_Y, count_at(1, UR_POS_START), TILE_TRYD);
-    draw_tray(TRAY_HX, DTRAY_Y, ur_score(&game, 1), TILE_TRYD);
+    draw_tray(TRAY_HX, DTRAY_Y, ur_score(&ur_g, 1), TILE_TRYD);
 
     if (msg) put_str(MSG_X, MSG_Y, msg);
     DISPLAY_ON;
 }
 
-static int8_t choose_move(uint8_t player, uint8_t roll)
+/* plat.h: with the board for `roll` already drawn, render the move list + selector
+ * and read the pick. */
+int8_t plat_choose_move(uint8_t player, uint8_t roll)
 {
     uint8_t pieces[UR_PIECES], srcs[UR_PIECES];
     uint8_t count, nsrc, i, j, pos, sel;
     bool seen;
     uint8_t k;
 
-    count = ur_legal_moves(&game, player, roll, pieces);
+    count = ur_legal_moves(&ur_g, player, roll, pieces);
     if (count == 0) return -1;
     nsrc = 0;
     for (i = 0; i < count; i++) {
-        pos = game.piece[player][pieces[i]];
+        pos = ur_g.piece[player][pieces[i]];
         seen = false;
         for (j = 0; j < nsrc; j++) if (srcs[j] == pos) { seen = true; break; }
         if (!seen) srcs[nsrc++] = pos;
@@ -372,66 +373,16 @@ static int8_t choose_move(uint8_t player, uint8_t roll)
 
     pos = srcs[sel];
     for (i = 0; i < count; i++)
-        if (game.piece[player][pieces[i]] == pos) return (int8_t)pieces[i];
+        if (ur_g.piece[player][pieces[i]] == pos) return (int8_t)pieces[i];
     return (int8_t)pieces[0];
 }
 
-static bool human_turn(uint8_t player)
-{
-    uint8_t roll;
-    int8_t picked;
-    ur_move_result res;
-
-    draw_board(NO_ROLL, "Press A to roll");
-    wait_press();
-    roll = ur_dice_roll();
-    sfx_roll();
-    draw_board(roll, "");
-
-    picked = choose_move(player, roll);
-    if (picked < 0) {
-        draw_board(roll, "No legal move - A");
-        wait_press();
-        ur_advance_turn(&game, (const ur_move_result *)0);
-        return false;
-    }
-    ur_apply_move(&game, player, (uint8_t)picked, roll, &res);
-    sfx_for_result(&res);
-    if (res.won) return true;
-    if (res.captured || res.rosette) {
-        draw_board(roll, res.captured ? "Capture! - A" : "Rosette - again!");
-        wait_press();
-    }
-    ur_advance_turn(&game, &res);
-    return false;
-}
-
-static bool computer_turn(uint8_t player)
-{
-    uint8_t pieces[UR_PIECES], roll;
-    int8_t pick;
-    ur_move_result res;
-
-    draw_board(NO_ROLL, "Dark's turn - A");
-    wait_press();
-    roll = ur_dice_roll();
-    sfx_roll();
-    draw_board(roll, "");
-    if (ur_legal_moves(&game, player, roll, pieces) == 0) {
-        draw_board(roll, "Dark: no move");
-        wait_press();
-        ur_advance_turn(&game, (const ur_move_result *)0);
-        return false;
-    }
-    pick = ur_ai_pick(&game, player, roll);
-    ur_apply_move(&game, player, (uint8_t)pick, roll, &res);
-    sfx_for_result(&res);
-    draw_board(roll, "Dark moved - A");
-    wait_press();
-    if (res.won) return true;
-    ur_advance_turn(&game, &res);
-    return false;
-}
+/* plat.h: wait for one confirm press; sound + RNG entropy. */
+void plat_wait(void) { wait_press(); }
+void plat_sfx_roll(void) { sfx_roll(); }
+void plat_sfx_result(const ur_move_result *res) { sfx_for_result(res); }
+uint16_t plat_seed(void) { return (uint16_t)(g_seed ^ ((uint16_t)rDIV << 3)); }
+void plat_animate(uint8_t player, uint8_t from, uint8_t to) { (void)player; (void)from; (void)to; }
 
 /* Title music: the Hurrian Hymn, once, skippable. The per-note loop is also where
  * we gather RNG entropy — the GB's blocking waitpad gives no idle loop to count in,
@@ -476,30 +427,16 @@ static bool title_menu(void)
 
 void main(void)
 {
-    uint8_t player;
-    bool over;
+    uint8_t vs_ai, winner;
 
     video_init();
     gb_sound_init();
 
     for (;;) {
-        ai1 = title_menu();
-        /* Seed once from gathered entropy: the hymn's DIV mix + DIV sampled at the
-         * (human-timed) moment the player confirmed the menu. Later games continue
-         * the RNG sequence, so each game differs. */
-        if (!g_seeded) {
-            ur_rng_seed((uint16_t)((g_seed ^ ((uint16_t)rDIV << 3)) | 1u));
-            g_seeded = true;
-        }
-        ur_init(&game);
-        over = false;
-        for (;;) {
-            player = game.turn;
-            if (player == 1 && ai1) over = computer_turn(player);
-            else                    over = human_turn(player);
-            if (over) break;
-        }
-        draw_board(NO_ROLL, player == 0 ? "LIGHT WINS! - A" : "DARK WINS! - A");
+        vs_ai = title_menu() ? 1 : 0;      /* plays the hymn + gathers entropy */
+        winner = ur_run_game(vs_ai);       /* shared controller drives the turns */
+        if (vs_ai) plat_draw(NO_ROLL, winner == 0 ? "YOU WIN! - A" : "YOU LOSE - A");
+        else       plat_draw(NO_ROLL, winner == 0 ? "LIGHT WINS! - A" : "DARK WINS! - A");
         wait_press();
     }
 }
