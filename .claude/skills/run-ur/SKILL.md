@@ -79,7 +79,9 @@ your terminal — a backgrounded atari800 spawned from the agent's shell gets ki
 - **ColecoVision** `make coleco` → `build/coleco/ur.rom` — `mame coleco -cart …`.
 - **C64** `make c64` → `build/c64/ur.prg` — run in VICE (`x64sc`).
 - **Apple II** `make apple2` → `build/apple2/ur.po` — `mame apple2ee` (ProDOS disk).
-- **SMS** `make sms` → `build/sms/ur.sms` (bring-up scaffold).
+- **SMS** `make sms` → `build/sms/ur.sms` — renders + playable; run in `mame sms`
+  (D-pad = arrows, button 1 = Left Ctrl). Drive like the Atari path but `xset r off`
+  first (X key-repeat → extra control-pad edges). See [`src/sms/CLAUDE.md`](../../../src/sms/CLAUDE.md).
 
 ## Gotchas (this environment — non-obvious)
 
