@@ -16,14 +16,23 @@ Game Boy Color** cart, the **Atari 5200**, and the **NES / Famicom**.
 
 ## Status
 
-**Playable on every target.** All eleven builds run locally (hot-seat + vs-AI) with
-a unified horizontal *Standard of Ur* board — carved cells, gold rosettes, two-tone
-tokens — and chip sound + the Hurrian Hymn title theme (a couple of the bonus ports
-still need audio; see [`ROADMAP.md`](ROADMAP.md)). **FujiNet online** (`N:TCP`,
-server-authoritative, cross-platform) is implemented on the four FujiNet platforms
-(Atari / Adam / C64 / Apple II); end-to-end cross-play needs FujiNet hardware (or
-FujiNet-PC) plus the game server. See [`ROADMAP.md`](ROADMAP.md) for the per-phase
-status.
+**Playable on every target.** All eleven builds run locally (hot-seat + vs-AI, with
+selectable AI difficulty) on a unified horizontal *Standard of Ur* board — carved
+cells, gold rosettes, two-tone tokens — each with chip sound + the Hurrian Hymn title
+theme (the Apple II also drives a **Mockingboard** if present). **FujiNet online**
+(`N:TCP`, server-authoritative, cross-platform) is implemented on the four FujiNet
+platforms (Atari / Adam / C64 / Apple II); end-to-end cross-play needs FujiNet
+hardware (or FujiNet-PC) plus the game server. See [`ROADMAP.md`](ROADMAP.md) for the
+per-phase status.
+
+## Releases
+
+`make release` builds all eleven targets and bundles each platform's image (Atari
+`.xex`, 5200 `.a52`, C64 `.prg`, Apple II `.system`/`.po`, Adam `.ddp`, ColecoVision
+`.rom`, SMS `.sms`, Game Gear `.gg`, Game Boy `.gb`, NES `.nes`) into
+`build/release/` with a manifest and checksums. Pushing a `v*` tag runs the release
+workflow, which builds in the dev image and attaches the artifacts to a GitHub
+Release.
 
 ## How it's built
 

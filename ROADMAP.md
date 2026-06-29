@@ -201,7 +201,14 @@ FujiNet, so no online path — like the ColecoVision cartridge).
       or D-pad Up/Down + button on the console ports). Host-tested: Hard/Normal beat
       Easy by a clear margin (`test_ai_levels_strength`).
 - [ ] More sound/music per chip (in-game underscore?); animation polish.
-- [ ] Packaging: `.atr` / `.dsk` / `.ddp` / `.d64` / `.po`; GitHub Releases.
+- [x] **Packaging + GitHub Releases** — `make release` builds all 11 targets and
+      bundles each platform's image (`.xex` / `.a52` / `.prg` / `.system`+`.po` /
+      `.ddp` / `.rom` / `.sms` / `.gg` / `.gb` / `.nes`) into `build/release/` with a
+      MANIFEST, SHA256SUMS, README/LICENSE, and a zip (`tools/package-release.sh`).
+      A tag push (`v*`) runs `.github/workflows/release.yml`, which builds in the dev
+      image and attaches the artifacts to the Release. (Disk-image variants —
+      `.atr`/`.d64` for the disk-preferring crowd — are an optional follow-up; the
+      shipped images run directly in the standard emulators.)
 - [ ] Distribution (itch.io / AtariAge / FujiNet game listing).
 
 ---

@@ -1,0 +1,58 @@
+name: release
+
+# Build every platform's distributable image and attach it to a GitHub Release.
+# Trigger by pushing a version tag (e.g. `git tag v0.1.0 && git push origin v0.1.0`),
+# or run manually from the Actions tab (provide a version).
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version label (e.g. v0.1.0)'
+        required: true
+        default: 'dev'
+
+permissions:
+  contents: write          # needed to create/update the Release
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ github.event.inputs.version || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0     # tags available for any git-based versioning
+
+      # Same dev image the CI build job uses (cc65 + z88dk in one container).
+      - name: Build dev image (cc65 + z88dk)
+        run: docker build -t ur-dev .
+
+      # Build all 11 platform targets and bundle them. Version comes from the tag,
+      # so the container doesn't need git. fujinet-lib (for adam) is fetched inside.
+      - name: Build + package release
+        run: docker run --rm -v "$PWD":/src ur-dev make release UR_VERSION="$VERSION"
+
+      # The container writes as root; make the bundle readable by the upload step.
+      - name: Fix ownership
+        run: sudo chown -R "$(id -u):$(id -g)" build/release
+
+      - name: Show manifest
+        run: cat "build/release/ur-$VERSION/MANIFEST.txt"
+
+      - name: Attach artifacts to the Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Ur ${{ env.VERSION }}
+          body_path: build/release/ur-${{ env.VERSION }}/MANIFEST.txt
+          files: |
+            build/release/*.zip
+            build/release/*.tar.gz
+            build/release/ur-*/ur-*
+            build/release/ur-*/SHA256SUMS.txt

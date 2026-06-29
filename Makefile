@@ -18,6 +18,7 @@ include makefiles/nes.mk
 include makefiles/c64.mk
 include makefiles/apple2.mk
 include makefiles/host-test.mk
+include makefiles/release.mk
 
 .PHONY: all clean deps help
 .DEFAULT_GOAL := help
