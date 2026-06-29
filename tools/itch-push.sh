@@ -49,13 +49,13 @@ push() {  # <dir> <channel>
 
 if [ "${DRY_RUN:-0}" = 1 ] || ! command -v butler >/dev/null 2>&1; then
   [ "${DRY_RUN:-0}" = 1 ] || echo "[itch] butler not found — staging only (install it + 'butler login' to push)."
-  echo "[itch] would push: $TARGET:all-platforms  + per-platform channels:"
+  echo "[itch] would push: $TARGET:roms  + per-platform channels:"
   while read -r chan prefix; do [ -n "${chan:-}" ] && echo "          $TARGET:$chan"; done <<< "$PLATFORMS"
   echo "[itch] staged under $ITCH/ and the bundle at $BUNDLE/"
   exit 0
 fi
 
-push "$BUNDLE" all-platforms
+push "$BUNDLE" roms
 while read -r chan prefix; do
   [ -z "${chan:-}" ] && continue
   [ -d "$ITCH/$chan" ] && push "$ITCH/$chan" "$chan"
