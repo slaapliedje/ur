@@ -96,7 +96,12 @@ as the description (post body → `</>` → paste), suggested title in the file'
 - **Platforms field:** itch's Windows/macOS/Linux checkboxes drive its app/installer
   features; since these are ROMs, leaving them unchecked (a plain download) is
   correct. The zip is OS-agnostic.
-- **Channels:** `tools/itch-push.sh` pushes to one channel (`roms`); itch versions
-  each push automatically. (Per-platform channels are an option later.) An HTML5
-  browser build is intentionally **not** planned — these ports are for playing on
-  real/emulated retro hardware, and web versions of Ur already exist.
+- **Downloads / channels:** `tools/itch-push.sh` pushes **both** an `all-platforms`
+  bundle **and one channel per machine** (`atari`, `atari-5200`, `c64`, `apple2`,
+  `coleco-adam`, `colecovision`, `master-system`, `game-gear`, `game-boy`, `nes`), so
+  the page shows a download button for every platform plus the full set. Each
+  per-platform download is self-contained (its ROM(s) + `HOW-TO-PLAY.txt` + LICENSE).
+  itch versions each push automatically. (`DRY_RUN=1 tools/itch-push.sh` stages
+  everything without butler, to preview what will be pushed.)
+- An HTML5 browser build is intentionally **not** planned — these ports are for
+  playing on real/emulated retro hardware, and web versions of Ur already exist.
