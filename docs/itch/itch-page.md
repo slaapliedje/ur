@@ -67,16 +67,21 @@ this palette in `server/web.go`).
 
 ## Cover & screenshots
 
-- **Cover (630×500):** a clean board shot reads best — the **SMS** or **Apple II
-  double-hi-res** board (most colourful), or the **Atari title** (the ziggurat). Crop
-  tight on the board.
-- **Screenshots (aim for 5–7, show the range):** SMS board (the showpiece) · Apple II
-  lo-res *and* DHGR boards · NES board · Game Boy **Color** board · C64 board · the
-  Atari title/menu. A **"CAPTURE!"** or **"ROSETTE — AGAIN!"** moment makes a great
-  action shot, and a two-screen grab of **two Ataris playing each other over FujiNet**
-  is a fun "it's really networked" shot.
-- Capture from each emulator at integer scale (sharp pixels), PNG. The `run-ur` skill
-  / the emulators set up during development produce these directly.
+A ready-to-upload **press kit is staged in
+[`screenshots/`](screenshots/)** (`01`–`09`, with `captions.txt`):
+Master System (showpiece), Apple II double-hi-res + lo-res, Game Boy Color,
+ColecoVision, Atari 5200, the Atari title (ziggurat), the two-Ataris-over-FujiNet
+shot, and the NES title.
+
+> **Upload them in the dashboard** — *Edit game → Screenshots* (drag-and-drop).
+> `butler`/`itch-push.sh` only upload game *builds*, not page screenshots/cover.
+
+- **Cover (630×500):** crop `01-master-system.png` or `02-apple2-double-hires.png`
+  tight on the board, or use `07-atari-8bit-title.png` (the ziggurat) for branding.
+- **Not in the kit** (couldn't drive them headless here): a C64 *board*, Game Gear,
+  Coleco Adam — grab those from an emulator whenever you like (the C64 looks like its
+  menu, Game Gear mirrors the SMS, the Adam mirrors the ColecoVision shot). A live
+  **"CAPTURE!"** / **"ROSETTE — AGAIN!"** moment also makes a great action shot.
 
 ---
 

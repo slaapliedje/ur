@@ -1,0 +1,20 @@
+Press-kit screenshots for the itch.io page (upload via Dashboard -> Edit game ->
+Screenshots — butler can't upload these). Suggested captions:
+
+  01-master-system.png      Sega Master System — the showpiece board
+  02-apple2-double-hires.png Apple IIe — 16-colour double-hi-res board
+  03-apple2-lores.png       Apple IIe — lo-res colour board
+  04-game-boy-color.png     Game Boy Color
+  05-colecovision.png       ColecoVision (the Coleco Adam shares this look)
+  06-atari-5200.png         Atari 5200
+  07-atari-8bit-title.png   Atari 8-bit — title (the ziggurat)
+  08-atari-vs-atari-online.png  Two Ataris playing each other over FujiNet
+  09-nes-title.png          NES / Famicom — title
+
+COVER (630x500): crop 01-master-system.png or 02-apple2-double-hires.png tight
+on the board, or use 07-atari-8bit-title.png (the ziggurat) for branding.
+
+NOT captured here (grab yourself when handy — VICE/these emulators are hard to
+drive headless in this setup): a Commodore 64 *board*, Game Gear, Coleco Adam.
+The C64 looks like its menu shot; Game Gear mirrors the Master System; the Adam
+mirrors the ColecoVision board above.
