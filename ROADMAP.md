@@ -227,8 +227,9 @@ FujiNet, so no online path — like the ColecoVision cartridge).
       `HOW-TO-PLAY.txt` (per-platform emulator + controls + credits), plus a page
       draft ([`docs/itch/itch-page.md`](docs/itch/itch-page.md)) and a butler push
       script ([`tools/itch-push.sh`](tools/itch-push.sh)). Remaining (needs the
-      account): create the itch project + `butler login` + run the push. An HTML5
-      browser-play build (EmulatorJS/RetroArch-web) is a possible follow-up.
+      account): create the itch project + `butler login` + run the push. (An HTML5
+      browser-play build is **deliberately out of scope** — the ports are for retro
+      hardware/emulator players, and web versions of Ur already abound.)
 - [x] **Online clients published** — the four FujiNet builds (`ur.xex`/`ur.ddp`/
       `ur.prg`/`ur.system`) are served live on thefnords.com (TNFS + HTTP), lobby
       registered (appkey 6). See the deploy procedure in the project memory.

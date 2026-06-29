@@ -72,5 +72,6 @@ server: https://github.com/slaapliedje/ur
   features; since these are ROMs, leaving them unchecked (a plain download) is
   correct. The zip is OS-agnostic.
 - **Channels:** `tools/itch-push.sh` pushes to one channel (`roms`); itch versions
-  each push automatically. (You could later add per-platform channels or an HTML5
-  browser build as a second project/embed.)
+  each push automatically. (Per-platform channels are an option later.) An HTML5
+  browser build is intentionally **not** planned — these ports are for playing on
+  real/emulated retro hardware, and web versions of Ur already exist.
