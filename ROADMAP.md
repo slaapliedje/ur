@@ -69,10 +69,15 @@ committable state.
       7 home, and that the C core agrees with the server on every legal move). Runs in
       CI. Since FujiNet is a transparent `N:TCP` pipe, this covers the protocol +
       mediation; only the FujiNet **device transport** still needs FujiNet-PC.
-- [x] Online 2-player on Atari — "Online" mode (`online_game` over `N:TCP`); compiles
-      in CI; protocol/mediation covered by `make test-online`. **Full FujiNet-device
-      end-to-end** still needs FujiNet-PC + an emulator with FujiNet (atari800 has
-      `-netsio`; Atari↔Atari is the proven path) — the remaining transport check.
+- [x] **Online 2-player on Atari — proven end-to-end over FujiNet-PC.** Two real
+      `ur.xex` clients, each via its own FujiNet-PC (`atari800 -netsio` ⇄ FujiNet-PC ⇄
+      `N:TCP://localhost:1234` ⇄ the Go server), were paired by the server into a
+      two-human game (server logged both JOINs + `game start`; both Atari boards
+      mirrored the same server-arbitrated turn). Single-Atari-vs-server-AI also
+      verified (FujiNet-PC `NetworkProtocolTCP::read(21)` = the STATE over real TCP).
+      Setup + gotchas (run-fujinet, cold-reset stagger; Fujisan does it turnkey) in
+      [`docs/protocol.md`] / the project memory. The FujiNet device transport is now
+      covered; protocol/mediation also covered headless by `make test-online`.
 - [x] FGS Lobby registration in the server (`server/lobby.go`, opt-in via
       `UR_LOBBY=1`; POSTs the `GameServer` JSON, heartbeat + player-count updates).
 - [ ] Real discoverability: the server now advertises + serves **all four**
