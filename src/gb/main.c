@@ -26,8 +26,13 @@
 #include "sound.h"
 #include "font8.h"          /* shared 1bpp font (from src/sms; -I in gb.mk) */
 
-#define rBGP (*(volatile uint8_t *)0xFF47)   /* DMG bg palette register */
-#define rDIV (*(volatile uint8_t *)0xFF04)   /* free-running timer (entropy) */
+#define rBGP  (*(volatile uint8_t *)0xFF47)  /* DMG bg palette register     */
+#define rOBP0 (*(volatile uint8_t *)0xFF48)  /* DMG sprite palette 0        */
+#define rDIV  (*(volatile uint8_t *)0xFF04)  /* free-running timer (entropy) */
+
+/* Sprite tile slots in the $8000 block for the gliding token (4 tiles each). */
+#define SPR_TOKL 0
+#define SPR_TOKD 4
 
 /* ---- palette: one 4-colour palette does the whole board ---------------- *
  * 0 field (dark lapis)  1 face (lapis)  2 shell (cream/white)  3 gold.
@@ -80,6 +85,31 @@ static void load_cell(uint8_t first)
     load_quad(8, 0, (uint8_t)(first + 1));
     load_quad(0, 8, (uint8_t)(first + 2));
     load_quad(8, 8, (uint8_t)(first + 3));
+}
+
+/* Sprites always read tile data from $8000, but the BG uses the $8800 block (the
+ * z88dk gb crt0 default), so the token's BG tiles can't double as sprite tiles —
+ * pack a sprite copy of the current `grid` token into 4 sprite tiles at spr_first.
+ * Used only for the gliding token (see plat_animate). */
+static uint8_t sbuf[64];
+static void pack_quad(uint8_t sx, uint8_t sy, uint8_t *dst)
+{
+    uint8_t r, c, p0, p1;
+    for (r = 0; r < 8; r++) {
+        p0 = 0; p1 = 0;
+        for (c = 0; c < 8; c++) {
+            uint8_t v = grid[((sy + r) << 4) + sx + c] & 3;
+            if (v & 1) p0 |= (uint8_t)(0x80 >> c);
+            if (v & 2) p1 |= (uint8_t)(0x80 >> c);
+        }
+        dst[r * 2] = p0; dst[r * 2 + 1] = p1;
+    }
+}
+static void load_cell_sprite(uint8_t spr_first)
+{
+    pack_quad(0, 0, &sbuf[0]);   pack_quad(8, 0, &sbuf[16]);
+    pack_quad(0, 8, &sbuf[32]);  pack_quad(8, 8, &sbuf[48]);
+    set_sprite_data(spr_first, 4, sbuf);
 }
 
 static void grid_carved(void)
@@ -178,12 +208,22 @@ static void video_init(void)
     build_dots();    load_cell(TILE_DOTS);
     build_eye();     load_cell(TILE_EYE);
     build_token(C_SHELL, C_FACE,  C_FIELD, TILE_TOKL);  /* Light: shell disc */
+    load_cell_sprite(SPR_TOKL);                         /* + a sprite copy for the glide */
     build_token(C_FACE,  C_SHELL, C_GOLD,  TILE_TOKD);  /* Dark: lapis+gold  */
+    load_cell_sprite(SPR_TOKD);
     build_bead(C_SHELL, C_FACE,  TILE_TRYL);
     build_bead(C_FACE,  C_SHELL, TILE_TRYD);
 
+    /* sprite palette = the board palette (colour 0 is transparent for sprites). */
+    if (_cpu == CGB_TYPE)
+        set_sprite_palette(0, 1, (uint16_t *)cgb_pal);
+    else
+        rOBP0 = DMG_BGP;
+
     SHOW_BKG;
+    SHOW_SPRITES;
     DISPLAY_ON;
+    enable_interrupts();         /* crt0 already set IE=VBL; the VBL ISR does OAM DMA */
 }
 static void load_font(void)
 {
@@ -382,7 +422,81 @@ void plat_wait(void) { wait_press(); }
 void plat_roll(uint8_t roll) { (void)roll; sfx_roll(); }
 void plat_sfx_result(const ur_move_result *res) { sfx_for_result(res); }
 uint16_t plat_seed(void) { return (uint16_t)(g_seed ^ ((uint16_t)rDIV << 3)); }
-void plat_animate(uint8_t player, uint8_t from, uint8_t to) { (void)player; (void)from; (void)to; }
+/* ---- token glide animation (hardware sprites) -------------------------- *
+ * A move plays as a four-sprite 16x16 token sliding cell-to-cell along the path.
+ * Static pieces stay BG tiles; only the mover becomes a sprite. The board's BG uses
+ * the $8800 tile block, sprites the $8000 block, so the token has a sprite copy
+ * (SPR_TOKL/SPR_TOKD, loaded in video_init). OAM updates are DMA'd by the VBL ISR
+ * each frame; we pace by polling LY (robust — never hangs). */
+#define rLY (*(volatile uint8_t *)0xFF44)
+static void gb_waitframe(void) { while (rLY >= 144) {} while (rLY < 144) {} }
+
+static uint8_t base_for(uint8_t row, uint8_t col)
+{
+    if (is_rosette_cell(row, col)) return TILE_ROSE;
+    if (row == 1)                  return TILE_EYE;
+    return TILE_DOTS;
+}
+/* Pixel position of a path cell (pos 0 = the waiting tray, pos>14 = the home tray). */
+static void cell_px(uint8_t player, uint8_t pos, uint8_t *px, uint8_t *py)
+{
+    uint8_t r, c;
+    if (pos == 0 || pos > UR_PATH_LEN) {
+        *px = (uint8_t)((pos == 0 ? TRAY_WX : TRAY_HX) * 8);
+        *py = (uint8_t)((player ? DTRAY_Y : LTRAY_Y) * 8);
+        return;
+    }
+    pos_to_cell(player, pos, &r, &c);
+    *px = (uint8_t)(cellx(c) * 8);
+    *py = (uint8_t)(celly(r) * 8);
+}
+/* Place the 4-sprite token at screen pixel (px,py). GB OAM is offset by (8,16).
+ * (Tiles are assigned once via set_sprite_tile before the glide; this only moves.) */
+static void put_token_sprite(uint8_t px, uint8_t py)
+{
+    move_sprite(0, (uint8_t)(px + 8),     (uint8_t)(py + 16));
+    move_sprite(1, (uint8_t)(px + 8 + 8), (uint8_t)(py + 16));
+    move_sprite(2, (uint8_t)(px + 8),     (uint8_t)(py + 16 + 8));
+    move_sprite(3, (uint8_t)(px + 8 + 8), (uint8_t)(py + 16 + 8));
+}
+static void hide_token_sprite(void)
+{
+    uint8_t i;
+    for (i = 0; i < 4; i++) move_sprite(i, 0, 0);   /* off-screen */
+    gb_waitframe();
+}
+
+/* plat.h: glide `player`'s token from path position `from` to `to`. */
+void plat_animate(uint8_t player, uint8_t from, uint8_t to)
+{
+    uint8_t base = player ? SPR_TOKD : SPR_TOKL;
+    uint8_t r, c, x, y, nx, ny, p;
+
+    if (from == to) return;
+    /* clear the BG token at the source so it doesn't ghost behind the slide */
+    if (from >= 1 && from <= UR_PATH_LEN) {
+        pos_to_cell(player, from, &r, &c);
+        DISPLAY_OFF;                         /* set_bkg_tiles isn't safe mid-frame */
+        put_cell(cellx(c), celly(r), base_for(r, c));
+        DISPLAY_ON;
+    }
+    set_sprite_tile(0, base);     set_sprite_tile(1, (uint8_t)(base + 1));
+    set_sprite_tile(2, (uint8_t)(base + 2)); set_sprite_tile(3, (uint8_t)(base + 3));
+
+    cell_px(player, from, &x, &y);
+    for (p = (uint8_t)(from + 1); p <= to && p <= UR_POS_HOME; p++) {
+        cell_px(player, p, &nx, &ny);
+        while (x != nx || y != ny) {
+            if (x < nx)      { x += 4; if (x > nx) x = nx; }
+            else if (x > nx) { x -= 4; if (x < nx) x = nx; }
+            if (y < ny)      { y += 4; if (y > ny) y = ny; }
+            else if (y > ny) { y -= 4; if (y < ny) y = ny; }
+            put_token_sprite(x, y);
+            gb_waitframe();
+        }
+    }
+    hide_token_sprite();
+}
 
 /* plat.h: choose the AI difficulty (D-pad Up = Easy, Down = Hard, A = Normal). */
 uint8_t plat_pick_level(void)

@@ -162,7 +162,9 @@ FujiNet, so no online path — like the ColecoVision cartridge).
       controller refactor: `plat_seed()` (entropy folded from the menu's input timing
       in `wait_press`) replaced the fixed `0xA537`. The standardized hook means every
       converted port seeds the same way.
-- [ ] Game Boy token glide animation (deferred).
+- [x] **Game Boy token glide animation** — done: `plat_animate` slides a four-sprite
+      token quad cell-to-cell (4 px/frame, LY-paced), like the SMS; GBC gets a token
+      sprite palette, DMG sets OBP0. See [`src/gb/CLAUDE.md`](src/gb/CLAUDE.md).
 
 ## Phase 8 — Polish & release
 - [x] **Visual parity across platforms** — all 11 targets now share the horizontal

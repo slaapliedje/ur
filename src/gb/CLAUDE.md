@@ -7,8 +7,8 @@
 > carved cells, gold **rosette stars**, bullseye **"eyes"**, five-dot **quincunx**
 > studs, and two-tone **tokens** — on the GB's 160×144 (20×18-tile) screen. Local
 > hot-seat + vs-AI; D-pad + A button. **APU sound** (the Hurrian Hymn title theme +
-> event SFX) and entropy-seeded dice are in; token glide animation is the remaining
-> follow-up. No FujiNet. `make gb` → `build/gb/ur.gb`.
+> event SFX), entropy-seeded dice, and a hardware-sprite **token glide** are all in.
+> No FujiNet. `make gb` → `build/gb/ur.gb`.
 > Run: `mame gameboy` (grey) / `mame gbcolor` (colour).
 
 > Parent context: [`/CLAUDE.md`](../../CLAUDE.md). The shared `src/common` core drops
@@ -107,8 +107,25 @@ loop to count in, so the hymn loop is the GB's equivalent of the other ports'
 input-timing accumulator. (When the game loop is lifted behind `plat.h`, this
 becomes a standard `plat_` entropy hook.)
 
+## Token glide (`plat_animate`)
+
+The moving token slides cell-to-cell with **hardware sprites**, like the SMS. Four
+8×8 sprites form the 16×16 token; `plat_animate(player,from,to)` clears the source
+cell's BG token (a brief `DISPLAY_OFF`/redraw, same as `draw_board`), then glides the
+sprite quad from the source pixel to the destination at 4 px/frame, pacing each step
+by polling **LY** (`gb_waitframe`), and finally hides the sprites so the redrawn BG
+token takes over. Sprite tiles live at the **$8000** base (separate from the BG's
+signed **$8800** base set by the crt0), so the token is copied into sprite VRAM via
+`set_sprite_data`; GBC gets a token sprite palette (`set_sprite_palette`), DMG sets
+`OBP0`. The crt0 `vbl` ISR runs the OAM DMA (`refresh_OAM`), so `enable_interrupts()`
+is required for `move_sprite` to take effect.
+
+Gotchas: sprite color 0 is transparent and OAM coords are offset (`x+8`, `y+16`);
+`set_interrupts` is **not** in this z88dk lib (the crt0 already enables the VBL IE —
+use only `enable_interrupts()`). Like the SMS slide, the mid-glide frame is transient
+and hard to screenshot — verify it live (the game plays through many turns without
+hang/corruption), not by a mid-motion capture.
+
 ## Still to do
 
-1. **Token glide animation** — GB hardware sprites (`set_sprite_*`/`move_sprite`),
-   like the SMS; would also enable a colour token sprite palette on GBC.
-2. The core + protocol are unchanged; FujiNet isn't applicable to a GB cart.
+1. The core + protocol are unchanged; FujiNet isn't applicable to a GB cart.
