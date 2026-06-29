@@ -12,8 +12,9 @@
 FROM z88dk/z88dk:latest
 
 # build-base = gcc + musl-dev + binutils (also used to run the host unit tests).
-# perl = the Game Boy CGB header patch (makefiles/gb-cgb-patch.pl).
-RUN apk add --no-cache build-base git make curl ca-certificates unzip perl \
+# perl = Game Boy CGB header patch; bash + zip = `make release` packaging
+# (tools/package-release.sh; Alpine's busybox has neither).
+RUN apk add --no-cache build-base git make curl ca-certificates unzip perl bash zip \
  && git clone --depth 1 https://github.com/cc65/cc65.git /tmp/cc65 \
  && make -C /tmp/cc65 -j4 \
  && make -C /tmp/cc65 install PREFIX=/usr/local \
