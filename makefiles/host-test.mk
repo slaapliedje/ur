@@ -20,3 +20,7 @@ endif
 
 $(TEST_OUT):
 	mkdir -p $@
+
+.PHONY: test-online
+test-online: ## Online end-to-end test: Go server + two C net clients play a full game
+	tools/test-online.sh

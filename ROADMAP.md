@@ -62,9 +62,17 @@ committable state.
 ## Phase 4 — Networking + game server
 - [x] Wire protocol — `src/common/proto.{h,c}` + `docs/protocol.md`, host-tested.
 - [x] Game server — `server/` (Go), server-authoritative; rules + protocol + tests in CI.
+- [x] **Online end-to-end test (no FujiNet)** — `make test-online`
+      (`tools/test-online.sh` + `tools/ur-netclient.c`): builds the Go server and a
+      host client that speaks the **real** `proto.c`/`ur.c` codec+rules over TCP, then
+      two clients play a full server-authoritative game (asserts a clean winner with
+      7 home, and that the C core agrees with the server on every legal move). Runs in
+      CI. Since FujiNet is a transparent `N:TCP` pipe, this covers the protocol +
+      mediation; only the FujiNet **device transport** still needs FujiNet-PC.
 - [x] Online 2-player on Atari — "Online" mode (`online_game` over `N:TCP`); compiles
-      in CI. **End-to-end test needs FujiNet-PC + an emulator with FujiNet + two
-      instances** (AltirraSDL has no FujiNet; use Wine Altirra or atari800).
+      in CI; protocol/mediation covered by `make test-online`. **Full FujiNet-device
+      end-to-end** still needs FujiNet-PC + an emulator with FujiNet (atari800 has
+      `-netsio`; Atari↔Atari is the proven path) — the remaining transport check.
 - [x] FGS Lobby registration in the server (`server/lobby.go`, opt-in via
       `UR_LOBBY=1`; POSTs the `GameServer` JSON, heartbeat + player-count updates).
 - [ ] Real discoverability: the server now advertises + serves **all four**

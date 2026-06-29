@@ -69,3 +69,9 @@ jobs:
           go vet ./...
           go test ./...
           go build ./...
+
+      # End-to-end: the Go server + two C net clients (real proto.c/ur.c codec)
+      # play a full server-authoritative game over TCP — the online path without
+      # needing FujiNet. (Runner has go + gcc + make.)
+      - name: Online end-to-end (server + two net clients)
+        run: make test-online
