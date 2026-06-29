@@ -726,6 +726,7 @@ int main(void)
 
     BOARD_OFF();                    /* ensure text mode for the menu */
     clrscr();
+    snd_init();                     /* pick the sound backend (Mockingboard or speaker) */
 
 #ifdef UR_ONLINE
     profile_load();                 /* name/wins/host from the appkey, if any */

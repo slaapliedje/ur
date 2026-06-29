@@ -15,9 +15,10 @@
 > bitmap), so they're computed, not generated glyph tables. **MIXED mode** keeps 4
 > text lines at the bottom for the turn / roll / move panel; the title menu and win
 > screen use plain text mode. GR lives in [`gr.c`](gr.c)/[`gr.h`](gr.h). Hot-seat +
-> vs-AI; `cgetc`/`kbhit` native. Sound is the **1-bit speaker**
-> (`src/apple2/sound.c`, $C030). `make apple2` → `build/apple2/ur.system` (+ `ur.po`
-> with AppleCommander).
+> vs-AI; `cgetc`/`kbhit` native. Sound auto-detects a **Mockingboard** (AY-3-8910 —
+> richer music + SFX, `src/apple2/mockingboard.c`) and falls back to the **1-bit
+> speaker** (`src/apple2/sound.c`, $C030). `make apple2` → `build/apple2/ur.system`
+> (+ `ur.po` with AppleCommander).
 >
 > **Verified in MAME** (`apple2ee`, the enhanced //e, booting ProDOS 8): menu, the
 > colour board, two-tone tokens, and a vs-AI turn all render and respond to the
@@ -121,6 +122,42 @@ The title **Hurrian Hymn** still plays through `tone()`/`apple2_music_note`.
 > A). Verified by recording MAME's `-wavwrite`: silence (0.2 s of audio, boot beep
 > only) → 40 s of pitched sound. **Writes** to soft-switches are safe (cc65 keeps
 > them) — that's why the graphics `SOFT()`/`WR()` macros use `*(...)=0`, not a read.
+
+## Mockingboard / AY-3-8910 (`src/apple2/mockingboard.c`)
+
+When a **Mockingboard** (or a Phasor in MB-compat mode) is fitted, the title music and
+every sound effect play through its **AY-3-8910 PSG** — 3 square voices + noise + a
+hardware volume envelope — instead of the 1-bit speaker. **One binary handles both:**
+`snd_init()` (called from `main()`) probes for the card at boot; if found, a runtime
+flag routes `apple2_music_note`/`sfx_*` to the AY (`mb_*`), otherwise to the speaker
+(`spk_*`). The Hurrian Hymn becomes a **melody voice + an octave-down bass voice**;
+SFX use AY tones, the noise channel (dice rattle / capture crash), and the envelope
+(decays, the win fanfare's ring-out).
+
+- **Card = 6522 VIA + AY:** in slot *n*, VIA #1 at `$Cn00`, VIA #2 at `$Cn80`. Drive
+  the AY through VIA port A (data) + port B (control: `$07` latch-reg#, `$06`
+  write-data, `$04` idle, `$00` reset). We mirror writes to **both** AYs so output is
+  centred/audible regardless of stereo routing. All **writes**, so no `(void)volatile`
+  trap.
+- **Detection (`mb_detect`)** scans **only slots 4 and 5** — where Mockingboards live
+  — and NEVER the storage/firmware slots: poking the disk controller in slot 6 (or a
+  SmartPort in 7) wrecks a live ProDOS (an early all-slots scan crashed to the
+  monitor). The probe writes two patterns to the 6522's DDRA latch, each followed by a
+  read of a *different* register (scrubbing the data bus so a floating/held bus can't
+  echo the value), then reads DDRA back — robust against false positives, which would
+  otherwise route sound to an absent AY and go silent on a speaker-only machine.
+- **Build:** auto-detected, no flag — lo-res (default) and `ONLINE=1` builds include
+  `mockingboard.c` + `-DUR_MOCKINGBOARD`; the **DHGR** build excludes it (CODE pinned
+  at `$6000` has no room) and stays speaker-only. See `makefiles/apple2.mk`.
+- **Verify in MAME:** `mame apple2ee -sl4 mockingboard …` (the `-listslots` device is
+  `mockingboard`; `-sl4` is the option). **MAME's apple2ee already has a Mockingboard
+  in slot 4 by default** (`-verbose` shows `:sl4:mockingboard:ay1/ay2`), so the AY path
+  is what runs by default; the AY appears on **wav channels 1 & 2** (the speaker is
+  ch0). Confirmed: the AY plays the hymn melody (F5-E5-D5-C5-B4 at pitch) and detection
+  rejects an empty slot (game with `-sl4 "" -sl5 mockingboard` still plays — proves no
+  slot-4 false positive). Note: a standalone test `SYSTEM` program with an *empty*
+  `for(;;){}` is dropped by cc65 `-O` (main returns → ProDOS quit screen); give the
+  loop a side effect.
 
 ## FujiNet online (`make apple2 ONLINE=1`)
 

@@ -137,6 +137,12 @@ committable state.
       so the hymn + all SFX were mute. Now toggled via inline asm (`bit $C030`);
       verified by MAME `-wavwrite` (0.2 s of audio → 40 s). See
       [`src/apple2/CLAUDE.md`](src/apple2/CLAUDE.md).
+- [x] **Mockingboard / AY-3-8910 sound** (`src/apple2/mockingboard.c`) — auto-detected
+      at boot (6522 probe on slots 4/5, robust against false positives), falls back to
+      the 1-bit speaker. The Hurrian Hymn plays as a melody + octave bass voice; SFX use
+      AY tones/noise/envelope. One binary handles both. Phasor works in MB-compat mode.
+      Included in lo-res + `ONLINE=1` builds (DHGR stays speaker-only — no room). Verified
+      in MAME (`-sl4 mockingboard`): hymn melody at pitch on the AY, empty-slot rejected.
 
 ## Additional console & handheld ports (bonus)
 

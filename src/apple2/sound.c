@@ -11,6 +11,10 @@
 #include <stdint.h>
 #include "sound.h"
 #include "music.h"          /* the Hurrian Hymn melody data (shared) */
+#ifdef UR_MOCKINGBOARD
+#include "mockingboard.h"   /* AY-3-8910 card: richer music/SFX when one is present */
+static uint8_t g_mb = 0;    /* nonzero once a Mockingboard has been detected + inited */
+#endif
 
 /* Flip the speaker cone: any access to the $C030 soft-switch toggles it.  cc65's
  * optimiser DROPS a bare `(void)*(volatile unsigned char *)0xC030;` (it discards the
@@ -98,46 +102,80 @@ static void arp(const unsigned char *pitches, unsigned char n,
 static const unsigned char arp_chord[3]   = { 109, 86, 72 };
 static const unsigned char arp_fanfare[4] = { 109, 86, 72, 54 };
 
-void snd_silence(void) { }          /* the speaker is silent unless toggled */
+/* ---- 1-bit speaker effects (spk_*) -------------------------------------- *
+ * These are the fallback voices.  The public sfx_* below dispatch to the
+ * Mockingboard (mb_sfx_*) when a card is present, else to these. */
 
 /* Dice rattle: two LFSR noise bursts that climb and settle, like tumbling dice. */
-void sfx_roll(void)
+static void spk_roll(void)
 {
     noise(36, 0x3Fu, 460);
     rest(1200);
     noise(52, 0x2Fu, 320);
 }
 
-void sfx_move(void) { sweep(92, 74, 3); }              /* a quick rising chirp */
+static void spk_move(void) { sweep(92, 74, 3); }       /* a quick rising chirp */
 
 /* Capture: an ominous falling buzz that crashes into noise. */
-void sfx_capture(void)
+static void spk_capture(void)
 {
     sweep(70, 165, 3);
     noise(120, 0x3Fu, 220);
 }
 
 /* Rosette: a bright rising arpeggio that resolves to a sparkle upward. */
-void sfx_rosette(void)
+static void spk_rosette(void)
 {
     arp(arp_chord, 3, 4, 7);
     sweep(70, 45, 6);
 }
 
 /* Score (bear-off): a rising glissando capped by a little chord sparkle. */
-void sfx_score(void)
+static void spk_score(void)
 {
     sweep(95, 58, 5);
     arp(arp_chord, 3, 2, 6);
 }
 
 /* Win: the chord fanfare arpeggiated up, then a long bright held note. */
-void sfx_win(void)
+static void spk_win(void)
 {
     arp(arp_fanfare, 4, 3, 8);
     rest(800);
     sweep(60, 42, 10);
 }
+
+/* ---- sound backend: Mockingboard if present, else the 1-bit speaker ------ */
+
+/* Detect a Mockingboard once at boot; sets the dispatch path used below. */
+void snd_init(void)
+{
+#ifdef UR_MOCKINGBOARD
+    uint8_t slot = mb_detect();
+    if (slot) { mb_init(slot); g_mb = 1; }
+#endif
+}
+
+void snd_silence(void)
+{
+#ifdef UR_MOCKINGBOARD
+    if (g_mb) { mb_silence(); return; }
+#endif
+    /* the speaker is silent unless toggled */
+}
+
+#ifdef UR_MOCKINGBOARD
+#define DISPATCH(mbfn, spkfn)  do { if (g_mb) { mbfn(); return; } spkfn(); } while (0)
+#else
+#define DISPATCH(mbfn, spkfn)  spkfn()
+#endif
+
+void sfx_roll(void)    { DISPATCH(mb_sfx_roll,    spk_roll);    }
+void sfx_move(void)    { DISPATCH(mb_sfx_move,    spk_move);    }
+void sfx_capture(void) { DISPATCH(mb_sfx_capture, spk_capture); }
+void sfx_rosette(void) { DISPATCH(mb_sfx_rosette, spk_rosette); }
+void sfx_score(void)   { DISPATCH(mb_sfx_score,   spk_score);   }
+void sfx_win(void)     { DISPATCH(mb_sfx_win,     spk_win);     }
 
 void sfx_for_result(const ur_move_result *r)
 {
@@ -164,9 +202,8 @@ static const unsigned int hymn_tpe[11] = {
 };
 
 /* Play one melody note (MIDI number, or MUSIC_REST) for `eighths` eighth-note
- * ticks (1/2/4), with a short gap so repeated pitches articulate. The melody loop
- * + the input poll live in main.c. */
-void apple2_music_note(unsigned char midi, unsigned char eighths)
+ * ticks (1/2/4), with a short gap so repeated pitches articulate. */
+static void spk_music_note(unsigned char midi, unsigned char eighths)
 {
     unsigned char e;
     if (midi == MUSIC_REST) {
@@ -178,4 +215,14 @@ void apple2_music_note(unsigned char midi, unsigned char eighths)
         tone(hymn_pitch[idx], (unsigned int)(hymn_tpe[idx] * eighths));
     }
     rest(1800);                 /* brief note-off gap (articulation) */
+}
+
+/* Public hymn-note entry: Mockingboard arrangement if present, else the speaker.
+ * The melody loop + the skip-key poll live in main.c. */
+void apple2_music_note(unsigned char midi, unsigned char eighths)
+{
+#ifdef UR_MOCKINGBOARD
+    if (g_mb) { mb_music_note(midi, eighths); return; }
+#endif
+    spk_music_note(midi, eighths);
 }

@@ -12,6 +12,10 @@
 
 #include "ur.h"
 
+/* Detect the sound backend once at boot (a Mockingboard if present, else the
+ * 1-bit speaker). Call before any other sound function. */
+void snd_init(void);
+
 void sfx_roll(void);
 void sfx_move(void);
 void sfx_capture(void);

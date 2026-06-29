@@ -8,13 +8,20 @@ APPLE2_TARGET  ?= apple2
 APPLE2_CFG     ?= apple2-system.cfg
 APPLE2_DEFS    :=
 # Lo-res excludes the DHGR sources; DHGR=1 adds them (dhgr.c + the asm aux-blit).
+# mockingboard.c is added back only for non-DHGR builds (the DHGR build pins CODE at
+# $6000 and has no room for it — it stays speaker-only). dhgr.c is likewise added
+# explicitly under DHGR=1.
 APPLE2_SOURCES := $(COMMON_SOURCES) $(UR_GAME_SRC) $(NET_SOURCES) \
-                  $(filter-out %/dhgr.c,$(wildcard $(SRC_DIR)/apple2/*.c))
+                  $(filter-out %/dhgr.c %/mockingboard.c,$(wildcard $(SRC_DIR)/apple2/*.c))
 ifeq ($(DHGR),1)
 APPLE2_TARGET  := apple2enh
 APPLE2_CFG     := $(SRC_DIR)/apple2/apple2-dhgr.cfg
 APPLE2_DEFS    += -DUR_DHGR
 APPLE2_SOURCES += $(SRC_DIR)/apple2/dhgr.c $(SRC_DIR)/apple2/dhgr_blit.s
+else
+# Mockingboard / AY-3-8910 support (richer music + SFX, auto-detected at boot).
+APPLE2_DEFS    += -DUR_MOCKINGBOARD
+APPLE2_SOURCES += $(SRC_DIR)/apple2/mockingboard.c
 endif
 
 # fujinet-lib (apple2 / SmartPort): same N: API + wire protocol as the other ports.
