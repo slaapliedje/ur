@@ -1,0 +1,79 @@
+<!--
+  itch.io DEVLOG post #1 for "The Royal Game of Ur".
+  HOW TO USE: project dashboard -> Devlog -> Create new post. Suggested title:
+    "One ancient game, eleven 8-bit machines - and they can play each other"
+  In the post body click "</>" (HTML) and paste everything below this comment.
+  Replace each [ add screenshot ... ] line with a real image via the image button.
+-->
+
+<p>Quick hello, and a heads-up before we start: <strong>this is an ongoing,
+work-in-progress thing, and I'd genuinely love your feedback.</strong> If you've got
+one of these machines (real or emulated), give it a spin and tell me what's broken,
+what feels off, or what you'd love to see &mdash; details at the bottom. 🌺</p>
+
+<h2>What is this?</h2>
+<p>The Royal Game of Ur is one of the oldest board games we know of &mdash; people
+were playing it in Mesopotamia around <strong>2600&nbsp;BCE</strong>. Its rules were
+brilliantly reconstructed from a cuneiform tablet by Dr&nbsp;Irving&nbsp;Finkel at the
+British Museum. I wanted to play it the way I most enjoy old games: <strong>on old
+machines</strong>. So I built it for a whole shelf of them.</p>
+
+<h2>One game, eleven machines</h2>
+<p>The trick to keeping eleven ports sane is a single <strong>shared C core</strong>
+&mdash; the rules, the AI, the dice, the network protocol &mdash; that compiles for
+two completely different worlds: the <strong>6502</strong> machines (Atari, C64,
+Apple&nbsp;II, NES&hellip;) via cc65, <em>and</em> the <strong>Z80-family</strong> ones
+(Coleco Adam, Master System, Game Boy&hellip;) via z88dk. Same game brain, wildly
+different bodies. On top of that sits a thin per-machine layer for graphics, sound and
+input.</p>
+
+<p>The current lineup: <strong>Atari 8-bit, Atari 5200, Commodore 64, Apple&nbsp;IIe,
+Coleco Adam, ColecoVision, Sega Master System, Game Gear, Game Boy / Color, and
+NES/Famicom.</strong></p>
+
+<p><em>[ add screenshot here: a montage / a couple of boards side by side ]</em></p>
+
+<h2>Making each one look right</h2>
+<p>Every port draws the same authentic <em>Standard of Ur</em> board &mdash; carved
+cells, gold flower rosettes, bullseye eyes, two-tone tokens &mdash; but rendered to
+each machine's strengths: hardware sprites here, redefined character sets there, raw
+bitmap on the Apple&nbsp;II (which gets both a 16-colour lo-res board <em>and</em> a
+double-hi-res one). Getting the same look out of a VIC-II, a TMS9918, GTIA and the
+Game Boy's DMG was half the fun.</p>
+
+<h2>The oldest melody, on the chips I had</h2>
+<p>The title music is the <strong>Hurrian Hymn</strong> (Ugarit, c.1400&nbsp;BCE) &mdash;
+the oldest substantially-complete written melody we have. It plays on POKEY, SID,
+the SN76489, the NES &amp; Game Boy sound chips, and the Apple&nbsp;II's 1-bit
+speaker. That last one had a great little war story: the speaker was dead silent for
+ages because the C compiler was quietly optimising away the very instruction that
+clicks the speaker cone. One line of inline assembly later, it sings &mdash; and if
+you've got a <strong>Mockingboard</strong>, the Apple&nbsp;II build will find it and
+use the AY chips instead.</p>
+
+<h2>&hellip;and they can play each other</h2>
+<p>Because the network protocol lives in that shared core, the ports speak the same
+language over the wire. Through <strong>FujiNet</strong>, two machines can play a real
+networked game mediated by a little game server. I've had <strong>two Ataris playing
+each other</strong> end-to-end through emulated FujiNet, and the Coleco Adam build
+speaks the same protocol. A Game-Boy-vs-C64 match is the whole reason the core is
+built this way &mdash; that's where this is headed.</p>
+
+<p><em>[ add screenshot here: two Atari windows mid-game over FujiNet ]</em></p>
+
+<h2>Where you come in</h2>
+<p>This is very much a living project, and real-world testing beats anything I can do
+solo. I'd love to hear:</p>
+<ul>
+  <li><strong>Does it run on your hardware?</strong> Real machines especially &mdash;
+      which one, and did anything misbehave?</li>
+  <li><strong>Bugs / weirdness</strong> &mdash; a wrong move, a graphics glitch, a
+      sound that's off, a control that feels wrong.</li>
+  <li><strong>What would make it better?</strong> Features, options, a machine I've
+      missed.</li>
+</ul>
+<p>Drop a comment here on itch, or open an issue on GitHub:
+<a href="https://github.com/slaapliedje/ur">github.com/slaapliedje/ur</a> (all the
+source, every platform, and the server live there &mdash; it's free and GPLv3).</p>
+
+<p>Thanks for taking a look. May the rosettes favour you. 🌺</p>

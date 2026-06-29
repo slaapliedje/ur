@@ -80,6 +80,16 @@ this palette in `server/web.go`).
 
 ---
 
+## Devlog posts
+
+Devlogs (project dashboard → *Devlog* → *Create new post*) are great for a
+work-in-progress project and surface in itch feeds. First post is drafted in
+**[`devlog-01.html`](devlog-01.html)** — the "one game, eleven machines + they can
+play each other" story, ending in a call for feedback/testers. Paste it the same way
+as the description (post body → `</>` → paste), suggested title in the file's comment.
+
+---
+
 ## Notes
 - **License:** GPLv3 — distribution is fine; the page links to the source (required).
   Keep the GitHub link visible.
