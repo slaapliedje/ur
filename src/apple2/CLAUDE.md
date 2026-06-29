@@ -93,6 +93,35 @@ Implements the `plat_*` interface for the Apple II family (II+, IIe, IIc, IIgs).
 - **Sound:** 1-bit speaker (toggle-timed); effects require CPU cycle counting.
 - **Input:** keyboard; paddles/joystick.
 
+## Sound (`src/apple2/sound.c`, the $C030 speaker)
+
+The speaker has no pitch register: each touch of the `$C030` soft-switch flips the
+cone once, so a tone is a cycle-counted loop that toggles, delays (the half-period →
+pitch), and repeats (the count → duration). On top of that single `tone()` the port
+shapes the click *timing* for richer effects than flat beeps:
+
+- **`sweep(p0,p1,hold)`** — ramps the pitch across the note → a glissando. Used for
+  the move chirp (rising), the capture buzz (falling), and the bear-off/win rises.
+- **`noise(base,spread,toggles)`** — jitters the half-period from a Galois LFSR
+  (a platform-local rattle, *not* the game RNG) → a real percussive rattle/crash.
+  Used for the dice roll and the capture crash.
+- **`arp(pitches,n,rounds,hold)`** — cycles a few pitches faster than the ear
+  resolves → they fuse into a chord. Used for the rosette/score/win fanfares
+  (a calibrated C-major triad from the hymn scale).
+
+The title **Hurrian Hymn** still plays through `tone()`/`apple2_music_note`.
+
+> **cc65 gotcha that silenced the whole port (fixed):** the speaker toggle was
+> `(void)*(volatile unsigned char *)0xC030;` — and cc65's optimiser **drops a
+> cast-to-void volatile read as dead code** (the generated `tone` loop did the delay
+> nops but never touched `$C030`), so the hymn *and* every effect were silent (only
+> the boot-ROM beep — the Monitor's own code — made noise). The fix is to toggle via
+> **inline asm**, which cc65 never removes or reorders: `#define SPK_CLICK()
+> __asm__("bit $C030")` (`BIT` reads the switch, flipping the cone, without clobbering
+> A). Verified by recording MAME's `-wavwrite`: silence (0.2 s of audio, boot beep
+> only) → 40 s of pitched sound. **Writes** to soft-switches are safe (cc65 keeps
+> them) — that's why the graphics `SOFT()`/`WR()` macros use `*(...)=0`, not a read.
+
 ## FujiNet online (`make apple2 ONLINE=1`)
 
 FujiNet attaches via the **SmartPort** bus, but the `N:` API + Ur wire protocol are

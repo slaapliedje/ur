@@ -130,7 +130,13 @@ committable state.
       lobby/profile menu, appkey profile + lobby host pickup, leaderboard. Uses the
       lo-res board (DHGR+ONLINE don't fit). Builds + boots + fails the network
       gracefully in MAME; full cross-play needs FujiNet + the Ur server.
-- [ ] Richer speaker sound (optional polish).
+- [x] **Richer speaker sound** — added `sweep`/`noise`/`arp` 1-bit primitives
+      (glissando move/capture/bear-off, LFSR dice rattle, arpeggiated rosette/win
+      chords). En route, **fixed a cc65 bug that had silenced the whole port**: the
+      `$C030` toggle was a cast-to-void volatile read, which the optimiser dropped —
+      so the hymn + all SFX were mute. Now toggled via inline asm (`bit $C030`);
+      verified by MAME `-wavwrite` (0.2 s of audio → 40 s). See
+      [`src/apple2/CLAUDE.md`](src/apple2/CLAUDE.md).
 
 ## Additional console & handheld ports (bonus)
 

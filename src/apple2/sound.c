@@ -12,14 +12,19 @@
 #include "sound.h"
 #include "music.h"          /* the Hurrian Hymn melody data (shared) */
 
-#define SPKR (*(volatile unsigned char *)0xC030)
+/* Flip the speaker cone: any access to the $C030 soft-switch toggles it.  cc65's
+ * optimiser DROPS a bare `(void)*(volatile unsigned char *)0xC030;` (it discards the
+ * cast-to-void volatile read as dead), which silenced every tone — so we toggle with
+ * inline asm, a guaranteed access.  `BIT` reads $C030 (toggling the cone) without
+ * clobbering A; cc65 never reorders or removes an `__asm__` statement. */
+#define SPK_CLICK() __asm__("bit $C030")
 
 /* One square-wave tone. pitch: smaller = higher; toggles: more = longer. */
 static void tone(unsigned char pitch, unsigned int toggles)
 {
     unsigned char d;
     while (toggles--) {
-        (void)SPKR;                 /* click the cone (LDA $C030) */
+        SPK_CLICK();                /* flip the cone (BIT $C030) */
         d = pitch;
         while (d--) {
             __asm__ ("nop");        /* delay -> half-period (keeps the loop alive) */
@@ -31,44 +36,107 @@ static void tone(unsigned char pitch, unsigned int toggles)
 /* A short gap so chained tones are distinct (no toggles -> silence). */
 static void rest(unsigned int n) { while (n--) __asm__ ("nop"); }
 
+/* ---- richer 1-bit primitives ------------------------------------------- *
+ * The speaker can only click, so "richer" means shaping the click TIMING:
+ *  - sweep(): ramp the pitch across the note -> a glissando (laser/sparkle),
+ *  - noise(): jitter the period from an LFSR -> a real percussive rattle,
+ *  - arp():   cycle a few pitches fast -> the ear fuses them into a chord.
+ * All three reuse the same ~9-cycle inner delay as tone(), so the calibrated
+ * pitch values (≈40 highest .. ≈170 lowest) map identically. */
+
+/* Glissando: hold each pitch for `hold` half-cycles while stepping p0 -> p1.
+ * p0 > p1 rises (pitch value falls = frequency climbs); p0 < p1 falls. */
+static void sweep(unsigned char p0, unsigned char p1, unsigned char hold)
+{
+    unsigned char p = p0, d, h;
+    for (;;) {
+        for (h = hold; h; h--) {
+            SPK_CLICK();
+            d = p;
+            while (d--) { __asm__ ("nop"); __asm__ ("nop"); }
+        }
+        if (p == p1) break;
+        if (p < p1) p++; else p--;
+    }
+}
+
+/* Percussive noise: the half-period is `base` plus an LFSR-random offset masked
+ * by `spread` (use 0x1F/0x3F), so the pitch dances -> a rattle/crash, not a tone.
+ * Keep base + spread < 256.  (Galois LFSR, taps 0xB400 — a platform-local rattle,
+ * NOT the game RNG, which lives deterministically in src/common.) */
+static unsigned int sfx_lfsr = 0xACE1u;
+static void noise(unsigned char base, unsigned char spread, unsigned int toggles)
+{
+    unsigned char d, bit;
+    while (toggles--) {
+        SPK_CLICK();
+        bit = (unsigned char)(sfx_lfsr & 1u);
+        sfx_lfsr >>= 1;
+        if (bit) sfx_lfsr ^= 0xB400u;
+        d = (unsigned char)(base + (unsigned char)(sfx_lfsr & spread));
+        while (d--) { __asm__ ("nop"); __asm__ ("nop"); }
+    }
+}
+
+/* Arpeggio: cycle `n` pitches, each held `hold` half-cycles, for `rounds` passes.
+ * Cycling faster than the ear resolves makes the notes ring together as a chord. */
+static void arp(const unsigned char *pitches, unsigned char n,
+                unsigned char rounds, unsigned char hold)
+{
+    unsigned char r, i, h, d;
+    for (r = 0; r < rounds; r++)
+        for (i = 0; i < n; i++)
+            for (h = hold; h; h--) {
+                SPK_CLICK();
+                d = pitches[i];
+                while (d--) { __asm__ ("nop"); __asm__ ("nop"); }
+            }
+}
+
+/* Calibrated triads (a C-major chord from the hymn scale: C5 / E5 / G5, low->high
+ * frequency, plus the octave C6 for the win fanfare). */
+static const unsigned char arp_chord[3]   = { 109, 86, 72 };
+static const unsigned char arp_fanfare[4] = { 109, 86, 72, 54 };
+
 void snd_silence(void) { }          /* the speaker is silent unless toggled */
 
-/* Dice rattle: a few quick bursts at jittering pitch. */
+/* Dice rattle: two LFSR noise bursts that climb and settle, like tumbling dice. */
 void sfx_roll(void)
 {
-    tone(60, 90);
-    tone(40, 70);
-    tone(70, 90);
+    noise(36, 0x3Fu, 460);
+    rest(1200);
+    noise(52, 0x2Fu, 320);
 }
 
-void sfx_move(void) { tone(90, 110); }                 /* a single mid blip */
+void sfx_move(void) { sweep(92, 74, 3); }              /* a quick rising chirp */
 
-/* Capture: a harsh low buzz then a click. */
+/* Capture: an ominous falling buzz that crashes into noise. */
 void sfx_capture(void)
 {
-    tone(150, 140);
-    rest(2000);
-    tone(110, 80);
+    sweep(70, 165, 3);
+    noise(120, 0x3Fu, 220);
 }
 
-void sfx_rosette(void) { tone(45, 160); }              /* bright, pleasant */
+/* Rosette: a bright rising arpeggio that resolves to a sparkle upward. */
+void sfx_rosette(void)
+{
+    arp(arp_chord, 3, 4, 7);
+    sweep(70, 45, 6);
+}
 
-/* Score (bear-off): two rising blips. */
+/* Score (bear-off): a rising glissando capped by a little chord sparkle. */
 void sfx_score(void)
 {
-    tone(80, 110);
-    rest(1500);
-    tone(50, 130);
+    sweep(95, 58, 5);
+    arp(arp_chord, 3, 2, 6);
 }
 
-/* Win: a little rising fanfare. */
+/* Win: the chord fanfare arpeggiated up, then a long bright held note. */
 void sfx_win(void)
 {
-    tone(90, 120);
-    rest(1200);
-    tone(64, 130);
-    rest(1200);
-    tone(40, 200);
+    arp(arp_fanfare, 4, 3, 8);
+    rest(800);
+    sweep(60, 42, 10);
 }
 
 void sfx_for_result(const ur_move_result *r)
