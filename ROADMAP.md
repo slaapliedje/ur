@@ -222,7 +222,16 @@ FujiNet, so no online path — like the ColecoVision cartridge).
       image and attaches the artifacts to the Release. (Disk-image variants —
       `.atr`/`.d64` for the disk-preferring crowd — are an optional follow-up; the
       shipped images run directly in the standard emulators.)
-- [ ] Distribution (itch.io / AtariAge / FujiNet game listing).
+- [~] **Distribution** (itch.io / AtariAge / FujiNet game listing). itch.io
+      *downloadable* prep is ready: `make release` bundle now ships a player-facing
+      `HOW-TO-PLAY.txt` (per-platform emulator + controls + credits), plus a page
+      draft ([`docs/itch/itch-page.md`](docs/itch/itch-page.md)) and a butler push
+      script ([`tools/itch-push.sh`](tools/itch-push.sh)). Remaining (needs the
+      account): create the itch project + `butler login` + run the push. An HTML5
+      browser-play build (EmulatorJS/RetroArch-web) is a possible follow-up.
+- [x] **Online clients published** — the four FujiNet builds (`ur.xex`/`ur.ddp`/
+      `ur.prg`/`ur.system`) are served live on thefnords.com (TNFS + HTTP), lobby
+      registered (appkey 6). See the deploy procedure in the project memory.
 
 ---
 *Track work as GitHub issues/milestones mapped to these phases.*

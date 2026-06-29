@@ -1,0 +1,77 @@
+================================================================
+  THE ROYAL GAME OF UR  -  for retro 8-bit machines
+================================================================
+
+The Royal Game of Ur is a ~4,600-year-old Mesopotamian board game
+(excavated at the city of Ur). This is a faithful build of it for a
+whole shelf of retro computers and consoles.
+
+These are ROM / disk / cartridge images -- you run them in an
+EMULATOR (or on real hardware). Pick the file for your machine,
+load it in that machine's emulator, and play.
+
+----------------------------------------------------------------
+  WHICH FILE FOR WHICH MACHINE  (run in an emulator)
+----------------------------------------------------------------
+  ur-atari-*.xex      Atari 8-bit (400/800/XL/XE)  - Altirra, atari800
+  ur-a5200-*.a52      Atari 5200                    - atari800 -5200, MAME
+  ur-c64-*.prg        Commodore 64                  - VICE (x64sc)
+  ur-apple2-*.po      Apple IIe (enhanced)          - boot the disk image; MAME apple2ee / AppleWin
+  ur-apple2-*.system  (the bare ProDOS SYSTEM file, if you prefer your own disk)
+  ur-adam-*.ddp       Coleco Adam                   - MAME (adam)
+  ur-coleco-*.rom     ColecoVision                  - MAME (coleco), real cart
+  ur-sms-*.sms        Sega Master System            - MAME, Emulicious, Kega Fusion
+  ur-gamegear-*.gg    Sega Game Gear                - MAME, Emulicious
+  ur-gb-*.gb          Game Boy / Game Boy Color     - any GB emulator (colour on GBC)
+  ur-nes-*.nes        NES / Famicom                 - Mesen, FCEUX, MAME
+
+(SHA256SUMS.txt lists checksums for every file.)
+
+----------------------------------------------------------------
+  HOW TO PLAY
+----------------------------------------------------------------
+Each player has 7 pieces to bring around a 14-square path and off
+the board. On your turn you roll 4 binary dice (0-4 marked corners
+show), then move one piece that many squares.
+
+  * ROSETTE squares (the flowers): land on one for an EXTRA roll,
+    and your piece there is SAFE from capture.
+  * The shared middle lane is the combat zone: land exactly on an
+    opponent's piece there and it's sent back to the start.
+  * You must roll the EXACT number to bear a piece off the end.
+  * First to bear off all 7 pieces wins.
+
+Modes: 2-player hot-seat, or 1 player vs the computer (Easy /
+Normal / Hard). The Atari and Coleco Adam builds also have an
+"Online" option to play over FujiNet against the game server.
+
+----------------------------------------------------------------
+  CONTROLS
+----------------------------------------------------------------
+Keyboard machines (Atari 8-bit, C64, Apple II):
+  - Menu: press the number of the option you want.
+  - Roll: press any key when prompted.
+  - Pick a move: press the number shown next to the move you want.
+
+Atari 5200: use the controller KEYPAD numbers (same as above).
+
+Coleco Adam / ColecoVision: controller KEYPAD to choose, FIRE to
+  roll / confirm (the Adam also accepts its keyboard).
+
+Consoles & handhelds (Master System, Game Gear, Game Boy, NES):
+  - Menu / move list: D-pad UP/DOWN moves the ">" cursor.
+  - Roll & confirm: press the action button (A / Start / FIRE).
+
+----------------------------------------------------------------
+  CREDITS & LICENSE
+----------------------------------------------------------------
+The rules of Ur were deciphered by Dr Irving Finkel of the British
+Museum -- with thanks. Title music is the Hurrian Hymn (h.6,
+Ugarit, c.1400 BCE), the oldest substantially-complete notated
+melody known.
+
+Free software under the GNU General Public License v3.0 (see
+LICENSE). Source code, all platforms, and the networked game
+server: https://github.com/slaapliedje/ur
+
+Enjoy -- and may the rosettes favour you.

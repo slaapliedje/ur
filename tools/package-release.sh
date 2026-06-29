@@ -59,8 +59,9 @@ done < <(artifacts)
 # checksums over the copied artifacts
 ( cd "$STAGE" && { sha256sum ur-* 2>/dev/null || shasum -a 256 ur-* ; } > SHA256SUMS.txt )
 
-# self-contained: include the readme + licence + this manifest
+# self-contained: include the readme + licence + the player how-to + this manifest
 cp README.md LICENSE "$STAGE/" 2>/dev/null || true
+cp docs/itch/HOW-TO-PLAY.txt "$STAGE/" 2>/dev/null || true
 
 # bundle (zip preferred; tar.gz fallback if zip is absent)
 ( cd "$BUILD/release" && rm -f "ur-$VERSION.zip" "ur-$VERSION.tar.gz"
