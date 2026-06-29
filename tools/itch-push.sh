@@ -13,13 +13,9 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-TARGET="${1:-${ITCH_TARGET:-}}"
+# Defaults to the live project; override with an arg or ITCH_TARGET.
+TARGET="${1:-${ITCH_TARGET:-slaapliedje/royal-game-of-ur}}"
 CHANNEL="${ITCH_CHANNEL:-roms}"
-if [ -z "$TARGET" ]; then
-  echo "error: itch target not set. Pass it as: tools/itch-push.sh <user>/<game>" >&2
-  echo "       (e.g. tools/itch-push.sh slaapliedje/royal-game-of-ur)" >&2
-  exit 2
-fi
 command -v butler >/dev/null 2>&1 || {
   echo "error: butler not found. Install from https://itch.io/docs/butler/ and run 'butler login'." >&2
   exit 2

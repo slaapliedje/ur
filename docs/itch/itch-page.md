@@ -34,34 +34,49 @@ builds on itch.io as a downloadable game. The actual upload is scripted in
 
 ---
 
-## Page description (paste into the itch editor)
+**Live project:** https://slaapliedje.itch.io/royal-game-of-ur (slug
+`royal-game-of-ur`; currently a Draft — publish when ready). `tools/itch-push.sh`
+defaults to this target.
 
-**The Royal Game of Ur** is one of the oldest board games in the world — played in
-Mesopotamia ~2,600 BCE and excavated at the city of Ur. This is a faithful,
-good-looking build of it for an entire shelf of retro machines, from one shared
-game core.
+## Page description
 
-> ⚠️ These are **emulator ROM / disk / cartridge images** — you'll need an emulator
-> for your chosen machine (all free; suggestions are in the included
-> `HOW-TO-PLAY.txt`). Or run them on real hardware.
+The polished, rich description lives in **[`page.html`](page.html)** (semantic HTML —
+headings, a platforms table, lists). To use it: on the project's *Edit* page, in the
+**Description** box, click the **`</>`** (HTML) toggle and paste the file's contents
+(everything after the leading comment). Then delete each `[ add screenshot … ]` line
+and drop a real image in with the editor's image button. itch keeps the structure and
+strips inline CSS — the colours come from the theme below.
 
-**Play it on:** Atari 8-bit · Atari 5200 · Commodore 64 · Apple II · Coleco Adam ·
-ColecoVision · Sega Master System · Game Gear · Game Boy / Color · NES / Famicom.
+## Theme (colours — Edit theme)
 
-**Features**
-- The authentic *Standard of Ur* board — carved cells, gold rosettes, two-tone
-  tokens — rendered to each machine's strengths (sprites, charsets, palettes).
-- 2-player hot-seat **and** vs-computer with selectable difficulty (Easy / Normal /
-  Hard).
-- Chip sound + the **Hurrian Hymn** title theme (the oldest notated melody known;
-  the Apple II build even drives a Mockingboard if you have one).
-- The Atari & Coleco Adam builds can also play **online over FujiNet** against the
-  game server.
+Match the in-game *Standard of Ur* / leaderboard palette so the page feels of-a-piece:
 
-**Rules** deciphered by Dr Irving Finkel of the British Museum — with thanks.
+| Role | Hex |
+|---|---|
+| Background (deep lapis) | `#0b1d3a` |
+| Secondary panel | `#10254a` |
+| Body text (shell/cream) | `#e8d8a0` |
+| Headings & links (gold) | `#d8a23a` |
+| Borders / rules | `#24406e` |
+| Muted text | `#7f93b8` |
 
-**Free & open source** (GPLv3). Full source, every platform, and the networked
-server: https://github.com/slaapliedje/ur
+In *Edit theme*: set the **background** to `#0b1d3a` (flat colour, or a subtly tiled
+lapis image), **text** to `#e8d8a0`, and **links** to gold `#d8a23a`. If you enable
+the advanced CSS box, the same hexes give you the leaderboard's exact look (it uses
+this palette in `server/web.go`).
+
+## Cover & screenshots
+
+- **Cover (630×500):** a clean board shot reads best — the **SMS** or **Apple II
+  double-hi-res** board (most colourful), or the **Atari title** (the ziggurat). Crop
+  tight on the board.
+- **Screenshots (aim for 5–7, show the range):** SMS board (the showpiece) · Apple II
+  lo-res *and* DHGR boards · NES board · Game Boy **Color** board · C64 board · the
+  Atari title/menu. A **"CAPTURE!"** or **"ROSETTE — AGAIN!"** moment makes a great
+  action shot, and a two-screen grab of **two Ataris playing each other over FujiNet**
+  is a fun "it's really networked" shot.
+- Capture from each emulator at integer scale (sharp pixels), PNG. The `run-ur` skill
+  / the emulators set up during development produce these directly.
 
 ---
 
