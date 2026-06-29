@@ -35,6 +35,11 @@ jobs:
       - name: Build all platforms
         run: docker run --rm -v "$PWD":/src ur-dev make all
 
+      # The bonus console/handheld ports (not in `make all`) — keeps them from
+      # rotting and covers their extra build tools (e.g. perl for the GB CGB patch).
+      - name: Build console/handheld ports (5200, SMS, Game Gear, GB, NES, ColecoVision)
+        run: docker run --rm -v "$PWD":/src ur-dev make a5200 sms gamegear gb nes coleco
+
       # The C64/Apple II default builds are local-only; also compile their FujiNet
       # online variants (link fujinet-lib + the network code path) so they can't rot.
       - name: Build C64 FujiNet online variant
