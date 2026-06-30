@@ -191,6 +191,26 @@ FujiNet, so no online path — like the ColecoVision cartridge).
       token quad cell-to-cell (4 px/frame, LY-paced), like the SMS; GBC gets a token
       sprite palette, DMG sets OBP0. See [`src/gb/CLAUDE.md`](src/gb/CLAUDE.md).
 
+## 16-bit ports (68000)
+
+The next era: the 68000 computers and consoles. The shared `src/common` core
+compiles **unchanged** under GCC for the 68000 (verified) — a third CPU family after
+the 6502 (cc65) and Z80 (z88dk).
+
+- [x] **Atari ST — bring-up scaffold** (`make st`; `m68k-atari-mint-gcc` →
+      `build/st/ur.prg`). Boots in **Hatari** (EmuTOS): sets low-res, loads the
+      Standard-of-Ur lapis/gold palette, shows the title; the shared core links in.
+      The Atari leads the 16-bit era as it led the 8-bit. See
+      [`src/st/CLAUDE.md`](src/st/CLAUDE.md). **Next:** carved planar board, YM2149
+      sound (the AY family — reuse the Apple II Mockingboard player), input, and the
+      shared `plat.h` controller.
+- [ ] **Sega Mega Drive / Genesis** — the 16-bit console showpiece (VDP, 64 on-screen
+      colours, hardware sprites, PSG+FM). Needs an SGDK/marsdev toolchain; verifies in
+      MAME (`megadriv`).
+- [ ] **Commodore Amiga** — the defining 16-bit home computer (OCS/AGA, copper, Paula).
+      Needs amiga-gcc/vbcc; verifies in MAME (`a500`).
+- [ ] (later) Sharp X68000, Neo Geo — also 68000, drivers present in MAME.
+
 ## Phase 8 — Polish & release
 - [x] **Visual parity across platforms** — all 11 targets now share the horizontal
       Standard-of-Ur board (carved cells, gold rosette/eye, white quincunx, two-tone

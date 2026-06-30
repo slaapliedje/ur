@@ -26,6 +26,12 @@ so no online): **Sega Master System** (`make sms`) and its **Game Gear** sibling
 **Atari 5200** (`make a5200`), and the **NES / Famicom** (`make nes`). See each
 `src/<platform>/CLAUDE.md` and [`ROADMAP.md`](ROADMAP.md).
 
+…and now the start of the **16-bit / 68000 era**: an **Atari ST** port (`make st`,
+built with `m68k-atari-mint-gcc`, run in Hatari) — the first of the 68000 computers
+and consoles (Mega Drive / Genesis and Amiga to follow). The shared C core compiles
+unchanged under GCC for the 68000, a third CPU family after the 6502 and Z80. See
+[`src/st/CLAUDE.md`](src/st/CLAUDE.md).
+
 All four targets now have a working platform layer with local play **and FujiNet
 online**: **Atari** (carved board + PMG two-tone tokens + DLI sheen + POKEY),
 **Adam** (carved Graphics-II board + sprite tokens + SN76489), **C64** (carved
