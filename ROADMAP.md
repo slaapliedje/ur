@@ -197,13 +197,15 @@ The next era: the 68000 computers and consoles. The shared `src/common` core
 compiles **unchanged** under GCC for the 68000 (verified) — a third CPU family after
 the 6502 (cc65) and Z80 (z88dk).
 
-- [x] **Atari ST — bring-up scaffold** (`make st`; `m68k-atari-mint-gcc` →
-      `build/st/ur.prg`). Boots in **Hatari** (EmuTOS): sets low-res, loads the
-      Standard-of-Ur lapis/gold palette, shows the title; the shared core links in.
-      The Atari leads the 16-bit era as it led the 8-bit. See
-      [`src/st/CLAUDE.md`](src/st/CLAUDE.md). **Next:** carved planar board, YM2149
-      sound (the AY family — reuse the Apple II Mockingboard player), input, and the
-      shared `plat.h` controller.
+- [x] **Atari ST — playable** (`make st`; `m68k-atari-mint-gcc` → `build/st/ur.prg`;
+      Hatari/EmuTOS, MAME `st`). The carved Standard-of-Ur board drawn to the Shifter's
+      planar low-res bitmap (gold rosettes/eyes/quincunx, two-tone disc tokens),
+      hot-seat + vs-AI (Easy/Normal/Hard) via the shared `plat.h` controller, keyboard
+      input, and **YM2149 sound** — the Hurrian Hymn (verified by recording: the
+      F5-E5-D5-C5-B4 theme) + event SFX. The Atari leads the 16-bit era as it led the
+      8-bit. See [`src/st/CLAUDE.md`](src/st/CLAUDE.md).
+- [ ] **Atari STe / TT / Falcon — enhanced edition** (planned): richer palettes
+      (STe 4096, Falcon truecolor), STe DMA sound, blitter-accelerated drawing.
 - [ ] **Sega Mega Drive / Genesis** — the 16-bit console showpiece (VDP, 64 on-screen
       colours, hardware sprites, PSG+FM). Needs an SGDK/marsdev toolchain; verifies in
       MAME (`megadriv`).

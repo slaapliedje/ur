@@ -4,10 +4,10 @@
 ST_OUT     := $(BUILD_DIR)/st
 ST_CC      ?= m68k-atari-mint-gcc
 
-# ur_game.c (the shared controller) is opt-in per port via $(UR_GAME_SRC); the ST
-# isn't converted yet, so it links the rules/proto/music core + its own main.
-ST_FLAGS   := -std=c99 -O2 -Wall -Wextra -I$(SRC_DIR)/st $(COMMON_INC)
-ST_SOURCES := $(COMMON_SOURCES) $(wildcard $(SRC_DIR)/st/*.c)
+# Uses the shared controller (ur_game.c via $(UR_GAME_SRC)); font8.h is shared from
+# src/sms (-I). Full GCC, so no toolchain-specific flags needed.
+ST_FLAGS   := -std=c99 -O2 -Wall -Wextra -I$(SRC_DIR)/st -I$(SRC_DIR)/sms $(COMMON_INC)
+ST_SOURCES := $(COMMON_SOURCES) $(UR_GAME_SRC) $(wildcard $(SRC_DIR)/st/*.c)
 
 .PHONY: st
 st: | $(ST_OUT) ## Build the Atari ST target (68000; .prg for Hatari/MAME)

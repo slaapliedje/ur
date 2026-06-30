@@ -1,12 +1,17 @@
 # src/st — Atari ST platform layer (the first 16-bit / 68000 port)
 
-> **Status: bring-up scaffold.** `make st` → `build/st/ur.prg`, a GEMDOS executable
-> built with **m68k-atari-mint-gcc**, verified booting in **Hatari** (EmuTOS): it sets
-> low-res, loads the Standard-of-Ur **lapis/gold palette**, and shows the title. The
-> shared `src/common` core (rules/AI/proto/music) compiles **unchanged** under GCC for
-> the 68000 — the same brain as the 6502 (cc65) and Z80 (z88dk) ports, now on a third
-> CPU family. **Next:** the carved Standard-of-Ur board (planar bitmap), YM2149 sound,
-> input, and the shared `plat.h` controller.
+> **Status: playable.** `make st` → `build/st/ur.prg`, a GEMDOS executable built with
+> **m68k-atari-mint-gcc**, verified in **Hatari** (EmuTOS): the carved Standard-of-Ur
+> board (gold rosettes, bullseye eyes, quincunx studs, two-tone disc tokens) drawn
+> straight to the Shifter's planar low-res bitmap, hot-seat + vs-AI (Easy/Normal/Hard)
+> via the shared `plat.h` controller, keyboard input, and **YM2149 sound** — the
+> **Hurrian Hymn** title theme (verified by recording: the F5-E5-D5-C5-B4 descending
+> tetrachord) + roll/capture/rosette/win SFX. The shared `src/common` core compiles
+> **unchanged** under GCC for the 68000 — the same brain as the 6502 (cc65) and Z80
+> (z88dk) ports, now on a third CPU family.
+>
+> **Planned: an enhanced STe / TT / Falcon edition** (more colours — STe 4096, TT/
+> Falcon palettes — DMA sound, blitter; the user wants this) once the base ST is solid.
 
 > Parent context: [`/CLAUDE.md`](../../CLAUDE.md). The Atari led our 8-bit era; the ST
 > leads the 16-bit era too.
@@ -46,11 +51,25 @@ constraints than the 8-bit toolchains.
   (Headless screenshots: `import -window $(xdotool search --class hatari|tail -1)`.)
 - **Run (MAME):** the `st`/`megast` drivers also work.
 
-## What's next
+## How it's built (`src/st/main.c`)
 
-1. **Carved Standard-of-Ur board** drawn to the planar low-res bitmap (the look every
-   port shares) — needs a planar rect/blit helper (set the 4 plane words per 16-px cell).
-2. **YM2149 sound** + the Hurrian Hymn (reuse the AY register approach from the Apple II
-   Mockingboard player — same chip family).
-3. **Input** (keyboard/joystick) and the shared **`plat.h`** controller (`ur_game.c`),
-   so the ST joins the unified local game loop (add `$(UR_GAME_SRC)` to `st.mk`).
+- **Video:** `Setscreen(-1,-1,0)` (low-res) + `Setpalette` (the lapis/gold scheme).
+  Drawing primitives over `Physbase()`: `frectw` (fast 16-px-aligned fills — cell
+  faces, screen clear), `pix`/`frect`/`disc`/`diamond` (motifs/tokens), and a `glyph`
+  blitter for the shared **font8** (1bpp 8×8). The board redraws fully each
+  `plat_draw` (fine for a turn-based game; double-buffering is a possible polish).
+- **Geometry:** the shared `cell_exists`/`pos_to_cell`/`is_rosette_cell` layout every
+  port uses. Cells 32×32 at 16-px-aligned offsets (so face fills are word-aligned/fast).
+- **Input:** keyboard via `Crawcin` (no echo) + `Cconis` (the RNG entropy accumulator,
+  `plat_seed`). Number-key menus + move picks (like the Atari 8-bit/C64/Apple II).
+- **Sound:** YM2149 via XBIOS `Giaccess(val, reg|0x80)` (no supervisor needed); note
+  timing via `Vsync`. Period table for 2 MHz PSG. `st_music_note` plays the shared
+  `ur_hymn`; `sfx_*` cover roll/move/capture/rosette/score/win.
+- Uses the shared controller `ur_game.c` (`$(UR_GAME_SRC)` in `st.mk`).
+
+## What's next (polish / the enhanced edition)
+
+1. **STe / TT / Falcon enhanced edition** — richer palettes (STe 4096, Falcon
+   truecolor), STe DMA sound, blitter-accelerated drawing. (Planned; the user wants it.)
+2. Optional base-ST polish: double-buffered redraw (no flicker), joystick input,
+   nicer motifs, a dice-roll/token-glide animation (`plat_animate` is currently a stub).
