@@ -32,6 +32,12 @@
 #define TILE_CH  '.'        /* empty cell   */
 #define NO_ROLL  0xFF
 
+/* Left text margin. TMS9928A output overscans on a real TV/CRT — the leftmost
+ * ~8px (character column 0) gets eaten — so all HUD/menu/move-list text starts at
+ * column TX (=1, i.e. shifted right 8px) to stay on-screen. The board itself sits
+ * at columns 8+ and is already clear of the overscan. */
+#define TX 1
+
 /*
  * Input on the Adam: keyboard AND ColecoVision controller, polled together.
  *
@@ -193,11 +199,11 @@ uint8_t plat_pick_level(void)
 {
     unsigned char k;
     clrscr();
-    gotoxy(0, 1); cputs("Difficulty");
-    gotoxy(0, 4); cputs("1) Easy");
-    gotoxy(0, 5); cputs("2) Normal");
-    gotoxy(0, 6); cputs("3) Hard");
-    gotoxy(0, 8); cputs("Keypad 1-3");
+    gotoxy(TX,1); cputs("Difficulty");
+    gotoxy(TX,4); cputs("1) Easy");
+    gotoxy(TX,5); cputs("2) Normal");
+    gotoxy(TX,6); cputs("3) Hard");
+    gotoxy(TX,8); cputs("Keypad 1-3");
     for (;;) {
         k = get_key();
         if (k >= '1' && k <= '3') return (unsigned char)(k - '1');
@@ -343,7 +349,7 @@ void plat_draw(unsigned char roll, const char *msg)
     hide_sprites();                     /* board tokens are charset now, not sprites */
     textbackground(COL_BG);
     clrscr();
-    textcolor(COL_TITLE); gotoxy(0, 0); cputs("Royal Game of Ur");
+    textcolor(COL_TITLE); gotoxy(TX,0); cputs("Royal Game of Ur");
 
     /* Carved, inlaid 16x16 cells. Rosettes are gold flowers; the shared lane has a
      * gold bullseye eye; the private lanes a white quincunx. Cut-away corners
@@ -377,26 +383,132 @@ void plat_draw(unsigned char roll, const char *msg)
 
     /* HUD below the board (pieces are colour discs, so name players by colour). */
     textbackground(COL_BG);             /* back to lapis after the carved cells */
-    textcolor(COL_LABEL); gotoxy(0, 12); cputs("Turn: ");
+    textcolor(COL_LABEL); gotoxy(TX,12); cputs("Turn: ");
     textcolor(ur_g.turn ? SPR_DARK_C : SPR_LIGHT_C);
     cputs(ur_g.turn ? "Dark " : "Light");
     textcolor(COL_LABEL);
-    gotoxy(0, 13); cprintf("Light home:%u  Dark home:%u ",
+    gotoxy(TX,13); cprintf("Light home:%u  Dark home:%u ",
                            (unsigned)ur_score(&ur_g, 0), (unsigned)ur_score(&ur_g, 1));
     if (roll != NO_ROLL) {
-        textcolor(COL_TITLE); gotoxy(0, 14); cprintf("Roll: %u  ", roll);
+        textcolor(COL_TITLE); gotoxy(TX,14); cprintf("Roll: %u  ", roll);
     }
-    if (msg) { textcolor(COL_LABEL); gotoxy(0, 23); cputs(msg); }
+    if (msg) { textcolor(COL_LABEL); gotoxy(TX,23); cputs(msg); }
 }
 
-/* List the legal moves (deduped by source) starting at row 15, prompt, and read
- * a 1..N choice. Returns the chosen piece index, or -1 if there is no move. */
+/* ---- move chooser: destination highlight + capture markers + stick/keypad --- *
+ * Feedback-driven parity with the Atari/5200: the move list shows a "CAP" marker
+ * when a move would capture; a gold ">" cursor walks the list; and the DESTINATION
+ * square is highlighted on the board. Input is BOTH the keypad (a digit picks a
+ * move directly) AND the joystick (LEFT/UP = prev, RIGHT/DOWN = next, FIRE =
+ * confirm) — read from the same joystick(3) word on the Adam and the ColecoVision
+ * (the Adam additionally accepts its keyboard digits). */
+
+/* Is an opponent piece sitting on `pos`? (drives the "CAP" move marker) */
+static bool opp_on(unsigned char player, unsigned char pos)
+{
+    return count_at((unsigned char)(1 - player), pos) > 0;
+}
+
+/* Re-colour a cell's 4 chars (colour table only — patterns unchanged). */
+static void recolor_cell(unsigned char col, unsigned char row, unsigned char color)
+{
+    unsigned char x = cellx(col), y = celly(row);
+    unsigned int  place = (y < 8) ? place_1 : (y < 16) ? place_2 : place_3;
+    int c = (int)((unsigned int)(y & 7) * 32 + x);
+    vdp_set_char_color(c,      color, place);
+    vdp_set_char_color(c + 1,  color, place);
+    vdp_set_char_color(c + 32, color, place);
+    vdp_set_char_color(c + 33, color, place);
+}
+
+/* The colour a cell should normally show (token if a piece sits there, else its
+ * motif) — used to restore a cell when the highlight moves off it. */
+static unsigned char cell_color(unsigned char col, unsigned char row)
+{
+    unsigned char pl, i, rr, cc;
+    for (pl = 0; pl < UR_NUM_PLAYERS; pl++)
+        for (i = 0; i < UR_PIECES; i++)
+            if (pos_to_cell(pl, ur_g.piece[pl][i], &rr, &cc) && rr == row && cc == col)
+                return pl ? TOKD_COLOR : TOKL_COLOR;
+    if (is_rosette_cell(row, col)) return ROSE_COLOR;
+    if (row == 1)                  return EYE_COLOR;
+    return DOTS_COLOR;
+}
+
+#define HILITE_COLOR ((VDP_INK_DARK_BLUE << 4) | VDP_INK_LIGHT_GREEN) /* dark motif on a bright green square */
+static unsigned char g_hi = 0xFF;   /* packed row*8+col of the highlighted dest cell, or 0xFF */
+
+/* Redraw the move list marking `sel` (gold ">"), and highlight sel's destination
+ * square (un-highlighting the previous one). */
+static void choice_show(unsigned char player, const unsigned char *srcs,
+                        unsigned char nsrc, unsigned char sel, unsigned char roll)
+{
+    unsigned char i, pos, dest, rr, cc;
+
+    if (g_hi != 0xFF) {                          /* restore the previous highlight */
+        recolor_cell((unsigned char)(g_hi & 7), (unsigned char)(g_hi >> 3),
+                     cell_color((unsigned char)(g_hi & 7), (unsigned char)(g_hi >> 3)));
+        g_hi = 0xFF;
+    }
+    for (i = 0; i < nsrc; i++) {
+        pos  = srcs[i];
+        dest = (unsigned char)(pos + roll);
+        gotoxy(TX,(unsigned char)(15 + i));
+        textcolor(i == sel ? COL_TITLE : COL_LABEL);
+        cputc(i == sel ? '>' : ' ');
+        if (pos == UR_POS_START) cprintf("%u) ent->%u", i + 1, dest);
+        else                     cprintf("%u) %u->%u", i + 1, pos, dest);
+        if (dest == UR_POS_HOME)                             cputs(" H  ");
+        else if (ur_is_rosette(dest))                        cputs(" *  ");
+        else if (ur_is_shared(dest) && opp_on(player, dest)) cputs(" CAP");
+        else                                                 cputs("    ");
+    }
+    pos  = srcs[sel];
+    dest = (unsigned char)(pos + roll);
+    if (pos_to_cell(player, dest, &rr, &cc)) {   /* on-board dest -> highlight it */
+        recolor_cell(cc, rr, HILITE_COLOR);
+        g_hi = (unsigned char)(rr * 8 + cc);
+    }
+}
+
+/* Non-blocking chooser input, edge-triggered on the controller (one event per
+ * press). Returns '1'..'9' (digit pick), 'P'/'N' (prev/next), '\r' (FIRE), or 0. */
+static unsigned char g_held = 0;
+static unsigned char choose_poll(void)
+{
+    unsigned int  r  = joystick(3);
+    unsigned char kp = (unsigned char)(r >> 8);
+    unsigned char lo = (unsigned char)(r & 0xFF);
+#ifndef UR_COLECO
+    unsigned char k;
+#endif
+    g_seed += 0x9E37u;
+
+    if (g_held) {                                /* wait for a full release first */
+        if (!kp && !(lo & (MOVE_LEFT | MOVE_RIGHT | MOVE_UP | MOVE_DOWN | CV_FIRE)))
+            g_held = 0;
+        return 0;
+    }
+    if (kp >= '1' && kp <= '9')        { g_held = 1; return kp; }
+    if (lo & CV_FIRE)                  { g_held = 1; return '\r'; }
+    if (lo & (MOVE_LEFT | MOVE_UP))    { g_held = 1; return 'P'; }
+    if (lo & (MOVE_RIGHT | MOVE_DOWN)) { g_held = 1; return 'N'; }
+#ifndef UR_COLECO
+    k = kbd_poll();                              /* Adam: keyboard digits too */
+    if (k >= '1' && k <= '9') { g_seed = (uint16_t)(g_seed * 31u + k); settle(); return k; }
+#endif
+    return 0;
+}
+
+/* Show the legal moves (deduped by source) with CAP markers + a selection cursor
+ * + a board destination highlight; drive it with the keypad AND the joystick.
+ * Returns the chosen piece index, or -1 if there is no legal move. */
 int8_t plat_choose_move(unsigned char player, unsigned char roll)
 {
     unsigned char pieces[UR_PIECES], srcs[UR_PIECES];
-    unsigned char count, nsrc, i, j, pos, dest, sel;
+    unsigned char count, nsrc, i, j, pos, sel, a;
+    unsigned int  hold;
     bool seen;
-    int c;
 
     count = ur_legal_moves(&ur_g, player, roll, pieces);
     if (count == 0)
@@ -412,23 +524,33 @@ int8_t plat_choose_move(unsigned char player, unsigned char roll)
             srcs[nsrc++] = pos;
     }
 
-    /* Move list below the board (the HUD occupies rows 12-14). */
-    textcolor(COL_TITLE); gotoxy(0, 14); cprintf("Roll: %u  ", roll);
-    textcolor(COL_LABEL);
-    for (i = 0; i < nsrc; i++) {
-        pos = srcs[i];
-        dest = (unsigned char)(pos + roll);
-        gotoxy(0, (unsigned char)(15 + i));
-        if (pos == UR_POS_START) cprintf("%u) ent->%u", i + 1, dest);
-        else                     cprintf("%u) %u->%u", i + 1, pos, dest);
-        if (dest == UR_POS_HOME)        cputs(" H");
-        else if (ur_is_rosette(dest))   cputs(" *");
-    }
-    textcolor(COL_TITLE);
-    gotoxy(0, 23); cprintf("Pick a move (1-%u): ", nsrc);
+    g_hi = 0xFF;                                 /* board freshly drawn: no highlight yet */
+    sel  = 0;
+    choice_show(player, srcs, nsrc, sel, roll);
+    textcolor(COL_TITLE); gotoxy(TX,23); cputs("Stick+FIRE or 1-N   ");
 
-    do { c = get_key(); } while (c < '1' || c >= (int)('1' + nsrc));
-    sel = (unsigned char)(c - '1');
+    /* Drain input still held from the roll confirm (don't take it as move 1). */
+    do { hold = joystick(3); }
+    while ((hold >> 8) || (hold & (MOVE_LEFT | MOVE_RIGHT | MOVE_UP | MOVE_DOWN | CV_FIRE)));
+    g_held = 0;
+#ifndef UR_COLECO
+    eos_start_read_keyboard();                   /* kick a background keyboard read (Adam) */
+#endif
+
+    for (;;) {
+        a = choose_poll();
+        if (a == 0) continue;
+        if (a >= '1' && a < (unsigned char)('1' + nsrc)) { sel = (unsigned char)(a - '1'); break; }
+        if (a == '\r') break;
+        if (a == 'P')      { sel = (unsigned char)((sel + nsrc - 1) % nsrc); choice_show(player, srcs, nsrc, sel, roll); }
+        else if (a == 'N') { sel = (unsigned char)((sel + 1) % nsrc);        choice_show(player, srcs, nsrc, sel, roll); }
+    }
+
+    if (g_hi != 0xFF) {                          /* clear the highlight before the move applies */
+        recolor_cell((unsigned char)(g_hi & 7), (unsigned char)(g_hi >> 3),
+                     cell_color((unsigned char)(g_hi & 7), (unsigned char)(g_hi >> 3)));
+        g_hi = 0xFF;
+    }
 
     pos = srcs[sel];
     for (i = 0; i < count; i++)
@@ -589,13 +711,13 @@ static void edit_field(char *dst, unsigned char maxlen, const char *title,
     tmp[len] = 0;
 
     textbackground(COL_BG); clrscr();
-    textcolor(COL_TITLE); gotoxy(0, 0); cputs(title);
+    textcolor(COL_TITLE); gotoxy(TX,0); cputs(title);
     textcolor(COL_LABEL);
-    gotoxy(0, 2); cputs("Type, then RETURN.");
-    gotoxy(0, 3); cputs("DELETE = back.");
+    gotoxy(TX,2); cputs("Type, then RETURN.");
+    gotoxy(TX,3); cputs("DELETE = back.");
 
     for (;;) {
-        gotoxy(0, 6); cputs("> "); cputs(tmp); cputc('_');
+        gotoxy(TX,6); cputs("> "); cputs(tmp); cputc('_');
         for (k = (unsigned char)(len + 3); k < maxlen + 4; k++) cputc(' ');
         c = get_raw_key();
         if (c == 0x0D || c == 0x0A) break;                 /* RETURN */
@@ -661,7 +783,7 @@ static int8_t read_state(ur_snapshot *snap)
 static void show_seat(const ur_snapshot *snap)
 {
     textcolor(snap->seat ? SPR_DARK_C : SPR_LIGHT_C);
-    gotoxy(0, 11);
+    gotoxy(TX,11);
     cprintf("You: %s", snap->seat ? "Dark " : "Light");
 }
 
@@ -673,11 +795,11 @@ static void online_game(void)
 
     hide_sprites();
     textbackground(COL_BG); clrscr();
-    textcolor(COL_TITLE); gotoxy(0, 0); cputs("The Royal Game of Ur");
+    textcolor(COL_TITLE); gotoxy(TX,0); cputs("The Royal Game of Ur");
     textcolor(COL_LABEL);
 
     if (network_init() != FN_ERR_OK) {
-        gotoxy(0, 3); cputs("No FujiNet found. Key...");
+        gotoxy(TX,3); cputs("No FujiNet found. Key...");
         get_key(); return;
     }
     /* FujiNet present: pull the saved profile once, then let a lobby-chosen
@@ -687,19 +809,19 @@ static void online_game(void)
     build_net_url();
 
     if (network_open(g_net_url, OPEN_MODE_RW, 0) != FN_ERR_OK) {
-        gotoxy(0, 3); cprintf("Can't reach %s", g_host);
-        gotoxy(0, 5); cputs("Key..."); get_key();
+        gotoxy(TX,3); cprintf("Can't reach %s", g_host);
+        gotoxy(TX,5); cputs("Key..."); get_key();
         return;
     }
     network_write(g_net_url, cmd, ur_proto_join(cmd, g_name));
 
-    gotoxy(0, 3); cprintf("Connecting to %s", g_host);
-    gotoxy(0, 5); cputs("Waiting for an opponent...");
-    gotoxy(0, 6); cputs("(computer joins after ~60s)");
+    gotoxy(TX,3); cprintf("Connecting to %s", g_host);
+    gotoxy(TX,5); cputs("Waiting for an opponent...");
+    gotoxy(TX,6); cputs("(computer joins after ~60s)");
 
     rc = read_state(&snap);
     if (rc == 0) {
-        gotoxy(0, 8); cputs("Disconnected. Key...");
+        gotoxy(TX,8); cputs("Disconnected. Key...");
         get_key(); network_close(g_net_url); return;
     }
 
@@ -750,14 +872,14 @@ int main(void)
 
 #if UR_SNDTEST  /* one-off: play every SFX in sequence (verify the SN76489) */
     textbackground(COL_BG); clrscr();
-    textcolor(COL_TITLE); gotoxy(0, 0); cputs("Sound test");
+    textcolor(COL_TITLE); gotoxy(TX,0); cputs("Sound test");
     textcolor(COL_LABEL);
-    gotoxy(0, 2); cputs("roll");    sfx_roll();    settle();
-    gotoxy(0, 3); cputs("capture"); sfx_capture(); settle();
-    gotoxy(0, 4); cputs("rosette"); sfx_rosette(); settle();
-    gotoxy(0, 5); cputs("score");   sfx_score();   settle();
-    gotoxy(0, 6); cputs("win");     sfx_win();     settle();
-    gotoxy(0, 8); cputs("done");
+    gotoxy(TX,2); cputs("roll");    sfx_roll();    settle();
+    gotoxy(TX,3); cputs("capture"); sfx_capture(); settle();
+    gotoxy(TX,4); cputs("rosette"); sfx_rosette(); settle();
+    gotoxy(TX,5); cputs("score");   sfx_score();   settle();
+    gotoxy(TX,6); cputs("win");     sfx_win();     settle();
+    gotoxy(TX,8); cputs("done");
     for (;;) settle();
 #endif
 
@@ -776,28 +898,28 @@ int main(void)
         hide_sprites();             /* no board tokens on the menu */
         textbackground(COL_BG);
         clrscr();
-        textcolor(COL_TITLE); gotoxy(0, 0);  cputs("The Royal Game of Ur");
-        textcolor(COL_LABEL); gotoxy(0, 1);  cputs("Ur - Mesopotamia - c.2600 BCE");
+        textcolor(COL_TITLE); gotoxy(TX,0);  cputs("The Royal Game of Ur");
+        textcolor(COL_LABEL); gotoxy(TX,1);  cputs("Ur - Mesopotamia - c.2600 BCE");
 #ifdef UR_COLECO
-        gotoxy(0, 2);  cputs("ColecoVision");
-        gotoxy(0, 5);  cputs("1) Two players");
-        gotoxy(0, 6);  cputs("2) One player vs computer");
-        gotoxy(0, 8);  cputs("Keypad 1/2 picks; FIRE rolls.");
-        textcolor(COL_TITLE); gotoxy(0, 13); cputs("Select (1-2):");
+        gotoxy(TX,2);  cputs("ColecoVision");
+        gotoxy(TX,5);  cputs("1) Two players");
+        gotoxy(TX,6);  cputs("2) One player vs computer");
+        gotoxy(TX,8);  cputs("Keypad 1/2 picks; FIRE rolls.");
+        textcolor(COL_TITLE); gotoxy(TX,13); cputs("Select (1-2):");
 #else
-        gotoxy(0, 2);  cputs("Coleco Adam");
-        gotoxy(0, 5);  cputs("1) Two players");
-        gotoxy(0, 6);  cputs("2) One player vs computer");
-        gotoxy(0, 7);  cputs("3) Online (FujiNet)");
-        gotoxy(0, 8);  cputs("4) Set name");
-        gotoxy(0, 9);  cputs("5) Set server");
-        textcolor(COL_LABEL); gotoxy(0, 11); cprintf("name:%s host:%s", g_name, g_host);
-        textcolor(COL_TITLE); gotoxy(0, 13); cputs("Select (1-5):");
+        gotoxy(TX,2);  cputs("Coleco Adam");
+        gotoxy(TX,5);  cputs("1) Two players");
+        gotoxy(TX,6);  cputs("2) One player vs computer");
+        gotoxy(TX,7);  cputs("3) Online (FujiNet)");
+        gotoxy(TX,8);  cputs("4) Set name");
+        gotoxy(TX,9);  cputs("5) Set server");
+        textcolor(COL_LABEL); gotoxy(TX,11); cprintf("name:%s host:%s", g_name, g_host);
+        textcolor(COL_TITLE); gotoxy(TX,13); cputs("Select (1-5):");
 #endif
         /* With thanks to the scholar who reconstructed the rules. */
         textcolor(COL_LABEL);
-        gotoxy(0, 22); cputs("Rules by Dr Irving Finkel,");
-        gotoxy(0, 23); cputs("British Museum - with thanks.");
+        gotoxy(TX,22); cputs("Rules by Dr Irving Finkel,");
+        gotoxy(TX,23); cputs("British Museum - with thanks.");
 
         play_hymn();                /* the Hurrian Hymn (once at boot, skippable) */
 

@@ -153,6 +153,33 @@ FIRE → Left Ctrl): KP-digit menu select, FIRE roll, and KP-digit in-game move 
 work via the controller. All verified empirically by driving MAME under X11
 (xdotool + ImageMagick `import`) and reading the screen back.
 
+## Move chooser & overscan (hardware feedback, both Adam + ColecoVision)
+
+Real-CRT feedback on the ColecoVision drove four fixes in `main.c` (all shared by
+the Adam and CV since they share this file):
+
+- **Overscan margin.** TMS9928A output overscans on a real TV — the leftmost ~8px
+  (character column 0) gets clipped. All HUD/menu/move-list text now starts at
+  **`#define TX 1`** (shifted right one char / 8px); the board already sits at
+  columns 8+ so it's unaffected. (Everything that was `gotoxy(0,…)` is `gotoxy(TX,…)`.)
+- **Keypad *and* joystick.** `plat_choose_move` reads the *same* `joystick(3)` word
+  for **both** the keypad (a digit picks a move directly) **and** the stick
+  (LEFT/UP = prev, RIGHT/DOWN = next, FIRE = confirm), edge-triggered so one press =
+  one step (`choose_poll`); the Adam also polls its keyboard digits. Parity with the
+  Atari/5200 chooser.
+- **Capture marker.** The move list appends **` CAP`** when a move would capture
+  (`ur_is_shared(dest) && opp_on(player,dest)`, same test the Atari uses), alongside
+  the existing ` *` (rosette) / ` H` (bear-off) markers.
+- **Destination highlight.** A gold `>` cursor marks the selected row, and the move's
+  **destination square is highlighted green** on the board (`recolor_cell` swaps the
+  cell's colour to `HILITE_COLOR`; `cell_color` restores it — colour-table only, so
+  the carved pattern is untouched). Bear-off moves (dest = home, off-board) show no
+  square highlight.
+
+Verified in MAME (`coleco`) via the `-DUR_DEMO` board with a staged capture: the
+text cleared the left overscan, `CAP` rendered, and a stick-Right moved both the `>`
+cursor and the green highlight onto the shared capture cell.
+
 Implements the `plat_*` interface for the **Coleco Adam**.
 
 > Parent context: [`/CLAUDE.md`](../../CLAUDE.md). Networking model:
