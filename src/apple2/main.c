@@ -315,7 +315,28 @@ void plat_draw(unsigned char roll, const char *msg)
     board_show();   /* lo-res: re-assert gfx after conio-free pokes (no-op for DHGR) */
 }
 
-/* List legal moves (deduped by source) on the panel, read a 1..N choice. */
+/* Bright-green outline around a board cell — a legal move-destination marker.
+ * Invalidates the cell in the dirty cache so the next plat_draw restores it. */
+static void border_cell(unsigned char col, unsigned char row)
+{
+#ifdef UR_DHGR
+    unsigned char g0 = (unsigned char)(col * 10), y0 = dh_ry[row];
+    dhgr_fill(g0, (unsigned char)(g0 + 7), y0, (unsigned char)(y0 + 1), DH_GREEN);
+    dhgr_fill(g0, (unsigned char)(g0 + 7), (unsigned char)(y0 + 42), (unsigned char)(y0 + 43), DH_GREEN);
+    dhgr_fill(g0, g0, y0, (unsigned char)(y0 + 43), DH_GREEN);
+    dhgr_fill((unsigned char)(g0 + 7), (unsigned char)(g0 + 7), y0, (unsigned char)(y0 + 43), DH_GREEN);
+#else
+    unsigned char x0 = cellx(col), y0 = celly(row);
+    gr_bar(x0, y0, (unsigned char)(x0 + CELL_W - 1), y0, GR_GREEN);
+    gr_bar(x0, (unsigned char)(y0 + CELL_H - 1), (unsigned char)(x0 + CELL_W - 1), (unsigned char)(y0 + CELL_H - 1), GR_GREEN);
+    gr_bar(x0, y0, x0, (unsigned char)(y0 + CELL_H - 1), GR_GREEN);
+    gr_bar((unsigned char)(x0 + CELL_W - 1), y0, (unsigned char)(x0 + CELL_W - 1), (unsigned char)(y0 + CELL_H - 1), GR_GREEN);
+#endif
+    prev_grid[row][col] = CELL_NONE;
+}
+
+/* List legal moves (deduped by source) on the panel, mark every legal destination
+ * square, and read a 1..N choice. */
 int8_t plat_choose_move(unsigned char player, unsigned char roll)
 {
     unsigned char pieces[UR_PIECES], srcs[UR_PIECES];
@@ -358,6 +379,13 @@ int8_t plat_choose_move(unsigned char player, unsigned char roll)
         panel_text(0, PANEL_TOP + 2, buf);
     }
     status("PICK A MOVE:");
+
+    for (i = 0; i < nsrc; i++) {          /* mark every legal landing square */
+        unsigned char hr, hc, d = (unsigned char)(srcs[i] + roll);
+        if (d < UR_POS_HOME && pos_to_cell(player, d, &hr, &hc))
+            border_cell(hc, hr);
+    }
+    board_show();
 
     do { c = cgetc(); } while (c < '1' || c >= (int)('1' + nsrc));
     sel = (unsigned char)(c - '1');
