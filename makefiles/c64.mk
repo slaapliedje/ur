@@ -6,6 +6,8 @@ C64_SOURCES := $(COMMON_SOURCES) $(UR_GAME_SRC) $(NET_SOURCES) \
                $(wildcard $(SRC_DIR)/c64/*.c) $(wildcard $(SRC_DIR)/c64/*.s)
 
 C64_FLAGS   := -t c64 -O -I$(SRC_DIR)/c64 $(COMMON_INC)
+# local build emits ur.prg; the ONLINE=1 block below overrides it to ur-online.prg
+C64_PRG     := ur.prg
 # `make c64 CHARSET=1` builds the charset board (no sprites/raster IRQ) fallback.
 ifeq ($(CHARSET),1)
 C64_FLAGS   += -DUR_CHARSET
@@ -26,6 +28,7 @@ ifeq ($(ONLINE),1)
 C64_FLAGS   += -DUR_ONLINE --include-dir $(C64_FNLIB_DIR)
 C64_DEPS    := $(C64_LIB)
 C64_LINK    := $(C64_LIB)
+C64_PRG     := ur-online.prg
 ifeq ($(CSP_COMPAT),1)
 C64_SOURCES += $(SRC_DIR)/atari/csp_compat.s
 endif
@@ -33,8 +36,13 @@ endif
 
 .PHONY: c64
 c64: $(C64_DEPS) | $(C64_OUT) ## Build the Commodore 64 target (.prg/.d64)
-	$(CL65) $(C64_FLAGS) -o $(C64_OUT)/ur.prg $(C64_SOURCES) $(C64_LINK)
-	@echo "[c64] built $(C64_OUT)/ur.prg — run in VICE (x64sc); ONLINE=1 adds FujiNet"
+	$(CL65) $(C64_FLAGS) -o $(C64_OUT)/$(C64_PRG) $(C64_SOURCES) $(C64_LINK)
+	@echo "[c64] built $(C64_OUT)/$(C64_PRG) — run in VICE (x64sc); ONLINE=1 adds FujiNet"
+
+# Convenience: the shippable FujiNet build (distinct name so it coexists with local).
+.PHONY: c64-online
+c64-online: ## Build the C64 FujiNet-online variant -> ur-online.prg
+	$(MAKE) c64 ONLINE=1
 
 # Download + unpack the pinned fujinet-lib release for c64.
 $(C64_LIB):

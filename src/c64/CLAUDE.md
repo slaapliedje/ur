@@ -86,6 +86,12 @@ Implements the `plat_*` interface for the Commodore 64.
 
 ## FujiNet (online — `make c64 ONLINE=1`)
 
+> **Shipped as its own download.** `make c64-online` (= `make c64 ONLINE=1`) emits
+> **`build/c64/ur-online.prg`** — a distinct name so it coexists with the local
+> `ur.prg`. `make release` builds both, and the itch **c64** channel carries both
+> (the local default keeps the custom-charset showcase; `-online` adds FujiNet). So
+> the C64 now ships a FujiNet-capable binary alongside the local one.
+
 FujiNet for the C64 attaches via the **IEC** (serial bus). The `N:` device API and
 the Ur wire protocol are identical to the Atari/Adam, so `online_game()` is a direct
 port of the Atari's: `network_init` → `network_open(N:TCP://host:1234/, RW)` → send

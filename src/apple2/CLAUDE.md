@@ -161,6 +161,13 @@ SFX use AY tones, the noise channel (dice rattle / capture crash), and the envel
 
 ## FujiNet online (`make apple2 ONLINE=1`)
 
+> **Shipped as its own download.** `make apple2-online` (= `make apple2 ONLINE=1`)
+> emits **`build/apple2/ur-online.system`** + **`ur-online.po`** — distinct names so
+> they coexist with the local `ur.system`/`ur.po`. `make release` builds both and the
+> itch **apple2** channel carries both. Online is the **lo-res** board (DHGR and
+> ONLINE can't share the binary — the code region overflows), so the DHGR showcase
+> stays local-only and the FujiNet build ships alongside it.
+
 FujiNet attaches via the **SmartPort** bus, but the `N:` API + Ur wire protocol are
 identical to the Atari/Adam/C64, so `online_game()` is a direct port: `network_init`
 → `network_open(N:TCP://host:1234/, RW)` → `ur_proto_join(name)`, then the

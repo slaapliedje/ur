@@ -22,8 +22,11 @@ cat <<EOF
 $BUILD/atari/ur.xex|ur-atari-$VERSION.xex|Atari 8-bit (400/800/XL/XE) — Altirra or atari800 (run the executable)
 $BUILD/a5200/ur.a52|ur-a5200-$VERSION.a52|Atari 5200 — atari800 -5200 or MAME a5200 (cartridge)
 $BUILD/c64/ur.prg|ur-c64-$VERSION.prg|Commodore 64 — VICE x64sc (autostart the PRG)
+$BUILD/c64/ur-online.prg|ur-c64-online-$VERSION.prg|Commodore 64 (FujiNet online) — VICE x64sc + FujiNet-PC; cross-play over N:TCP
 $BUILD/apple2/ur.system|ur-apple2-$VERSION.system|Apple IIe (enhanced) — ProDOS SYSTEM file (copy onto a ProDOS disk)
 $BUILD/apple2/ur.po|ur-apple2-$VERSION.po|Apple IIe (enhanced) — ProDOS disk image holding UR.SYSTEM
+$BUILD/apple2/ur-online.system|ur-apple2-online-$VERSION.system|Apple IIe (FujiNet online, lo-res) — ProDOS SYSTEM file; cross-play over SmartPort N:TCP
+$BUILD/apple2/ur-online.po|ur-apple2-online-$VERSION.po|Apple IIe (FujiNet online, lo-res) — ProDOS disk image; needs FujiNet
 $BUILD/adam/ur.ddp|ur-adam-$VERSION.ddp|Coleco Adam — MAME adam (digital data pack)
 $BUILD/coleco/ur.rom|ur-coleco-$VERSION.rom|ColecoVision — MAME coleco or real hardware (cartridge)
 $BUILD/sms/ur.sms|ur-sms-$VERSION.sms|Sega Master System — MAME sms / Emulicious

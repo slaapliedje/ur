@@ -31,12 +31,15 @@ APPLE2_FNLIB_URL := https://github.com/FujiNetWIFI/fujinet-lib/releases/download
 APPLE2_LINK :=
 APPLE2_DEPS :=
 APPLE2_INC  :=
+# local build emits ur.*; the ONLINE=1 block below overrides it to ur-online.*
+APPLE2_PRG  := ur
 # `make apple2 ONLINE=1` links fujinet-lib + the FujiNet online path (over SmartPort).
 ifeq ($(ONLINE),1)
 APPLE2_DEFS += -DUR_ONLINE
 APPLE2_INC  := --include-dir $(APPLE2_FNLIB_DIR)
 APPLE2_LINK := $(APPLE2_LIB)
 APPLE2_DEPS := $(APPLE2_LIB)
+APPLE2_PRG  := ur-online
 ifeq ($(CSP_COMPAT),1)
 APPLE2_SOURCES += $(SRC_DIR)/atari/csp_compat.s
 endif
@@ -60,21 +63,27 @@ apple2: $(APPLE2_DEPS) | $(APPLE2_OUT) ## Build the Apple II target (SYSTEM bina
 ifeq ($(strip $(wildcard $(SRC_DIR)/apple2/*.c)),)
 	@echo "[apple2] no sources yet — add src/apple2/*.c, then build (cc65). (skeleton)"
 else
-	$(CL65) $(APPLE2_FLAGS) -o $(APPLE2_OUT)/ur.exe $(APPLE2_SOURCES) $(APPLE2_LINK)
+	$(CL65) $(APPLE2_FLAGS) -o $(APPLE2_OUT)/$(APPLE2_PRG).exe $(APPLE2_SOURCES) $(APPLE2_LINK)
 	# apple2-system.cfg prepends a 58-byte ($3A) EXEHDR ahead of the $2000 entry.
 	# ProDOS loads a SYSTEM file at $2000 and JMPs there, so strip the EXEHDR: the
 	# remaining image starts with the crt0 ($2000) entry (LDX #$FF / TXS / ...).
-	tail -c +59 $(APPLE2_OUT)/ur.exe > $(APPLE2_OUT)/ur.system
-	@echo "[apple2] built $(APPLE2_OUT)/ur.system (ProDOS SYSTEM image, entry \$$2000)"
+	tail -c +59 $(APPLE2_OUT)/$(APPLE2_PRG).exe > $(APPLE2_OUT)/$(APPLE2_PRG).system
+	@echo "[apple2] built $(APPLE2_OUT)/$(APPLE2_PRG).system (ProDOS SYSTEM image, entry \$$2000)"
 ifeq ($(strip $(AC)),)
 	@echo "[apple2] (no AppleCommander jar -> skipping .po; set AC=path/to/AppleCommander.jar)"
 else
-	@rm -f $(APPLE2_OUT)/ur.po
-	java -jar $(AC) -pro140 $(APPLE2_OUT)/ur.po UR >/dev/null
-	java -jar $(AC) -p $(APPLE2_OUT)/ur.po UR.SYSTEM sys 0x2000 < $(APPLE2_OUT)/ur.system
-	@echo "[apple2] packaged $(APPLE2_OUT)/ur.po — make a bootable disk with tools/apple2-bootdisk.sh"
+	@rm -f $(APPLE2_OUT)/$(APPLE2_PRG).po
+	java -jar $(AC) -pro140 $(APPLE2_OUT)/$(APPLE2_PRG).po UR >/dev/null
+	java -jar $(AC) -p $(APPLE2_OUT)/$(APPLE2_PRG).po UR.SYSTEM sys 0x2000 < $(APPLE2_OUT)/$(APPLE2_PRG).system
+	@echo "[apple2] packaged $(APPLE2_OUT)/$(APPLE2_PRG).po — make a bootable disk with tools/apple2-bootdisk.sh"
 endif
 endif
+
+# Convenience: the shippable FujiNet build (lo-res board; distinct name so it
+# coexists with the local default). DHGR and ONLINE can't share a binary.
+.PHONY: apple2-online
+apple2-online: ## Build the Apple II FujiNet-online variant -> ur-online.system/.po
+	$(MAKE) apple2 ONLINE=1
 
 # Build a *bootable* ProDOS disk by copying a real ProDOS disk (which supplies the
 # PRODOS kernel + boot block) and dropping in UR.SYSTEM as the sole launcher:
