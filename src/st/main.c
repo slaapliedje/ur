@@ -12,45 +12,55 @@
  * (Sound: YM2149 via Giaccess — added next; stubbed silent here.)
  */
 #include <osbind.h>
+#include <mint/falcon.h>       /* Falcon video mode constants (BPS16, COL40, …) */
 #include <stdint.h>
 #include "ur_game.h"          /* shared controller + plat.h + ur.h */
 #include "music.h"            /* the Hurrian Hymn melody data (shared) */
 #include "font8.h"            /* shared 1bpp 8x8 font (from src/sms; -I in st.mk) */
 
-/* ---- palette: the Standard-of-Ur lapis/gold scheme (ST 0x0RGB, 3 bits/chan) -- */
-enum { C_BG=0, C_SHELL, C_GOLD, C_FACE, C_HI, C_DARK, C_SH, C_WHITE, C_GREY };
-static const uint16_t ur_palette[16] = {
-    0x0012, /* 0 BG    deep lapis            */
-    0x0775, /* 1 SHELL shell / cream (Light) */
-    0x0751, /* 2 GOLD                        */
-    0x0035, /* 3 FACE  lapis cell face       */
-    0x0257, /* 4 HI    bright lapis (bevel +) */
-    0x0610, /* 5 DARK  carnelian (Dark)      */
-    0x0013, /* 6 SH    shadow (bevel -)      */
-    0x0777, /* 7 WHITE                       */
-    0x0444, /* 8 GREY  stone                 */
-    0x0222, 0x0333, 0x0555, 0x0666, 0x0540, 0x0762, 0x0776
-};
-
-/* ---- planar low-res framebuffer primitives ----------------------------- */
+/* ---- colours + framebuffer: build-specific --------------------------------- *
+ * The Falcon build (UR_FALCON) uses a 320x200 TRUECOLOR chunky bitmap (one RGB565
+ * word per pixel) with the full Standard-of-Ur palette; the plain ST build uses a
+ * 16-colour word-interleaved 4-bitplane bitmap. Everything below (geometry, board,
+ * plat_draw, sound, the shared controller) is IDENTICAL for both — only the pixel
+ * format and these colour constants differ. */
 #define SCRW 320
 #define SCRH 200
+#ifdef UR_FALCON
+#define RGB(r,g,b) ((uint16_t)(((r)<<11)|((g)<<5)|(b)))   /* 5:6:5  (r,b 0..31; g 0..63) */
+#define C_BG    RGB(2,5,11)      /* deep lapis field      */
+#define C_SHELL RGB(30,56,22)    /* shell / cream (Light) */
+#define C_GOLD  RGB(30,42,6)     /* gold                  */
+#define C_FACE  RGB(5,15,24)     /* lapis cell face       */
+#define C_HI    RGB(13,30,31)    /* bright lapis (bevel+) */
+#define C_DARK  RGB(25,6,3)      /* carnelian (Dark)      */
+#define C_SH    RGB(2,7,14)      /* shadow (bevel-)       */
+#define C_WHITE RGB(31,63,31)    /* white                 */
+#define C_GREY  RGB(16,34,20)    /* stone                 */
+static uint16_t *fbuf;           /* truecolor framebuffer (one word/pixel) */
+static int16_t   old_mode;
+static void pix(int x, int y, uint16_t c) { fbuf[(long)y * SCRW + x] = c; }
+static void frectw(int x, int y, int w, int h, uint16_t c)
+{
+    int yy, xx;
+    for (yy = y; yy < y + h; yy++) { uint16_t *r = fbuf + (long)yy * SCRW + x; for (xx = 0; xx < w; xx++) r[xx] = c; }
+}
+#else
+enum { C_BG=0, C_SHELL, C_GOLD, C_FACE, C_HI, C_DARK, C_SH, C_WHITE, C_GREY };
+static const uint16_t ur_palette[16] = {   /* 0x0RGB, 3 bits/channel */
+    0x0012, 0x0775, 0x0751, 0x0035, 0x0257, 0x0610, 0x0013, 0x0777,
+    0x0444, 0x0222, 0x0333, 0x0555, 0x0666, 0x0540, 0x0762, 0x0776
+};
 #define STRIDE 160               /* bytes per scanline (20 groups * 4 planes * 2) */
-static uint8_t *scr;             /* Physbase() */
-
-/* one pixel (slow path — used for motifs/tokens/glyphs) */
-static void pix(int x, int y, uint8_t c)
+static uint8_t *scr;
+static void pix(int x, int y, uint16_t c)
 {
     uint16_t *grp = (uint16_t *)(scr + (long)y * STRIDE + (x >> 4) * 8);
     uint16_t m = (uint16_t)(0x8000u >> (x & 15));
     int p;
-    for (p = 0; p < 4; p++) {
-        if ((c >> p) & 1) grp[p] |= m; else grp[p] &= (uint16_t)~m;
-    }
+    for (p = 0; p < 4; p++) { if ((c >> p) & 1) grp[p] |= m; else grp[p] &= (uint16_t)~m; }
 }
-
-/* fast filled rect for 16-px-aligned x/w (cell faces, screen clear) */
-static void frectw(int x, int y, int w, int h, uint8_t c)
+static void frectw(int x, int y, int w, int h, uint16_t c)   /* fast 16-px-aligned fill */
 {
     uint16_t p0 = (c & 1) ? 0xFFFF : 0, p1 = (c & 2) ? 0xFFFF : 0;
     uint16_t p2 = (c & 4) ? 0xFFFF : 0, p3 = (c & 8) ? 0xFFFF : 0;
@@ -60,24 +70,41 @@ static void frectw(int x, int y, int w, int h, uint8_t c)
         for (g = 0; g < gw; g++) { r[0]=p0; r[1]=p1; r[2]=p2; r[3]=p3; r += 4; }
     }
 }
-/* general filled rect (any x/w) — per pixel */
-static void frect(int x, int y, int w, int h, uint8_t c)
+#endif
+/* shared higher-level fills (build on pix/frectw) */
+static void frect(int x, int y, int w, int h, uint16_t c)
 {
     int xx, yy;
-    for (yy = y; yy < y + h; yy++)
-        for (xx = x; xx < x + w; xx++) pix(xx, yy, c);
+    for (yy = y; yy < y + h; yy++) for (xx = x; xx < x + w; xx++) pix(xx, yy, c);
 }
-static void clr(uint8_t c) { frectw(0, 0, SCRW, SCRH, c); }
+static void clr(uint16_t c) { frectw(0, 0, SCRW, SCRH, c); }
+
+#ifdef UR_FALCON
+/* truecolor-only: a vertical gradient rect (top colour -> bottom colour), for lit
+ * lapis cell faces — the flourish the ST's 16 colours can't do. */
+static uint16_t lerp565(uint16_t a, uint16_t b, int t, int n)
+{
+    int ar=(a>>11)&31, ag=(a>>5)&63, ab=a&31;
+    int br=(b>>11)&31, bg=(b>>5)&63, bb=b&31;
+    int r = ar + (br-ar)*t/n, g = ag + (bg-ag)*t/n, bl = ab + (bb-ab)*t/n;
+    return (uint16_t)((r<<11)|(g<<5)|bl);
+}
+static void grad_v(int x, int y, int w, int h, uint16_t ctop, uint16_t cbot)
+{
+    int yy;
+    for (yy = 0; yy < h; yy++) frectw(x, y + yy, w, 1, lerp565(ctop, cbot, yy, h - 1));
+}
+#endif
 
 /* filled circle + filled diamond (motifs / tokens) */
-static void disc(int cx, int cy, int r, uint8_t c)
+static void disc(int cx, int cy, int r, uint16_t c)
 {
     int dx, dy;
     for (dy = -r; dy <= r; dy++)
         for (dx = -r; dx <= r; dx++)
             if (dx*dx + dy*dy <= r*r) pix(cx + dx, cy + dy, c);
 }
-static void diamond(int cx, int cy, int r, uint8_t c)
+static void diamond(int cx, int cy, int r, uint16_t c)
 {
     int dx, dy;
     for (dy = -r; dy <= r; dy++) {
@@ -87,7 +114,7 @@ static void diamond(int cx, int cy, int r, uint8_t c)
 }
 
 /* font8 glyph (8x8, 1bpp) at pixel (px,py) in colour c; transparent background */
-static void glyph(int px, int py, char ch, uint8_t c)
+static void glyph(int px, int py, char ch, uint16_t c)
 {
     const uint8_t *g;
     int row, col;
@@ -99,11 +126,11 @@ static void glyph(int px, int py, char ch, uint8_t c)
             if (b & (0x80 >> col)) pix(px + col, py + row, c);
     }
 }
-static void text(int px, int py, const char *s, uint8_t c)
+static void text(int px, int py, const char *s, uint16_t c)
 {
     for (; *s; s++, px += 8) glyph(px, py, *s, c);
 }
-static void text_u(int px, int py, uint8_t v, uint8_t c)   /* 0..99 */
+static void text_u(int px, int py, uint8_t v, uint16_t c)   /* 0..99 */
 {
     char b[3]; int n = 0;
     if (v >= 10) b[n++] = (char)('0' + v / 10);
@@ -142,11 +169,16 @@ static uint8_t count_at(uint8_t pl, uint8_t pos)
 static void draw_cell(int col, int row)
 {
     int x = cellx(col), y = celly(row), cx = x + CELL/2, cy = y + CELL/2;
+#ifdef UR_FALCON
+    grad_v(x, y, CELL, CELL, C_HI, C_SH);      /* truecolor lit-from-top face   */
+    frectw(x, y, CELL, 1, C_WHITE);            /* crisp top edge                */
+#else
     frectw(x, y, CELL, CELL, C_FACE);          /* face                          */
     frectw(x, y, CELL, 2, C_HI);               /* top highlight (word-aligned)  */
     frect(x, y, 2, CELL, C_HI);                /* left highlight                */
     frectw(x, y + CELL - 2, CELL, 2, C_SH);    /* bottom shadow                 */
     frect(x + CELL - 2, y, 2, CELL, C_SH);     /* right shadow                  */
+#endif
     if (is_rosette_cell(row, col)) {           /* gold flower rosette           */
         diamond(cx, cy, 11, C_GOLD);
         diamond(cx, cy, 6, C_FACE);
@@ -318,10 +350,19 @@ uint8_t plat_pick_level(void)
 /* ---- video init + title / menu ----------------------------------------- */
 static void video_init(void)
 {
-    Setscreen((void *)-1L, (void *)-1L, 0);   /* low-res 320x200x4 */
+#ifdef UR_FALCON
+    long sz = VgetSize(BPS16 | COL40);         /* 320x200 truecolor (RGB monitor) */
+    void *raw = (void *)Mxalloc(sz + 256, 0);
+    fbuf = (uint16_t *)(((long)raw + 255) & ~255L);
+    old_mode = VsetMode(-1);
+    VsetMode(BPS16 | COL40);                   /* set truecolor bit-depth first… */
+    VsetScreen((long)fbuf, (long)fbuf, -1, -1); /* …then show our buffer          */
+#else
+    Setscreen((void *)-1L, (void *)-1L, 0);    /* low-res 320x200x4 */
     Setpalette((void *)ur_palette);
-    Cconws("\033f");                           /* VT52: hide the text cursor */
+    Cconws("\033f");                            /* VT52: hide the text cursor */
     scr = (uint8_t *)Physbase();
+#endif
     snd_silence();                             /* quiet the PSG at boot */
 }
 

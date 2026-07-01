@@ -10,8 +10,13 @@
 > **unchanged** under GCC for the 68000 — the same brain as the 6502 (cc65) and Z80
 > (z88dk) ports, now on a third CPU family.
 >
-> **Planned: an enhanced STe / TT / Falcon edition** (more colours — STe 4096, TT/
-> Falcon palettes — DMA sound, blitter; the user wants this) once the base ST is solid.
+> **Enhanced Atari Falcon edition: playable** — `make st FALCON=1` →
+> `build/st/ur-falcon.prg`, a **320×200 truecolor** (RGB565 chunky) build with
+> **gradient-lit cell faces** (the flourish the ST's 16 colours can't do). Same
+> `src/st/main.c`, same shared controller/geometry/sound/input — only the pixel format
+> and palette differ (`#ifdef UR_FALCON`). Verified in Hatari `--machine falcon`.
+> **Still planned: STe (4096-colour palette) and TT (256-colour) variants**, plus
+> STe/Falcon DMA sound + the blitter.
 
 > Parent context: [`/CLAUDE.md`](../../CLAUDE.md). The Atari led our 8-bit era; the ST
 > leads the 16-bit era too.
@@ -49,6 +54,12 @@ constraints than the 8-bit toolchains.
          --sound off --fast-boot on --confirm-quit off
   ```
   (Headless screenshots: `import -window $(xdotool search --class hatari|tail -1)`.)
+- **Falcon build:** `make st FALCON=1` → `build/st/ur-falcon.prg`; run it as an RGB
+  Falcon: `hatari --machine falcon --dsp none --monitor rgb --tos
+  /usr/share/hatari/TOSv4.04.img --harddrive <dir> --auto 'C:\UR.PRG'`. Truecolor mode
+  gotcha: set the depth with `VsetMode(BPS16|COL40)` **first**, THEN point the base at
+  your buffer with `VsetScreen(buf,buf,-1,-1)` — `VsetScreen`'s mode arg alone won't
+  change the bit-depth (you get planar stripes). Monitor reports MON=1 (STcolor/RGB).
 - **Run (MAME):** the `st`/`megast` drivers also work.
 
 ## How it's built (`src/st/main.c`)

@@ -204,8 +204,12 @@ the 6502 (cc65) and Z80 (z88dk).
       input, and **YM2149 sound** — the Hurrian Hymn (verified by recording: the
       F5-E5-D5-C5-B4 theme) + event SFX. The Atari leads the 16-bit era as it led the
       8-bit. See [`src/st/CLAUDE.md`](src/st/CLAUDE.md).
-- [ ] **Atari STe / TT / Falcon — enhanced edition** (planned): richer palettes
-      (STe 4096, Falcon truecolor), STe DMA sound, blitter-accelerated drawing.
+- [x] **Atari Falcon — truecolor edition** (`make st FALCON=1` → `ur-falcon.prg`;
+      Hatari `--machine falcon`). A 320×200 **truecolor** (RGB565 chunky) build with
+      **gradient-lit cell faces** — one `src/st/main.c`, `#ifdef UR_FALCON` swaps only
+      the pixel format + palette; geometry/controller/sound/input all shared.
+- [ ] **Atari STe / TT variants** (planned): STe 4096-colour palette; TT 256-colour;
+      STe/Falcon DMA sound + the blitter.
 - [ ] **Sega Mega Drive / Genesis** — the 16-bit console showpiece (VDP, 64 on-screen
       colours, hardware sprites, PSG+FM). Needs an SGDK/marsdev toolchain; verifies in
       MAME (`megadriv`).
