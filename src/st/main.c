@@ -327,6 +327,7 @@ int8_t plat_choose_move(uint8_t player, uint8_t roll)
         if (dest >= UR_POS_HOME) { glyph(px, 172, 'H', C_SHELL); px += 8; }
         else { text_u(px, 172, dest, C_SHELL); px += (dest < 10) ? 8 : 16; }
         if (dest < UR_POS_HOME && ur_is_rosette(dest)) { glyph(px, 172, '*', C_GOLD); px += 8; }
+        else if (dest < UR_POS_HOME && ur_dest_captures(&ur_g, player, dest)) { glyph(px, 172, 'X', C_DARK); px += 8; }
         px += 8;
     }
     do { k = waitkey(); } while (k < '1' || k >= '1' + (int)nsrc);

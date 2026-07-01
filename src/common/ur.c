@@ -109,6 +109,17 @@ bool ur_move_legal(const ur_state *s, uint8_t player, uint8_t piece, uint8_t rol
     return true;
 }
 
+/* Would a piece landing on `dest` capture an opponent? True iff dest is on the
+ * shared row, is not a (safe) rosette, and an opponent piece sits there — the same
+ * condition ur_apply_move uses. Pure predicate for the ports' move-list "capture"
+ * marker; safe to call for any dest (home/private/off-board -> false). */
+bool ur_dest_captures(const ur_state *s, uint8_t player, uint8_t dest)
+{
+    if (dest == UR_POS_HOME || !ur_is_shared(dest) || ur_is_rosette(dest))
+        return false;
+    return opp_piece_at(s, (uint8_t)(1 - player), dest) >= 0;
+}
+
 uint8_t ur_legal_moves(const ur_state *s, uint8_t player, uint8_t roll, uint8_t *pieces_out)
 {
     uint8_t i, n = 0;

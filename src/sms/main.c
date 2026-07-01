@@ -571,7 +571,9 @@ int8_t plat_choose_move(unsigned char player, unsigned char roll)
             if (src == UR_POS_START) put_str(LIST_X + 2, y, "ent->");
             else { put_ch(LIST_X + 2, y, 'p'); put_u(LIST_X + 3, y, src); put_str(LIST_X + 5, y, "->"); }
             if (dest == UR_POS_HOME) put_ch(LIST_X + 7, y, 'H');
-            else { put_u(LIST_X + 7, y, dest); if (ur_is_rosette(dest)) put_ch(LIST_X + 9, y, '*'); }
+            else { put_u(LIST_X + 7, y, dest);
+                   if (ur_is_rosette(dest)) put_ch(LIST_X + 9, y, '*');
+                   else if (ur_dest_captures(&ur_g, player, dest)) put_ch(LIST_X + 9, y, 'X'); }
         }
         k = wait_press();
         if (k & JOY_UP)   sel = (unsigned char)((sel + nsrc - 1) % nsrc);

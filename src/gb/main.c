@@ -403,7 +403,9 @@ int8_t plat_choose_move(uint8_t player, uint8_t roll)
             if (src == UR_POS_START) put_str(LIST_X + 2, y, "ent->");
             else { put_tile(LIST_X + 2, y, (uint8_t)('p' - 0x20)); put_u(LIST_X + 3, y, src); put_str(LIST_X + 5, y, "->"); }
             if (dest == UR_POS_HOME) put_tile(LIST_X + 7, y, (uint8_t)('H' - 0x20));
-            else { put_u(LIST_X + 7, y, dest); if (ur_is_rosette(dest)) put_tile(LIST_X + 9, y, (uint8_t)('*' - 0x20)); }
+            else { put_u(LIST_X + 7, y, dest);
+                   if (ur_is_rosette(dest)) put_tile(LIST_X + 9, y, (uint8_t)('*' - 0x20));
+                   else if (ur_dest_captures(&ur_g, player, dest)) put_tile(LIST_X + 9, y, (uint8_t)('X' - 0x20)); }
         }
         k = wait_press();
         if (k & J_UP)   sel = (uint8_t)((sel + nsrc - 1) % nsrc);

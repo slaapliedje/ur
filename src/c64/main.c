@@ -669,6 +669,7 @@ int8_t plat_choose_move(unsigned char player, unsigned char roll)
         else                     cprintf("%u) %u->%u", i + 1, pos, dest);
         if (dest == UR_POS_HOME)        cputs(" H");
         else if (ur_is_rosette(dest))   cputs(" *");
+        else if (ur_dest_captures(&ur_g, player, dest)) cputs(" X");  /* capture */
     }
     cclearxy(0, 24, 40);
     textcolor(COL_TITLE); cputsxy(0, 24, "Pick a move:");

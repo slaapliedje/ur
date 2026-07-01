@@ -269,6 +269,7 @@ int8_t plat_choose_move(unsigned char player, unsigned char roll)
         p = put_u(p, dest);
         if (dest == UR_POS_HOME)      *p++ = 'H';
         else if (ur_is_rosette(dest)) *p++ = '*';
+        else if (ur_dest_captures(&ur_g, player, dest)) *p++ = 'X';   /* capture */
         *p = 0;
         put_str(3, (unsigned char)(MLY + i), buf);
     }

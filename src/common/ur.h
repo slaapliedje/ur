@@ -49,6 +49,9 @@ void     ur_init(ur_state *s);
 /* ---- board predicates --------------------------------------------------- */
 bool     ur_is_rosette(uint8_t pos);   /* true for path positions 4, 8, 14 */
 bool     ur_is_shared(uint8_t pos);    /* true for the shared middle row */
+/* True if landing on `dest` would capture an opponent (shared row, not a rosette,
+ * opponent present) — for the ports' move-list "capture" marker. */
+bool     ur_dest_captures(const ur_state *s, uint8_t player, uint8_t dest);
 
 /* ---- dice / RNG (deterministic; seed comes from the platform) ----------- */
 void     ur_rng_seed(uint16_t seed);
