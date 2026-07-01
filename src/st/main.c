@@ -37,6 +37,7 @@
 #define C_SH    RGB(2,7,14)      /* shadow (bevel-)       */
 #define C_WHITE RGB(31,63,31)    /* white                 */
 #define C_GREY  RGB(16,34,20)    /* stone                 */
+#define C_HILITE RGB(6,52,12)    /* bright green move-destination marker */
 static uint16_t *fbuf;           /* truecolor framebuffer (one word/pixel) */
 static int16_t   old_mode;
 static void pix(int x, int y, uint16_t c) { fbuf[(long)y * SCRW + x] = c; }
@@ -46,10 +47,11 @@ static void frectw(int x, int y, int w, int h, uint16_t c)
     for (yy = y; yy < y + h; yy++) { uint16_t *r = fbuf + (long)yy * SCRW + x; for (xx = 0; xx < w; xx++) r[xx] = c; }
 }
 #else
-enum { C_BG=0, C_SHELL, C_GOLD, C_FACE, C_HI, C_DARK, C_SH, C_WHITE, C_GREY };
+enum { C_BG=0, C_SHELL, C_GOLD, C_FACE, C_HI, C_DARK, C_SH, C_WHITE, C_GREY, C_HILITE };
 static const uint16_t ur_palette[16] = {   /* 0x0RGB, 3 bits/channel */
     0x0012, 0x0775, 0x0751, 0x0035, 0x0257, 0x0610, 0x0013, 0x0777,
-    0x0444, 0x0222, 0x0333, 0x0555, 0x0666, 0x0540, 0x0762, 0x0776
+    0x0444, 0x0070, 0x0333, 0x0555, 0x0666, 0x0540, 0x0762, 0x0776
+    /*            ^ idx 9 = C_HILITE: bright green move-destination marker */
 };
 #define STRIDE 160               /* bytes per scanline (20 groups * 4 planes * 2) */
 static uint8_t *scr;
@@ -302,7 +304,18 @@ static void sfx_for_result(const ur_move_result *res)
 void    plat_roll(uint8_t roll) { (void)roll; sfx_roll(); }
 void    plat_sfx_result(const ur_move_result *res) { sfx_for_result(res); }
 
-/* plat.h: show the legal-move list, return the chosen piece (-1 = none). Number keys. */
+/* Bright-green outline around a board cell — marks a legal move destination. */
+static void border_cell(int col, int row, uint16_t c)
+{
+    int x = cellx(col), y = celly(row);
+    frectw(x, y, CELL, 2, c);              /* top    (16-aligned) */
+    frectw(x, y + CELL - 2, CELL, 2, c);   /* bottom              */
+    frect(x, y, 2, CELL, c);               /* left                */
+    frect(x + CELL - 2, y, 2, CELL, c);    /* right               */
+}
+
+/* plat.h: show the legal-move list, mark every legal destination square, and
+ * return the chosen piece (-1 = none). Number keys pick directly. */
 int8_t plat_choose_move(uint8_t player, uint8_t roll)
 {
     uint8_t pieces[UR_PIECES], srcs[UR_PIECES], count, nsrc = 0, i, j, pos, dest;
@@ -329,6 +342,11 @@ int8_t plat_choose_move(uint8_t player, uint8_t roll)
         if (dest < UR_POS_HOME && ur_is_rosette(dest)) { glyph(px, 172, '*', C_GOLD); px += 8; }
         else if (dest < UR_POS_HOME && ur_dest_captures(&ur_g, player, dest)) { glyph(px, 172, 'X', C_DARK); px += 8; }
         px += 8;
+    }
+    for (i = 0; i < nsrc; i++) {                   /* mark every legal landing square */
+        int hr, hc; uint8_t d = (uint8_t)(srcs[i] + roll);
+        if (d < UR_POS_HOME && pos_to_cell(player, d, &hr, &hc))
+            border_cell(hc, hr, C_HILITE);
     }
     do { k = waitkey(); } while (k < '1' || k >= '1' + (int)nsrc);
     sel = k - '1';
