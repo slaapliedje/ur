@@ -1,0 +1,69 @@
+<!--
+  itch.io DEVLOG post #2 for "The Royal Game of Ur".
+  HOW TO USE: project dashboard -> Devlog -> Create new post. Suggested title:
+    "v0.1.1 - ColecoVision & Adam polish from real-hardware feedback (and the 16-bit era begins)"
+  In the post body click "</>" (HTML) and paste everything below this comment.
+  Replace each [ add screenshot ... ] line with a real image via the image button.
+-->
+
+<p>First point release is up &mdash; <strong>v0.1.1</strong> &mdash; and it's a great
+example of why I asked for feedback in the first post: <strong>this whole update came
+from someone playing the ColecoVision build on a real TV.</strong> That's exactly the
+stuff I can't catch in an emulator window. Thank you. 🌺</p>
+
+<h2>The ColecoVision & Adam got some love</h2>
+<p>The Coleco Adam and the ColecoVision share the same code in this project (the Adam
+is essentially a ColecoVision with a keyboard and drives bolted on), so every fix here
+lands on <strong>both</strong>:</p>
+<ul>
+  <li><strong>Overscan.</strong> On a real CRT the picture bleeds off the edges, and
+      the leftmost ~8 pixels &mdash; the first character &mdash; were getting eaten,
+      clipping the text. Everything now sits a notch to the right so it stays
+      on-screen. (Emulators show the full frame, so this one was invisible to me until
+      a real TV pointed it out.)</li>
+  <li><strong>Keypad <em>and</em> joystick.</strong> When it's your turn you can now
+      pick a move either way &mdash; tap a number on the keypad, or nudge the
+      <strong>joystick</strong> to walk through your options and press the button to
+      commit. Matches how the Atari plays.</li>
+  <li><strong>&ldquo;Capture!&rdquo; warnings.</strong> The move list now flags a move
+      with <strong>CAP</strong> when it would knock an opponent's piece back to the
+      start &mdash; no more capturing (or getting captured) by surprise.</li>
+  <li><strong>Landing-square highlight.</strong> As you scan your moves, the square
+      you'd land on <strong>lights up green</strong> on the board, so you can see the
+      play before you make it.</li>
+</ul>
+
+<p><em>[ add screenshot here: the ColecoVision move list showing a "CAP" move with the
+green destination square highlighted ]</em></p>
+
+<h2>The oldest melody &mdash; confirmed singing</h2>
+<p>I also went back and <strong>double-checked the title music</strong> on the Coleco's
+SN76489 sound chip, because &ldquo;it compiles&rdquo; isn't the same as &ldquo;it plays
+right.&rdquo; I recorded the audio and traced the pitches, and the whole
+<strong>Hurrian Hymn</strong> is there &mdash; all seven phrases, in tune, on the right
+octave. The oldest written melody we have, playing correctly on a 1982 game chip. That
+made me happy.</p>
+
+<h2>Peeking over the horizon: the 16-bit era</h2>
+<p>Here's the fun teaser. The shared game &ldquo;brain&rdquo; that keeps all the 8-bit
+ports in step has now made its <strong>third</strong> leap: after the 6502 and the Z80,
+it compiles for the <strong>68000</strong> too. That means the first
+<strong>Atari&nbsp;ST</strong> port is running &mdash; and there's an
+<strong>Atari&nbsp;Falcon</strong> build rendering the board in glorious
+<strong>true colour</strong> with gradient-lit tiles the 8-bit machines can only dream
+of.</p>
+<p>They're not in the downloads <em>yet</em> &mdash; I want to polish them a bit more
+first &mdash; but they're real, they run, and they're where this is headed next.
+(Mega&nbsp;Drive / Genesis and Amiga are on the list after that.)</p>
+
+<p><em>[ add screenshot here: the Atari Falcon truecolor board with its gradient tiles ]</em></p>
+
+<h2>Keep it coming</h2>
+<p>This update exists because someone told me what was wrong on their machine, so I'll
+say it again: <strong>if you play this &mdash; especially on real hardware &mdash; tell
+me how it goes.</strong> What ran, what glitched, what felt off, what you wish it did.
+Drop a comment here or open an issue on GitHub:
+<a href="https://github.com/slaapliedje/ur">github.com/slaapliedje/ur</a> (all the
+source, every platform, free and GPLv3).</p>
+
+<p>Thanks for playing along. May the rosettes favour you. 🌺</p>

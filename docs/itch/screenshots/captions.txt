@@ -10,6 +10,11 @@ Screenshots — butler can't upload these). Suggested captions:
   07-atari-8bit-title.png   Atari 8-bit — title (the ziggurat)
   08-atari-vs-atari-online.png  Two Ataris playing each other over FujiNet
   09-nes-title.png          NES / Famicom — title
+  10-coleco-move-highlight.png  ColecoVision — move list with a "CAP" capture flag + the green landing-square highlight (v0.1.1)
+  11-atari-falcon-truecolor.png Atari Falcon — truecolor board with gradient-lit tiles (16-bit, in the works)
+
+The last two pair with DEVLOG post #2 (docs/itch/devlog-02.html): 10 = the
+ColecoVision fixes, 11 = the Falcon 16-bit teaser.
 
 COVER (630x500): crop 01-master-system.png or 02-apple2-double-hires.png tight
 on the board, or use 07-atari-8bit-title.png (the ziggurat) for branding.
