@@ -1,5 +1,5 @@
 ================================================================
-  THE ROYAL GAME OF UR  -  for retro 8-bit machines
+  THE ROYAL GAME OF UR  -  for retro 8-bit & 16-bit machines
 ================================================================
 
 The Royal Game of Ur is a ~4,600-year-old Mesopotamian board game
@@ -26,6 +26,10 @@ load it in that machine's emulator, and play.
   ur-gamegear-*.gg    Sega Game Gear                - MAME, Emulicious
   ur-gb-*.gb          Game Boy / Game Boy Color     - any GB emulator (colour on GBC)
   ur-nes-*.nes        NES / Famicom                 - Mesen, FCEUX, MAME
+  ur-st-*.prg         Atari ST (GEMDOS program)     - Hatari (EmuTOS works), real ST
+  ur-ste-*.prg        Atari STe (4096-colour look)  - Hatari --machine ste
+  ur-tt-*.prg         Atari TT (256-colour look)    - Hatari --machine tt
+  ur-falcon-*.prg     Atari Falcon (truecolor look) - Hatari --machine falcon (TOS 4)
 
 (SHA256SUMS.txt lists checksums for every file.)
 
@@ -51,10 +55,13 @@ and is in the separate "-online" C64 and Apple II downloads above.
 ----------------------------------------------------------------
   CONTROLS
 ----------------------------------------------------------------
-Keyboard machines (Atari 8-bit, C64, Apple II):
+Keyboard machines (Atari 8-bit, C64, Apple II, Atari ST/STe/TT/
+Falcon):
   - Menu: press the number of the option you want.
   - Roll: press any key when prompted.
   - Pick a move: press the number shown next to the move you want.
+  On the ST family, drop the .prg on a (GEMDOS) drive and run it;
+  legal move destinations light up green on the board.
 
 Atari 5200: use the controller KEYPAD numbers (same as above).
 

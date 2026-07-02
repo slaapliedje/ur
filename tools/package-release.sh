@@ -33,6 +33,10 @@ $BUILD/sms/ur.sms|ur-sms-$VERSION.sms|Sega Master System — MAME sms / Emulicio
 $BUILD/sms/ur-gg.gg|ur-gamegear-$VERSION.gg|Sega Game Gear — MAME gamegear
 $BUILD/gb/ur.gb|ur-gb-$VERSION.gb|Game Boy / Game Boy Color — MAME gameboy (grey) or gbcolor (colour)
 $BUILD/nes/ur.nes|ur-nes-$VERSION.nes|NES / Famicom — MAME nes / Mesen / FCEUX (iNES NROM)
+$BUILD/st/ur.prg|ur-st-$VERSION.prg|Atari ST — GEMDOS .prg; Hatari (EmuTOS) or real hardware
+$BUILD/st/ur-ste.prg|ur-ste-$VERSION.prg|Atari STe — 4096-colour palette edition; Hatari --machine ste
+$BUILD/st/ur-tt.prg|ur-tt-$VERSION.prg|Atari TT — 256-colour gradient edition; Hatari --machine tt
+$BUILD/st/ur-falcon.prg|ur-falcon-$VERSION.prg|Atari Falcon — truecolor edition; Hatari --machine falcon (TOS 4)
 EOF
 }
 

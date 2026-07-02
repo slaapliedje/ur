@@ -14,7 +14,7 @@ VERSION="$(git describe --tags --always --dirty 2>/dev/null || echo dev)"
 BUNDLE="build/release/ur-$VERSION"
 ITCH="build/itch"
 
-# channel  <space>  filename-prefix in the bundle
+# channel  <space>  filename-prefix(es, comma-separated) in the bundle
 PLATFORMS='
 atari           ur-atari-
 atari-5200      ur-a5200-
@@ -26,6 +26,8 @@ master-system   ur-sms-
 game-gear       ur-gamegear-
 game-boy        ur-gb-
 nes             ur-nes-
+atari-st        ur-st-,ur-ste-,ur-tt-
+atari-falcon    ur-falcon-
 '
 
 echo "[itch] building offline release bundle ($VERSION)…"
@@ -37,7 +39,11 @@ rm -rf "$ITCH"; mkdir -p "$ITCH"
 while read -r chan prefix; do
   [ -z "${chan:-}" ] && continue
   d="$ITCH/$chan"; mkdir -p "$d"
-  cp "$BUNDLE/$prefix"* "$d"/ 2>/dev/null || { echo "  WARN: no files for $chan ($prefix*)"; continue; }
+  found=0
+  for p in ${prefix//,/ }; do
+    cp "$BUNDLE/$p"* "$d"/ 2>/dev/null && found=1
+  done
+  [ "$found" = 1 ] || { echo "  WARN: no files for $chan ($prefix*)"; continue; }
   cp "$BUNDLE/HOW-TO-PLAY.txt" "$BUNDLE/LICENSE" "$d"/ 2>/dev/null || true
   printf "  %-14s <- %s\n" "$chan" "$(cd "$d" && ls ur-* 2>/dev/null | tr '\n' ' ')"
 done <<< "$PLATFORMS"

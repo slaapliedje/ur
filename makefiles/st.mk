@@ -37,5 +37,14 @@ else
 	@echo "[st] built $(ST_OUT)/$(ST_PRG) — Hatari (ST: EmuTOS / Falcon: TOS4 --machine falcon)"
 endif
 
+# Convenience wrappers so `make release` can build every ST-family variant.
+.PHONY: st-ste st-tt st-falcon
+st-ste: ## Build the Atari STe variant -> ur-ste.prg
+	$(MAKE) st STE=1
+st-tt: ## Build the Atari TT variant -> ur-tt.prg
+	$(MAKE) st TT=1
+st-falcon: ## Build the Atari Falcon truecolor variant -> ur-falcon.prg
+	$(MAKE) st FALCON=1
+
 $(ST_OUT):
 	mkdir -p $@
