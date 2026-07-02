@@ -17,6 +17,17 @@
 > and palette differ (`#ifdef UR_FALCON`). Verified in Hatari `--machine falcon`.
 > **Still planned: STe (4096-colour palette) and TT (256-colour) variants**, plus
 > STe/Falcon DMA sound + the blitter.
+>
+> **Title scene + 3D board (both builds):** the title (and win screen) is a
+> procedural **Great Ziggurat of Ur at dusk** — `title_scene()`/`zbox()` draw
+> oblique-projection brick terraces (lit front / sand ledge / shaded side, mud-brick
+> coursing), the grand stair, a blue-glazed shrine with a gilded door, a setting sun
+> with halo, and stars; the Falcon gets a gradient night→amber sky, the ST a banded
+> dusk from palette spares (idx 10/11/13–15 = shadow, dusk amber, brick, lit brick,
+> sand). The board is a **raised slab**: a dark drop shadow along the H silhouette's
+> south/east edges (strips only where no neighbour cell would cover them —
+> `cell_exists` is unbounded, so board edges are guarded explicitly), crisp white cell
+> rims + dark seat lines, and tokens/beads with offset drop shadows + specular glints.
 
 > Parent context: [`/CLAUDE.md`](../../CLAUDE.md). The Atari led our 8-bit era; the ST
 > leads the 16-bit era too.

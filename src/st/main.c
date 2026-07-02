@@ -38,6 +38,11 @@
 #define C_WHITE RGB(31,63,31)    /* white                 */
 #define C_GREY  RGB(16,34,20)    /* stone                 */
 #define C_HILITE RGB(6,52,12)    /* bright green move-destination marker */
+#define C_SHADOW RGB(1,3,6)      /* deep shadow (board drop shadow)      */
+#define C_DUSK  RGB(25,24,6)     /* dusk amber (title horizon)           */
+#define C_BRICK RGB(18,25,6)     /* mud brick, shaded side               */
+#define C_BRICKL RGB(25,37,11)   /* mud brick, lit front                 */
+#define C_SAND  RGB(28,50,17)    /* pale sand / terrace ledge            */
 static uint16_t *fbuf;           /* truecolor framebuffer (one word/pixel) */
 static int16_t   old_mode;
 static void pix(int x, int y, uint16_t c) { fbuf[(long)y * SCRW + x] = c; }
@@ -47,11 +52,13 @@ static void frectw(int x, int y, int w, int h, uint16_t c)
     for (yy = y; yy < y + h; yy++) { uint16_t *r = fbuf + (long)yy * SCRW + x; for (xx = 0; xx < w; xx++) r[xx] = c; }
 }
 #else
-enum { C_BG=0, C_SHELL, C_GOLD, C_FACE, C_HI, C_DARK, C_SH, C_WHITE, C_GREY, C_HILITE };
+enum { C_BG=0, C_SHELL, C_GOLD, C_FACE, C_HI, C_DARK, C_SH, C_WHITE, C_GREY, C_HILITE,
+       C_SHADOW, C_DUSK, C_SPARE, C_BRICK, C_BRICKL, C_SAND };
 static const uint16_t ur_palette[16] = {   /* 0x0RGB, 3 bits/channel */
     0x0012, 0x0775, 0x0751, 0x0035, 0x0257, 0x0610, 0x0013, 0x0777,
-    0x0444, 0x0070, 0x0333, 0x0555, 0x0666, 0x0540, 0x0762, 0x0776
-    /*            ^ idx 9 = C_HILITE: bright green move-destination marker */
+    0x0444, 0x0070, 0x0001, 0x0631, 0x0666, 0x0540, 0x0762, 0x0776
+    /* idx 9 = C_HILITE green marker; 10 = near-black shadow; 11 = dusk amber;
+     * 13/14/15 = mud brick (shaded / lit) + sand — the title ziggurat + board 3D */
 };
 #define STRIDE 160               /* bytes per scanline (20 groups * 4 planes * 2) */
 static uint8_t *scr;
@@ -115,6 +122,62 @@ static void diamond(int cx, int cy, int r, uint16_t c)
     }
 }
 
+/* ---- title scene: the Great Ziggurat of Ur at dusk --------------------- *
+ * Procedural, like all our art. Oblique-projection boxes: lit front face,
+ * sand-lit top ledge, shaded right side. */
+static void zbox(int cx, int ybase, int w, int h, int d,
+                 uint16_t front, uint16_t top, uint16_t side)
+{
+    int i;
+    frect(cx - w / 2, ybase - h, w, h, front);
+    for (i = 3; i < h; i += 5)                       /* mud-brick coursing */
+        frect(cx - w / 2, ybase - h + i, w, 1, side);
+    for (i = 1; i <= d; i++) {
+        frect(cx - w / 2 + i, ybase - h - i, w, 1, top);
+        frect(cx + w / 2 + i - 1, ybase - h - i, 1, h, side);
+    }
+}
+
+static void title_scene(void)
+{
+    static const uint16_t sx[] = { 12,40,70,95,130,183,210,245,275,300,55,118,225,290 };
+    static const uint8_t  sy[] = { 30,52,24,44,58, 30,50,26,46,58,66,64,60,34 };
+    int i, y;
+
+    clr(C_BG);
+#ifdef UR_FALCON
+    grad_v(0, 0, SCRW, 128, RGB(1,2,7), C_DUSK);      /* night sky -> amber dusk */
+#else
+    for (y = 104; y < 128; y++)                        /* banded dusk glow        */
+        if (y >= 118 || (y & 1)) frectw(0, y, SCRW, 1, C_DUSK);
+#endif
+    for (i = 0; i < (int)(sizeof sy / sizeof sy[0]); i++)
+        pix(sx[i], sy[i], (i & 1) ? C_WHITE : C_GREY); /* stars                   */
+
+    disc(262, 124, 16, C_DUSK);                        /* setting sun: halo,      */
+    disc(262, 124, 13, C_GOLD);                        /*   disc,                 */
+    disc(262, 124, 5,  C_SHELL);                       /*   hot core              */
+
+    frectw(0, 128, SCRW, 1, C_BRICK);                  /* horizon line            */
+#ifdef UR_FALCON
+    grad_v(0, 129, SCRW, 17, C_SAND, C_BRICK);         /* sand fading into dusk   */
+#else
+    frectw(0, 129, SCRW, 17, C_SAND);
+#endif
+
+    /* the ziggurat: three brick terraces + the blue-glazed shrine on top */
+    zbox(160, 140, 150, 24, 6, C_BRICKL, C_SAND, C_BRICK);
+    zbox(160, 116, 106, 20, 6, C_BRICKL, C_SAND, C_BRICK);
+    zbox(160,  96,  64, 16, 6, C_BRICKL, C_SAND, C_BRICK);
+    zbox(160,  80,  30, 14, 5, C_FACE,   C_HI,   C_SH);
+    frect(157, 72, 6, 8, C_GOLD);                      /* gilded doorway          */
+
+    frect(152, 96, 16, 44, C_SAND);                    /* the grand stair         */
+    for (y = 98; y < 140; y += 3) frect(152, y, 16, 1, C_BRICK);
+    frect(152, 96, 1, 44, C_BRICK);
+    frect(167, 96, 1, 44, C_BRICK);
+}
+
 /* font8 glyph (8x8, 1bpp) at pixel (px,py) in colour c; transparent background */
 static void glyph(int px, int py, char ch, uint16_t c)
 {
@@ -174,12 +237,17 @@ static void draw_cell(int col, int row)
 #ifdef UR_FALCON
     grad_v(x, y, CELL, CELL, C_HI, C_SH);      /* truecolor lit-from-top face   */
     frectw(x, y, CELL, 1, C_WHITE);            /* crisp top edge                */
+    frect(x + CELL - 2, y + 1, 2, CELL - 1, C_SH);      /* right-side form      */
+    frectw(x, y + CELL - 1, CELL, 1, C_SHADOW);         /* dark seat line       */
 #else
     frectw(x, y, CELL, CELL, C_FACE);          /* face                          */
-    frectw(x, y, CELL, 2, C_HI);               /* top highlight (word-aligned)  */
-    frect(x, y, 2, CELL, C_HI);                /* left highlight                */
+    frectw(x, y, CELL, 1, C_WHITE);            /* crisp lit rim                 */
+    frectw(x, y + 1, CELL, 2, C_HI);           /* top highlight                 */
+    frect(x, y + 1, 2, CELL - 1, C_HI);        /* left highlight                */
     frectw(x, y + CELL - 2, CELL, 2, C_SH);    /* bottom shadow                 */
-    frect(x + CELL - 2, y, 2, CELL, C_SH);     /* right shadow                  */
+    frect(x + CELL - 2, y + 1, 2, CELL - 1, C_SH);      /* right shadow         */
+    frectw(x, y + CELL - 1, CELL, 1, C_SHADOW);         /* dark seat line       */
+    frect(x + CELL - 1, y + 2, 1, CELL - 2, C_SHADOW);  /* dark right edge      */
 #endif
     if (is_rosette_cell(row, col)) {           /* gold flower rosette           */
         diamond(cx, cy, 11, C_GOLD);
@@ -198,12 +266,14 @@ static void draw_cell(int col, int row)
 static void draw_token(int col, int row, uint8_t player)
 {
     int cx = cellx(col) + CELL/2, cy = celly(row) + CELL/2;
-    disc(cx, cy, 13, C_SH);                                /* drop shadow ring   */
+    disc(cx + 2, cy + 2, 13, C_SHADOW);                    /* offset drop shadow */
     disc(cx, cy, 12, player ? C_DARK : C_SHELL);           /* body               */
+    disc(cx - 4, cy - 4, player ? 2 : 3, C_WHITE);         /* specular glint     */
     disc(cx, cy, 4,  player ? C_GOLD : C_FACE);            /* centre pip         */
 }
 static void draw_bead(int px, int py, uint8_t player)
 {
+    disc(px + 1, py + 1, 4, C_SHADOW);                     /* drop shadow        */
     disc(px, py, 4, player ? C_DARK : C_SHELL);
 }
 
@@ -219,6 +289,19 @@ void plat_draw(uint8_t roll, const char *msg)
     text(120, 12, "ROLL:", C_WHITE);
     if (roll != UR_NO_ROLL) text_u(168, 12, roll, C_GOLD);
 
+    /* raised-slab drop shadow: dark strips along the H silhouette's south/east
+     * edges (interior strips would be covered by the neighbour cell anyway).
+     * cell_exists() doesn't bound row/col, so guard the board edges explicitly. */
+    for (row = 0; row < 3; row++)
+        for (col = 0; col < 8; col++)
+            if (cell_exists(row, col)) {
+                int x = cellx(col), y = celly(row);
+                int s = (row == 2 || !cell_exists(row + 1, col));
+                int e = (col == 7 || !cell_exists(row, col + 1));
+                if (s) frect(x + 4, y + CELL, CELL - (e ? 0 : 4), 4, C_SHADOW);
+                if (e) frect(x + CELL, y + 4, 4, CELL - 4, C_SHADOW);
+                if (s && e) frect(x + CELL, y + CELL, 4, 4, C_SHADOW);
+            }
     for (row = 0; row < 3; row++)
         for (col = 0; col < 8; col++)
             if (cell_exists(row, col)) draw_cell(col, row);
@@ -388,12 +471,17 @@ static void video_init(void)
 static int title_menu(void)        /* returns vs_ai (1 = vs computer) */
 {
     int k;
-    clr(C_BG);
-    text(72, 24, "THE ROYAL GAME OF UR", C_GOLD);
-    text(80, 40, "ATARI ST  -  68000", C_SHELL);
-    text(48, 80,  "1) TWO PLAYERS", C_WHITE);
-    text(48, 96,  "2) ONE PLAYER VS COMPUTER", C_WHITE);
-    text(48, 128, "SELECT 1 OR 2:", C_SHELL);
+    title_scene();                 /* the Great Ziggurat of Ur at dusk */
+    text(80, 8, "THE ROYAL GAME OF UR", C_GOLD);
+    text(64, 20, "MESOPOTAMIA - C.2600 BCE", C_SHELL);
+    text(88, 152, "1) TWO PLAYERS", C_WHITE);
+    text(60, 164, "2) ONE PLAYER VS COMPUTER", C_WHITE);
+    text(104, 180, "SELECT 1 OR 2:", C_SHELL);
+#ifdef UR_FALCON
+    text(224, 192, "ATARI FALCON", C_GREY);
+#else
+    text(256, 192, "ATARI ST", C_GREY);
+#endif
     play_hymn();                   /* the Hurrian Hymn, once, skippable by a key */
     for (;;) {
         k = waitkey();
@@ -407,9 +495,9 @@ int main(void)
     video_init();
     for (;;) {
         uint8_t winner = ur_run_game((uint8_t)title_menu());
-        clr(C_BG);
-        text(96, 80, winner ? "DARK WINS!" : "LIGHT WINS!", C_GOLD);
-        text(64, 112, "PRESS ANY KEY", C_SHELL);
+        title_scene();             /* victory beneath the ziggurat */
+        text(winner ? 120 : 116, 156, winner ? "DARK WINS!" : "LIGHT WINS!", C_GOLD);
+        text(108, 176, "PRESS ANY KEY", C_SHELL);
         plat_wait();
     }
     return 0;
