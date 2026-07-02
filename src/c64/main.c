@@ -46,15 +46,18 @@
 #endif
 
 /*
- * Custom-charset glyphs need 2K of RAM at $3800 in VIC bank 0. The local builds
- * are small enough to leave that free, but an ONLINE build also links fujinet-lib
- * (~8K), filling bank 0 (the screen must stay at $0400 for conio) -- so online
- * builds use the ROM charset and draw board cells as colour tiles instead.
+ * Custom-charset glyphs need 2K of RAM at $3800 in VIC bank 0. The game has since
+ * outgrown the space below $3800 (~13K program + 2K charset > the ~14K under
+ * $4000), so the program collided with the charset and the board rendered garbled.
+ * Fix: the DEFAULT build now uses the ROM charset + hardware-sprite tokens (the
+ * same renderer as the ONLINE build — no $3800, no collision), which is also the
+ * nicer "sprite showcase" look. Only the small vertical CHARSET=1 fallback still
+ * installs a custom charset (it fits comfortably under $3800).
  */
-#ifdef UR_ONLINE
-#define CUSTOM_CHARSET 0
+#if defined(UR_CHARSET)
+#define CUSTOM_CHARSET 1        /* vertical fallback: custom charset, fits under $3800 */
 #else
-#define CUSTOM_CHARSET 1
+#define CUSTOM_CHARSET 0        /* default + online: ROM charset + sprite tokens (no $3800) */
 #endif
 
 #define POKE(addr, val)  (*(volatile unsigned char *)(addr) = (unsigned char)(val))
