@@ -7,7 +7,10 @@
 > eyes** down the shared lane, **white quincunx** on the private lanes, and **round
 > two-tone tokens** (cream Light / brown Dark). Each board cell is a **2×2-tile
 > (16×16) block aligned to the attribute grid** so it gets its own palette. The HUD
-> uses an 8×8 font baked into the same CHR. **Sound is the 2A03 APU** (`sound.c`):
+> uses an 8×8 font baked into the same CHR. The move chooser **tints each legal
+> destination cell green** (`greenbg()` in `tools/nes-chr.c` builds green-field twins
+> `T_GROSE/GDOTS/GEYE`; `P_TEXT`/`P_GOLD` colour 3 = green, rendered by cell type), motif
+> kept, and there's a **rosette-cursor difficulty menu**. **Sound is the 2A03 APU** (`sound.c`):
 > the **Hurrian Hymn** title theme on pulse 1, plus event sfx (dice rattle on the
 > noise channel, move/rosette/score/win blips on pulse 1). The NES controller drives
 > everything (read off `$4016`). `make nes` → `build/nes/ur.nes` (an iNES NROM cart);

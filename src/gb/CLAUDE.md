@@ -6,7 +6,9 @@
 > design — the authentic horizontal H-board (3 rows × 8 cols), procedurally drawn
 > carved cells, gold **rosette stars**, bullseye **"eyes"**, five-dot **quincunx**
 > studs, and two-tone **tokens** — on the GB's 160×144 (20×18-tile) screen. Local
-> hot-seat + vs-AI; D-pad + A button. **APU sound** (the Hurrian Hymn title theme +
+> hot-seat + vs-AI; D-pad + A button, a **rosette-cursor difficulty menu**, and a move
+> chooser that **highlights each legal destination as a gold-lit cell** (motif kept).
+> **APU sound** (the Hurrian Hymn title theme +
 > event SFX), entropy-seeded dice, and a hardware-sprite **token glide** are all in.
 > No FujiNet. `make gb` → `build/gb/ur.gb`.
 > Run: `mame gameboy` (grey) / `mame gbcolor` (colour).

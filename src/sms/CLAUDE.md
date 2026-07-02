@@ -9,12 +9,18 @@
 > bullseye **"eyes"** down the shared lane, **five-dot quincunx** studs on the private
 > lanes — plus shaded round **tokens** (shell-white Light, lapis Dark with a shell
 > rim + gold pip) that **glide cell-to-cell as a hardware sprite** on a move,
-> shell/lapis bead **trays**, a gold title, a Turn/Roll HUD, and a
-> D-pad move chooser. The board/token/rosette tiles are **generated procedurally at
+> shell/lapis bead **trays**, a gold title, a Turn/Roll HUD, a
+> D-pad move chooser that **tints each legal destination cell green** (a recoloured
+> copy of its motif — `greenify()` → `TILE_GROSE/GDOTS/GEYE` — so the rosette/eye/
+> quincunx stays visible on green), and a **rosette-cursor difficulty menu**. The
+> board/token/rosette tiles are **generated procedurally at
 > boot** (a 16×16 colour grid → four 4bpp tiles), not stored as art. **SN76489
-> sound**: the Hurrian Hymn at boot (skippable) + roll/move/capture/rosette/score/win
-> effects. Control-pad input (D-pad + button 1). No FujiNet (a cartridge console).
-> `make sms` → `build/sms/ur.sms` (run in MAME `sms` / Emulicious). **`make gamegear`**
+> sound**: the Hurrian Hymn (skippable) — played **after** the title screen is drawn
+> (`title_menu()` calls `play_hymn()` post-draw) so the boot isn't a long blank —
+> plus roll/move/capture/rosette/score/win effects. Control-pad input (D-pad +
+> button 1). No FujiNet (a cartridge console).
+> `make sms` → `build/sms/ur.sms` (run in MAME `sms`, **RetroArch + Genesis Plus GX**,
+> or Emulicious). **`make gamegear`**
 > → `build/sms/ur-gg.gg` builds the **same renderer** for the Game Gear: identical
 > art/palette/tokens/animation, just a **compacted layout** (`-DUR_GG`) because the GG
 > only shows a 160×144 (20×18-tile) window — see "Game Gear layout" below.
@@ -126,10 +132,23 @@ target. **To re-find the visible window** (e.g. on another emulator), build with
 - **Run:** `mame sms -cart build/sms/ur.sms -window -skip_gameinfo` (needs the MAME
   `sms` BIOS romset). Default MAME mapping: D-pad = arrow keys, **button 1 = Left
   Ctrl**.
+- **Better rig for headless verification — RetroArch + Genesis Plus GX:**
+  `retroarch -L /usr/lib/libretro/genesis_plus_gx_libretro.so build/sms/ur.sms
+  --appendconfig <cfg>`. GPGX is accurate (renders the board/sprites correctly) and
+  takes **plain keyboard input** — `z` = button 1/fire, arrows = D-pad, `Return` =
+  Start — far less fiddly than MAME's Left-Ctrl. Two gotchas: (1) RetroArch **pauses
+  when the window loses focus**, which fights scripted focus-switching — put
+  `pause_nonactive = "false"` in the `--appendconfig` cfg; (2) the boot hymn's skip is
+  only polled **between notes**, so a quick tap can miss it — **hold** fire ~2.5 s to
+  skip. GPGX also does the Game Gear; it does **not** do the NES (use MAME `nes`), and
+  `dgen-sdl` is Genesis-only (no `.sms`).
 - **Driving it headlessly** (X11 + xdotool + ImageMagick `import`, like the Atari
   `run-ur` skill): launch → `nap` (perl, not `sleep`) → `xdotool windowactivate
   --sync` → real-XTEST `keydown`/`keyup` → `import -window`. Run `xset r off` first
   so X **key auto-repeat** doesn't turn one keydown into several control-pad edges.
+  **Screenshot-timing note:** the move chooser is transient under fast input — capture
+  right after the roll and *before* any confirm, or you'll snap the post-move board and
+  wrongly conclude the highlight/sprite didn't render (this bit me).
 - **Verifying audio:** `mame sms -cart … -sound sdl -wavwrite out.wav` captures the
   emulated PSG stream; measure it with `ffmpeg -i out.wav -af volumedetect -f null
   /dev/null` (non-silence ⇒ the SN76489 writes are landing). With `-nothrottle` the
