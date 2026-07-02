@@ -60,7 +60,13 @@ static const uint16_t cgb_pal[4] = {
 #define TILE_TOKD  (FONT8_COUNT + 20)      /* 4: lapis token              */
 #define TILE_TRYL  (FONT8_COUNT + 24)      /* 1: shell tray bead          */
 #define TILE_TRYD  (FONT8_COUNT + 25)      /* 1: lapis tray bead          */
-#define TILE_GFRAME (FONT8_COUNT + 26)     /* 4: move-destination frame   */
+/* gold-"lit" copies of the three motif cells — the move-destination highlight.
+ * The GB's 4 colours can't do green, and any bright bg tint would swallow half the
+ * motif (gold+shell), so instead the stone goes GOLD and the motif's gold parts go
+ * dark: a gold-lit cell with the motif fully readable (dark + cream on gold). */
+#define TILE_HROSE (FONT8_COUNT + 26)      /* 4: gold-lit rosette */
+#define TILE_HDOTS (FONT8_COUNT + 30)      /* 4: gold-lit quincunx */
+#define TILE_HEYE  (FONT8_COUNT + 34)      /* 4: gold-lit eye */
 
 /* ---- procedural tiles: a 16x16 colour grid baked into four 2bpp tiles --- */
 static uint8_t grid[256];
@@ -195,15 +201,16 @@ static void build_bead(uint8_t body, uint8_t ring, uint8_t tno)
 
 static void load_font(void);            /* defined just below */
 
-/* Bright shell/white hollow 16x16 frame — the move-destination highlight (cream on
- * GBC, white on DMG). Drawn as a BG cell over each legal landing square in the
- * chooser; cleared by the next full board redraw. */
-static void build_gframe(void)
+/* Recolour a just-built motif cell to a gold "lit" highlight, keeping the motif
+ * readable: the carved face (lapis) -> gold, and the motif's gold parts -> dark
+ * (so a gold star reads as a dark star on the gold cell). Shell/shadow stay. */
+static void goldify(void)
 {
-    uint8_t x, y;
-    for (y = 0; y < 16; y++)
-        for (x = 0; x < 16; x++)
-            grid[(y << 4) + x] = (x < 2 || x > 13 || y < 2 || y > 13) ? C_SHELL : C_FIELD;
+    uint16_t i;
+    for (i = 0; i < 256; i++) {
+        if      (grid[i] == C_GOLD) grid[i] = C_FIELD;   /* motif gold -> dark */
+        else if (grid[i] == C_FACE) grid[i] = C_GOLD;    /* stone face -> gold */
+    }
 }
 
 static void video_init(void)
@@ -225,7 +232,9 @@ static void video_init(void)
     load_cell_sprite(SPR_TOKD);
     build_bead(C_SHELL, C_FACE,  TILE_TRYL);
     build_bead(C_FACE,  C_SHELL, TILE_TRYD);
-    build_gframe();  load_cell(TILE_GFRAME);            /* move-destination highlight */
+    build_rosette(); goldify(); load_cell(TILE_HROSE);  /* gold-lit highlight cells */
+    build_dots();    goldify(); load_cell(TILE_HDOTS);
+    build_eye();     goldify(); load_cell(TILE_HEYE);
 
     /* sprite palette = the board palette (colour 0 is transparent for sprites). */
     if (_cpu == CGB_TYPE)
@@ -405,12 +414,14 @@ int8_t plat_choose_move(uint8_t player, uint8_t roll)
         if (!seen) srcs[nsrc++] = pos;
     }
 
-    {   /* mark every legal landing square with a bright frame (cleared next redraw) */
+    {   /* gold-lit tint on every legal landing square (motif kept; cleared next redraw) */
         uint8_t d, r, c;
         for (i = 0; i < nsrc; i++) {
             d = (uint8_t)(srcs[i] + roll);
-            if (pos_to_cell(player, d, &r, &c))
-                put_cell(cellx(c), celly(r), TILE_GFRAME);
+            if (!pos_to_cell(player, d, &r, &c)) continue;
+            if (ur_is_rosette(d)) put_cell(cellx(c), celly(r), TILE_HROSE);
+            else if (r == 1)      put_cell(cellx(c), celly(r), TILE_HEYE);
+            else                  put_cell(cellx(c), celly(r), TILE_HDOTS);
         }
     }
 
