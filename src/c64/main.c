@@ -637,7 +637,28 @@ void plat_draw(unsigned char roll, const char *msg)
 #endif  /* UR_CHARSET */
 /* ======================================================================== */
 
-/* List legal moves (deduped by source) in the panel, read a 1..N choice. */
+/* Recolour a legal move's destination cell GREEN — a bright "lands here" marker.
+ * plat_draw fully redraws the board each turn, so no manual restore is needed.
+ * Writes colour RAM only (keeps the cell glyph): dense multicolor cells get the
+ * "11" colour = green (0x0D), the vertical fallback / online ROM-tile cells get a
+ * plain green (5). */
+static void hilite_cell(unsigned char col, unsigned char row)
+{
+#ifdef UR_CHARSET
+    *(unsigned char *)(0xD800u + (unsigned int)celly(row) * 40 + cellx(col)) = 5;
+#elif CUSTOM_CHARSET
+    unsigned int o = (unsigned int)trow(row) * 40 + tcol(col);
+    *(unsigned char *)(0xD800u + o)      = 0x0D;
+    *(unsigned char *)(0xD800u + o + 1)  = 0x0D;
+    *(unsigned char *)(0xD800u + o + 40) = 0x0D;
+    *(unsigned char *)(0xD800u + o + 41) = 0x0D;
+#else
+    *(unsigned char *)(0xD800u + (unsigned int)trow(row) * 40 + tcol(col)) = 5;
+#endif
+}
+
+/* List legal moves (deduped by source) in the panel, mark every legal destination
+ * square green, and read a 1..N choice. */
 int8_t plat_choose_move(unsigned char player, unsigned char roll)
 {
     unsigned char pieces[UR_PIECES], srcs[UR_PIECES];
@@ -673,6 +694,12 @@ int8_t plat_choose_move(unsigned char player, unsigned char roll)
     }
     cclearxy(0, 24, 40);
     textcolor(COL_TITLE); cputsxy(0, 24, "Pick a move:");
+
+    for (i = 0; i < nsrc; i++) {          /* mark every legal landing square green */
+        unsigned char hr, hc, d = (unsigned char)(srcs[i] + roll);
+        if (d < UR_POS_HOME && pos_to_cell(player, d, &hr, &hc))
+            hilite_cell(hc, hr);
+    }
 
     do { c = cgetc(); } while (c < '1' || c >= (int)('1' + nsrc));
     sel = (unsigned char)(c - '1');
