@@ -41,11 +41,13 @@ enum {
     C_RED,          /* 7 - carnelian           */
     C_GREY,         /* 8 - token shadow        */
     C_DGOLD,        /* 9 - dark gold           */
-    C_GREEN2        /* 10 - move-dest frame    */
+    C_GREEN2,       /* 10 - highlight cell face (green)  */
+    C_GRNHI,        /* 11 - highlight bevel highlight    */
+    C_GRNSH         /* 12 - highlight bevel shadow       */
 };
 static const unsigned char palette0[16] = {
     0x10, 0x3F, 0x20, 0x35, 0x00, 0x0B, 0x2F, 0x03, 0x15, 0x06,
-    0x0C, 0,0,0,0,0     /* [10] = bright green: the move-destination frame */
+    0x0C, 0x0E, 0x04, 0,0,0   /* [10..12] = green face / hi / shadow: move-dest tint */
 };
 /* CRAM 16..31: doubles as the BG "bank 1" (index 0 = field backdrop, index 1 =
  * gold for INK_GOLD title text) AND the sprite palette for the gliding tokens.
@@ -71,7 +73,11 @@ enum { S_GOLD = 1, S_SHELL, S_LAPIS, S_HI, S_SH, S_GREY, S_WHITE };
 #define TILE_TRYD  (FONT8_COUNT + 25)      /* 1: 8x8 lapis tray bead          */
 #define TILE_SPRL  (FONT8_COUNT + 26)      /* 4: shell token, sprite palette  */
 #define TILE_SPRD  (FONT8_COUNT + 30)      /* 4: lapis token, sprite palette  */
-#define TILE_GFRAME (FONT8_COUNT + 34)     /* 4: green move-destination frame */
+/* green-tinted copies of the three motif cells — the move-destination highlight
+ * (carved stone recoloured green, the gold motif kept on top). */
+#define TILE_GROSE (FONT8_COUNT + 34)      /* 4: green-tinted rosette */
+#define TILE_GDOTS (FONT8_COUNT + 38)      /* 4: green-tinted quincunx */
+#define TILE_GEYE  (FONT8_COUNT + 42)      /* 4: green-tinted eye */
 
 /* SMS VDP R1: bit6 = display enable, bit7 = (legacy, kept set); no frame IRQ. */
 #define display_on()   vdp_set_reg(0x01, 0xC0)
@@ -250,15 +256,16 @@ static void build_bead8(unsigned char body, unsigned char hi, unsigned char sh,
     load_quad(0, 0, tno);
 }
 
-/* Hollow bright-green 16x16 border on the lapis field — the move-destination
- * highlight. Drawn as a BG cell over each legal landing square in the chooser
- * (cleared by the next full board redraw). */
-static void build_gframe(void)
+/* Recolour a just-built motif cell's carved STONE to green (face/highlight/shadow),
+ * keeping the gold/shell motif on top — the move-destination "tinted tile". */
+static void greenify(void)
 {
-    unsigned char x, y;
-    for (y = 0; y < 16; y++)
-        for (x = 0; x < 16; x++)
-            grid[(y << 4) + x] = (x < 2 || x > 13 || y < 2 || y > 13) ? C_GREEN2 : C_FIELD;
+    unsigned int i;
+    for (i = 0; i < 256; i++) {
+        if      (grid[i] == C_FACE) grid[i] = C_GREEN2;
+        else if (grid[i] == C_HI)   grid[i] = C_GRNHI;
+        else if (grid[i] == C_SH)   grid[i] = C_GRNSH;
+    }
 }
 
 static void video_init(void)
@@ -282,7 +289,9 @@ static void video_init(void)
      * corner index 0 is transparent for sprites) — used for the glide animation */
     build_token16(S_SHELL, S_WHITE, S_GREY, S_SH,   S_GREY,  TILE_SPRL);
     build_token16(S_LAPIS, S_HI,    S_SH,   S_GOLD, S_SHELL, TILE_SPRD);
-    build_gframe(); load_cell16(TILE_GFRAME);            /* move-dest highlight frame */
+    build_rosette(); greenify(); load_cell16(TILE_GROSE);   /* green-tinted highlight cells */
+    build_dots();    greenify(); load_cell16(TILE_GDOTS);
+    build_eye();     greenify(); load_cell16(TILE_GEYE);
 
     vdp_set_reg(0x07, C_FIELD);                          /* backdrop = field  */
     sprites_off();
@@ -510,6 +519,13 @@ static unsigned int base_for(unsigned char row, unsigned char col)
     if (row == 1)                  return TILE_EYE;
     return TILE_DOTS;
 }
+/* the green-tinted twin of base_for() — the move-destination highlight cell */
+static unsigned int green_base_for(unsigned char row, unsigned char col)
+{
+    if (is_rosette_cell(row, col)) return TILE_GROSE;
+    if (row == 1)                  return TILE_GEYE;
+    return TILE_GDOTS;
+}
 /* pixel position of a path cell (pos 0 = a tray slot, pos>14 = the home tray) */
 static void cell_px(unsigned char player, unsigned char pos, int *px, int *py)
 {
@@ -574,12 +590,12 @@ int8_t plat_choose_move(unsigned char player, unsigned char roll)
         if (!seen) srcs[nsrc++] = pos;
     }
 
-    {   /* green frame on every legal landing square (cleared by the next redraw) */
+    {   /* tint every legal landing square green — motif kept (cleared by next redraw) */
         unsigned char d, r, c;
         for (i = 0; i < nsrc; i++) {
             d = (unsigned char)(srcs[i] + roll);
             if (pos_to_cell(player, d, &r, &c))
-                put_cell(cellx(c), celly(r), TILE_GFRAME);
+                put_cell(cellx(c), celly(r), green_base_for(r, c));
         }
     }
 
