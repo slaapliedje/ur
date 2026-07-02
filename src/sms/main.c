@@ -625,20 +625,25 @@ uint16_t plat_seed(void) { return g_seed; }
 /* plat.h: choose the AI difficulty (D-pad Up = Easy, Down = Hard, FIRE = Normal). */
 uint8_t plat_pick_level(void)
 {
+    static const char *const opt[3] = { "EASY", "NORMAL", "HARD" };
+    unsigned char sel = UR_AI_NORMAL, i, y;   /* start on Normal */
     int k;
     display_off();
     sprites_off();
     screen_clear();
     set_ink(INK_GOLD); put_str(TITLE_X, 2, "DIFFICULTY"); set_ink(INK_WHITE);
-    put_str(2, 6,  "Up:   Easy");
-    put_str(2, 8,  "Fire: Normal");
-    put_str(2, 10, "Down: Hard");
+    put_str(2, 13, "U/D PICK  FIRE OK");
     display_on();
     for (;;) {
+        for (i = 0; i < 3; i++) {                 /* a gold rosette marks the choice */
+            y = (unsigned char)(6 + i * 2);
+            set_ink(INK_GOLD);  put_ch(4, y, (i == sel) ? '*' : ' ');
+            set_ink(INK_WHITE); put_str(6, y, opt[i]);
+        }
         k = wait_press();
-        if (k & JOY_UP)                 return UR_AI_EASY;
-        if (k & JOY_DOWN)               return UR_AI_HARD;
-        if (k & (JOY_FIREA | JOY_FIREB)) return UR_AI_NORMAL;
+        if (k & JOY_UP)   sel = (unsigned char)((sel + 2) % 3);
+        if (k & JOY_DOWN) sel = (unsigned char)((sel + 1) % 3);
+        if (k & (JOY_FIREA | JOY_FIREB)) return sel;   /* 0/1/2 = UR_AI_EASY/NORMAL/HARD */
     }
 }
 

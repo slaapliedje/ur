@@ -305,21 +305,26 @@ void plat_sfx_result(const ur_move_result *res) { sfx_for_result(res); }
 uint16_t plat_seed(void) { return g_seed; }
 void plat_animate(uint8_t player, uint8_t from, uint8_t to) { (void)player; (void)from; (void)to; }
 
-/* plat.h: choose the AI difficulty (D-pad Up = Easy, Down = Hard, A = Normal). */
+/* plat.h: choose the AI difficulty — a proper menu with a rosette (*) cursor that
+ * the D-pad moves over Easy/Normal/Hard; A/Start confirms. */
 uint8_t plat_pick_level(void)
 {
-    unsigned char p;
+    static const char *const opt[3] = { "EASY", "NORMAL", "HARD" };
+    unsigned char sel = UR_AI_NORMAL, i, row, p;   /* start on Normal */
     clear_screen();
     put_str(8, 4, "DIFFICULTY");
-    put_str(6, 9,  "UP   - EASY");
-    put_str(6, 11, "A    - NORMAL");
-    put_str(6, 13, "DOWN - HARD");
-    ppu_blit();
+    put_str(6, 20, "UP DOWN + A");
     for (;;) {
+        for (i = 0; i < 3; i++) {
+            row = (unsigned char)(9 + i * 2);
+            put_str(6, row, (i == sel) ? "*" : " ");   /* rosette marks the choice */
+            put_str(8, row, opt[i]);
+        }
+        ppu_blit();
         p = wait_pad();
-        if (p & PAD_UP)               return UR_AI_EASY;
-        if (p & PAD_DOWN)             return UR_AI_HARD;
-        if (p & (PAD_A | PAD_B | PAD_START)) return UR_AI_NORMAL;
+        if (p & PAD_UP)   sel = (unsigned char)((sel + 2) % 3);
+        if (p & PAD_DOWN) sel = (unsigned char)((sel + 1) % 3);
+        if (p & (PAD_A | PAD_B | PAD_START)) return sel;   /* 0/1/2 = UR_AI_EASY/NORMAL/HARD */
     }
 }
 

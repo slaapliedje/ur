@@ -525,19 +525,23 @@ void plat_animate(uint8_t player, uint8_t from, uint8_t to)
 /* plat.h: choose the AI difficulty (D-pad Up = Easy, Down = Hard, A = Normal). */
 uint8_t plat_pick_level(void)
 {
-    uint8_t k;
+    static const char *const opt[3] = { "EASY", "NORMAL", "HARD" };
+    uint8_t sel = UR_AI_NORMAL, i, y, k;   /* start on Normal */
     DISPLAY_OFF;
     screen_clear();
     put_str(2, 2, "DIFFICULTY");
-    put_str(1, 6,  "Up:   Easy");
-    put_str(1, 8,  "A:    Normal");
-    put_str(1, 10, "Down: Hard");
+    put_str(1, 14, "U/D PICK  A OK");
     DISPLAY_ON;
     for (;;) {
+        for (i = 0; i < 3; i++) {                 /* rosette marker on the choice */
+            y = (uint8_t)(6 + i * 2);
+            put_tile(3, y, (uint8_t)(((i == sel) ? '*' : ' ') - 0x20));
+            put_str(5, y, opt[i]);
+        }
         k = wait_press();
-        if (k & J_UP)                  return UR_AI_EASY;
-        if (k & J_DOWN)                return UR_AI_HARD;
-        if (k & (J_A | J_B | J_START)) return UR_AI_NORMAL;
+        if (k & J_UP)   sel = (uint8_t)((sel + 2) % 3);
+        if (k & J_DOWN) sel = (uint8_t)((sel + 1) % 3);
+        if (k & (J_A | J_B | J_START)) return sel;   /* 0/1/2 = UR_AI_EASY/NORMAL/HARD */
     }
 }
 
