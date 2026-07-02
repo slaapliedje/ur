@@ -22,7 +22,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#define NTILES 0xD8
+#define NTILES 0xE0
 static unsigned char p0[NTILES][8];   /* plane 0 */
 static unsigned char p1[NTILES][8];   /* plane 1 */
 
@@ -154,12 +154,14 @@ static void cell_token(void)     /* round donut: body c1, pip hole c2 */
         if (d <= 36)  B[y][x] = 2;     /* pip */
     }
 }
-static void cell_frame(void)     /* hollow 2px border (c3) — move-destination marker */
+/* Recolour a just-built motif's empty background (c0) to c3, so the cell renders on
+ * a solid GREEN field (palette colour 3 = green) with its gold/white motif kept —
+ * the move-destination "tinted tile". */
+static void greenbg(void)
 {
     int x, y;
-    clear16();
     for (y = 0; y < 16; y++) for (x = 0; x < 16; x++)
-        if (x < 2 || x > 13 || y < 2 || y > 13) B[y][x] = 3;
+        if (B[y][x] == 0) B[y][x] = 3;
 }
 
 static void emit(void)
@@ -188,7 +190,11 @@ int main(void)
     cell_dots();    pack(0xC8);
     cell_token();   pack(0xCC);   /* Light token (palette colours differ at runtime) */
     cell_token();   pack(0xD0);   /* Dark token  (same shape, different palette)      */
-    cell_frame();   pack(0xD4);   /* green move-destination frame (palette c3 = green) */
+    /* green-tinted highlight cells: same motif on a green field (palette c3 = green).
+     * rosette/eye render with P_GOLD, dots with P_TEXT — both have green at c3. */
+    cell_rosette(); greenbg(); pack(0xD4);   /* T_GROSE */
+    cell_dots();    greenbg(); pack(0xD8);   /* T_GDOTS */
+    cell_eye();     greenbg(); pack(0xDC);   /* T_GEYE  */
     emit();
     return 0;
 }

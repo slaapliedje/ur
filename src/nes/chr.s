@@ -426,11 +426,27 @@
 .byte $07,$07,$03,$00,$00,$00,$00,$00
 .byte $1E,$1E,$3E,$FE,$FC,$F8,$F0,$00  ; tile $D3 plane0
 .byte $E0,$E0,$C0,$00,$00,$00,$00,$00
-.byte $FF,$FF,$C0,$C0,$C0,$C0,$C0,$C0  ; tile $D4 plane0
-.byte $FF,$FF,$C0,$C0,$C0,$C0,$C0,$C0
-.byte $FF,$FF,$03,$03,$03,$03,$03,$03  ; tile $D5 plane0
-.byte $FF,$FF,$03,$03,$03,$03,$03,$03
-.byte $C0,$C0,$C0,$C0,$C0,$C0,$FF,$FF  ; tile $D6 plane0
-.byte $C0,$C0,$C0,$C0,$C0,$C0,$FF,$FF
-.byte $03,$03,$03,$03,$03,$03,$FF,$FF  ; tile $D7 plane0
-.byte $03,$03,$03,$03,$03,$03,$FF,$FF
+.byte $FF,$FF,$FF,$FF,$FF,$FF,$FC,$FC  ; tile $D4 plane0
+.byte $FF,$F0,$F8,$FC,$B0,$90,$83,$83
+.byte $FF,$FF,$FF,$FF,$FF,$FF,$3F,$3F  ; tile $D5 plane0
+.byte $FF,$0F,$1F,$3F,$0D,$09,$C1,$C1
+.byte $FC,$FC,$FF,$FF,$FF,$FF,$FF,$FF  ; tile $D6 plane0
+.byte $83,$83,$90,$B0,$FC,$F8,$F0,$FF
+.byte $3F,$3F,$FF,$FF,$FF,$FF,$FF,$FF  ; tile $D7 plane0
+.byte $C1,$C1,$09,$0D,$3F,$1F,$0F,$FF
+.byte $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF  ; tile $D8 plane0
+.byte $FF,$FF,$FF,$E3,$E3,$E3,$FF,$FE
+.byte $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF  ; tile $D9 plane0
+.byte $FF,$FF,$FF,$E3,$E3,$E3,$FF,$3F
+.byte $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF  ; tile $DA plane0
+.byte $FE,$FE,$FF,$E3,$E3,$E3,$FF,$FF
+.byte $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF  ; tile $DB plane0
+.byte $3F,$3F,$FF,$E3,$E3,$E3,$FF,$FF
+.byte $FF,$FF,$FF,$FF,$FF,$FE,$FC,$F8  ; tile $DC plane0
+.byte $FF,$F0,$E0,$C7,$8F,$9F,$9F,$9F
+.byte $FF,$FF,$FF,$FF,$FF,$7F,$3F,$1F  ; tile $DD plane0
+.byte $FF,$0F,$07,$E3,$F1,$F9,$F9,$F9
+.byte $F8,$FC,$FE,$FF,$FF,$FF,$FF,$FF  ; tile $DE plane0
+.byte $9F,$9F,$9F,$8F,$C7,$E0,$F0,$FF
+.byte $1F,$3F,$7F,$FF,$FF,$FF,$FF,$FF  ; tile $DF plane0
+.byte $F9,$F9,$F9,$F1,$E3,$07,$0F,$FF

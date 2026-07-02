@@ -67,8 +67,8 @@ static unsigned char attrb[64];       /* attribute table  */
  * authentic Standard-of-Ur materials — P2 shell-white Light, P3 carnelian-red Dark —
  * which read cleanly against each other and against the gold cells. */
 static const unsigned char palette[32] = {
-    0x01, 0x30, 0x28, 0x2A,   /* P0: lapis, white,  gold,  GREEN (c3 = move-dest frame) */
-    0x01, 0x28, 0x30, 0x17,   /* P1: lapis, gold,   white, brown  -> rosette/eye */
+    0x01, 0x30, 0x28, 0x2A,   /* P0: lapis, white,  gold,  GREEN (c3 = highlight tint) */
+    0x01, 0x28, 0x30, 0x2A,   /* P1: lapis, gold,   white, GREEN (c3 = highlight tint) */
     0x01, 0x30, 0x16, 0x16,   /* P2: lapis, shell-white, carnelian -> Light token */
     0x01, 0x16, 0x30, 0x30,   /* P3: lapis, carnelian,  shell-white -> Dark token */
     0x01, 0x30, 0x28, 0x16,   0x01, 0,0,0,   0x01, 0,0,0,   0x01, 0,0,0
@@ -80,7 +80,10 @@ static const unsigned char palette[32] = {
 #define T_DOTS  0xC8
 #define T_LIGHT 0xCC
 #define T_DARK  0xD0
-#define T_FRAME 0xD4          /* green move-destination frame (2x2), palette c3=green */
+/* green-tinted highlight cells (motif on a green field; palette c3 = green) */
+#define T_GROSE 0xD4          /* rosette on green (render with P_GOLD) */
+#define T_GDOTS 0xD8          /* quincunx on green (render with P_TEXT) */
+#define T_GEYE  0xDC          /* eye on green (render with P_GOLD) */
 #define P_TEXT  0
 #define P_GOLD  1
 #define P_LIGHT 2
@@ -275,10 +278,12 @@ int8_t plat_choose_move(unsigned char player, unsigned char roll)
         put_str(3, (unsigned char)(MLY + i), buf);
     }
 
-    for (i = 0; i < nsrc; i++) {          /* green frame on every legal landing square */
+    for (i = 0; i < nsrc; i++) {          /* tint every legal landing square green */
         unsigned char hr, hc, d = (unsigned char)(srcs[i] + roll);
-        if (pos_to_cell(player, d, &hr, &hc))
-            put_cell(hc, hr, T_FRAME, P_TEXT);
+        if (!pos_to_cell(player, d, &hr, &hc)) continue;
+        if (ur_is_rosette(d)) put_cell(hc, hr, T_GROSE, P_GOLD);
+        else if (hr == 1)     put_cell(hc, hr, T_GEYE,  P_GOLD);
+        else                  put_cell(hc, hr, T_GDOTS, P_TEXT);
     }
 
     sel = 0;
