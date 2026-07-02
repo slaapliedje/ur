@@ -1,28 +1,29 @@
 # src/c64 — Commodore 64 platform layer (3rd target)
 
-> **Status: the dense "Standard of Ur" board (SMS-style) + SID sound + FujiNet
-> online.** Build variants of `src/c64/main.c`, picked with make flags:
+> **Status: horizontal "Standard of Ur" board + two-tone sprite tokens + SID sound
+> + FujiNet online.** Build variants of `src/c64/main.c`, picked with make flags:
 >
-> - **`make c64` (default, local) — DENSE multicolor-charset mosaic.** Matches the
->   SMS showpiece: the **horizontal 3×8 H-board** drawn as **chunky 2×2 carved
->   cells** — gold **rosette stars** at the 5 rosette squares, bullseye **eyes** down
->   the shared lane, five-dot **quincunx** studs on the private lanes — with round
->   **two-tone tokens** (shell-white Light, carnelian-red Dark) and shell/red tray
->   beads, in the Standard-of-Ur palette (lapis field, light-blue cell body, black
->   shadow, gold/white/red inlay). Everything is the **custom multicolor charset**
->   (`$3800`); **no sprites/raster IRQ** (the dense rows are adjacent, which is
->   incompatible with the sprite multiplexer — see below). Glyphs (codes `0xC4..0xD3`)
->   are **precomputed** (`dense_chars[]`, regenerate with the host tool
->   [`tools/c64-dense-glyphs.c`](../../tools/c64-dense-glyphs.c)) and memcpy'd in,
->   keeping the binary clear of the charset RAM.
-> - **`make c64 ONLINE=1` — FujiNet online + the sprite-token board.** The earlier
->   **VIC-II multicolor SPRITE tokens** (two-tone bone/brown) via the **raster-
->   interrupt multiplexer** ([`mux.s`](mux.s)) on a ROM-charset board (fujinet-lib
->   fills VIC bank 0, so no custom charset). Adds `N:TCP` server-authoritative play
->   (same wire protocol + server as the Atari/Adam): the lobby/profile menu, the
->   AppKey profile, lobby host pickup. See **FujiNet** below.
-> - **`make c64 CHARSET=1` — charset fallback (vertical board).** The earlier
->   vertical layout drawn with a custom charset; the known-good baseline.
+> - **`make c64` (default, local) — ROM-charset board + SPRITE tokens.** The
+>   **horizontal 3×8 H-board**: gold **rosette** / grey **lane** cells (ROM
+>   reverse-space colour tiles) with round **two-tone hardware-sprite tokens**
+>   (bone Light / brown Dark) via the **raster-interrupt multiplexer**
+>   ([`mux.s`](mux.s)), plus tray beads and a green **move-destination highlight**.
+>   Uses the ROM charset (no `$3800`), so text renders clean.
+>   **⚠️ Why not the dense custom charset?** The game outgrew VIC bank 0: the program
+>   reaches ~`$3B4C`, and a 2K custom charset needs `$3800`, so they collided —
+>   `setup_charset` copied the font over the program's own code and the whole board
+>   garbled. 13K program + 2K charset don't fit under `$4000`. So the default now
+>   shares the online build's collision-free renderer. `CUSTOM_CHARSET` is `1` only
+>   for the vertical `CHARSET=1` fallback (which fits under `$3800`), else `0`. The
+>   dense-mosaic code (`dense_chars[]`, `tools/c64-dense-glyphs.c`) is retired /
+>   `#if`'d out — reviving it needs a VIC-bank + screen relocation off conio.
+> - **`make c64 ONLINE=1` — FujiNet online (same renderer).** The default renderer
+>   plus `N:TCP` server-authoritative play (same wire protocol + server as the
+>   Atari/Adam): the lobby/profile menu, the AppKey profile, lobby host pickup.
+>   fujinet-lib fills VIC bank 0 (another reason it uses the ROM charset). See
+>   **FujiNet** below. Ships as `ur-online.prg` alongside the local `ur.prg`.
+> - **`make c64 CHARSET=1` — charset fallback (vertical board).** A smaller vertical
+>   layout with a custom charset that DOES fit under `$3800`; the known-good baseline.
 >
 > All reuse the shared core, the menu/turn loop, and **SID sound** (`src/c64/sound.c`).
 > `cgetc`/`kbhit` work natively. `make c64` → `build/c64/ur.prg` (run in VICE
