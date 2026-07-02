@@ -15,8 +15,19 @@
 > **gradient-lit cell faces** (the flourish the ST's 16 colours can't do). Same
 > `src/st/main.c`, same shared controller/geometry/sound/input — only the pixel format
 > and palette differ (`#ifdef UR_FALCON`). Verified in Hatari `--machine falcon`.
-> **Still planned: STe (4096-colour palette) and TT (256-colour) variants**, plus
-> STe/Falcon DMA sound + the blitter.
+>
+> **STe and TT variants: playable** — `make st STE=1` → `ur-ste.prg` (same planar
+> board, palette picked from the STe's **4096 colours**; the STe nibble format puts
+> each channel's extra LSB in bit 3 — see `SN()`; plus a two-shade dusk via
+> `C_DUSK2`). `make st TT=1` → `ur-tt.prg` (**TT-low 320×480, 256 colours**: the
+> shared 320×200 layout y-doubled, base colours + palette **ramps** — 64-shade sky,
+> 32-shade gradient cell faces like the Falcon, 16-shade sand; mode via
+> `EsetShift(0x0700)` + `EsetPalette` — note the **camelCase** names in mint's
+> osbind.h). Verified in Hatari `--machine ste` / `--machine tt` (EmuTOS 1.4).
+> **Still planned:** STe/Falcon DMA sound + the blitter.
+>
+> **itch page art:** `tools/ziggurat-banner.c` renders this title scene as
+> `docs/itch/banner.png` (960×400) + `cover.png` (630×500) — see the header comment.
 >
 > **Title scene + 3D board (both builds):** the title (and win screen) is a
 > procedural **Great Ziggurat of Ur at dusk** — `title_scene()`/`zbox()` draw
@@ -64,7 +75,17 @@ constraints than the 8-bit toolchains.
          --harddrive <dir-with-UR.PRG> --auto 'C:\UR.PRG' \
          --sound off --fast-boot on --confirm-quit off
   ```
-  (Headless screenshots: `import -window $(xdotool search --class hatari|tail -1)`.)
+- **Headless driving — use the command fifo, not xdotool (important):** launch with
+  `--cmd-fifo <path> --screenshot-dir <dir>` (the fifo must NOT pre-exist; Hatari
+  creates it), then drive with **no window focus at all**:
+  `echo "hatari-event keypress 1" > <fifo>` (key input) and
+  `echo "hatari-shortcut screenshot" > <fifo>` (writes `grab000N.png` to the dir).
+  ⚠️ **Do NOT trust `import -window <id>` on Hatari**: after the guest switches video
+  mode (e.g. the TT build's EsetShift), the window-id capture returns SOLID BLACK
+  even though the emulator is rendering fine — this masqueraded as a black-screen
+  bug for a long debugging session. A root-window crop shows the truth but needs the
+  window frontmost (and may photograph whatever else is on top). The fifo screenshot
+  is always correct, and it never steals the user's focus.
 - **Falcon build:** `make st FALCON=1` → `build/st/ur-falcon.prg`; run it as an RGB
   Falcon: `hatari --machine falcon --dsp none --monitor rgb --tos
   /usr/share/hatari/TOSv4.04.img --harddrive <dir> --auto 'C:\UR.PRG'`. Truecolor mode
