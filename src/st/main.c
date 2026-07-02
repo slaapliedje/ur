@@ -53,13 +53,69 @@ static void frectw(int x, int y, int w, int h, uint16_t c)
 }
 #else
 enum { C_BG=0, C_SHELL, C_GOLD, C_FACE, C_HI, C_DARK, C_SH, C_WHITE, C_GREY, C_HILITE,
-       C_SHADOW, C_DUSK, C_SPARE, C_BRICK, C_BRICKL, C_SAND };
+       C_SHADOW, C_DUSK, C_DUSK2, C_BRICK, C_BRICKL, C_SAND };
+
+#ifdef UR_TT
+/* ---- Atari TT: TT-low 320x480, 256 colours, 8 bitplanes ------------------- *
+ * We draw the shared 320x200 layout with every logical pixel doubled to two
+ * scanlines (40-line top margin centres it). 256 palette entries buy gradient
+ * ramps the 16-colour machines can't do: base colours 0..15, then a 64-shade
+ * night->amber sky ramp, a 32-shade cell-face ramp, a 16-shade sand ramp. */
+#define STRIDE 320               /* bytes/scanline (20 groups * 8 planes * 2) */
+#define TT_YOFF 40
+#define TT_SKY0  16              /* 64: night -> dusk amber   */
+#define TT_FACE0 80              /* 32: C_HI -> C_SH (cells)  */
+#define TT_SAND0 112             /* 16: sand -> brick (ground) */
+static uint8_t *scr;
+static uint16_t tt_pal[256];     /* 0x0RGB, 4 bits/channel (straight, not STe) */
+static const uint16_t tt_base[16] = {
+    0x0025, 0x0FEB, 0x0FA2, 0x006B, 0x04AF, 0x0C20, 0x0026, 0x0FFF,
+    0x0898, 0x02E2, 0x0012, 0x0D72, 0x0931, 0x0B82, 0x0FD5, 0x0FEC
+};
+static void pix1(int x, int y, uint16_t c)      /* one real scanline */
+{
+    uint16_t *grp = (uint16_t *)(scr + (long)y * STRIDE + (x >> 4) * 16);
+    uint16_t m = (uint16_t)(0x8000u >> (x & 15));
+    int p;
+    for (p = 0; p < 8; p++) { if ((c >> p) & 1) grp[p] |= m; else grp[p] &= (uint16_t)~m; }
+}
+static void pix(int x, int y, uint16_t c)
+{
+    int yy = y * 2 + TT_YOFF;
+    pix1(x, yy, c); pix1(x, yy + 1, c);
+}
+static void frectw(int x, int y, int w, int h, uint16_t c)   /* 16-px-aligned fill */
+{
+    uint16_t on[8];
+    int g0 = x >> 4, gw = w >> 4, yy, g, p;
+    for (p = 0; p < 8; p++) on[p] = ((c >> p) & 1) ? 0xFFFF : 0;
+    for (yy = y * 2 + TT_YOFF; yy < (y + h) * 2 + TT_YOFF; yy++) {
+        uint16_t *r = (uint16_t *)(scr + (long)yy * STRIDE) + g0 * 8;
+        for (g = 0; g < gw; g++) { for (p = 0; p < 8; p++) r[p] = on[p]; r += 8; }
+    }
+}
+#else
+/* ---- Atari ST / STe: 320x200, 16 colours, 4 bitplanes --------------------- */
+#ifdef UR_STE
+/* STe palette: 4 bits/channel from 4096. Nibble format keeps the ST's 3 bits in
+ * bits 0..2 and puts the extra LSB in bit 3 — so SN() rotates each channel. */
+#define SN(v)      ((uint16_t)((((v) & 1) << 3) | ((v) >> 1)))
+#define STE(r,g,b) ((uint16_t)((SN(r) << 8) | (SN(g) << 4) | SN(b)))
+static const uint16_t ur_palette[16] = {
+    STE(0,2,5),   STE(15,14,11), STE(15,10,2),  STE(0,6,11),
+    STE(4,10,15), STE(12,2,0),   STE(0,2,6),    STE(15,15,15),
+    STE(8,9,8),   STE(2,14,2),   STE(0,1,2),    STE(13,7,2),
+    STE(9,3,1),   STE(11,8,2),   STE(15,13,5),  STE(15,14,12)
+    /* idx 12 = C_DUSK2: the deep-ember dusk band only the STe's palette can mix */
+};
+#else
 static const uint16_t ur_palette[16] = {   /* 0x0RGB, 3 bits/channel */
     0x0012, 0x0775, 0x0751, 0x0035, 0x0257, 0x0610, 0x0013, 0x0777,
     0x0444, 0x0070, 0x0001, 0x0631, 0x0666, 0x0540, 0x0762, 0x0776
     /* idx 9 = C_HILITE green marker; 10 = near-black shadow; 11 = dusk amber;
      * 13/14/15 = mud brick (shaded / lit) + sand — the title ziggurat + board 3D */
 };
+#endif
 #define STRIDE 160               /* bytes per scanline (20 groups * 4 planes * 2) */
 static uint8_t *scr;
 static void pix(int x, int y, uint16_t c)
@@ -79,6 +135,7 @@ static void frectw(int x, int y, int w, int h, uint16_t c)   /* fast 16-px-align
         for (g = 0; g < gw; g++) { r[0]=p0; r[1]=p1; r[2]=p2; r[3]=p3; r += 4; }
     }
 }
+#endif /* UR_TT */
 #endif
 /* shared higher-level fills (build on pix/frectw) */
 static void frect(int x, int y, int w, int h, uint16_t c)
@@ -147,6 +204,14 @@ static void title_scene(void)
     clr(C_BG);
 #ifdef UR_FALCON
     grad_v(0, 0, SCRW, 128, RGB(1,2,7), C_DUSK);      /* night sky -> amber dusk */
+#elif defined(UR_TT)
+    for (y = 0; y < 128; y++)                          /* 64-shade sky ramp       */
+        frectw(0, y, SCRW, 1, (uint16_t)(TT_SKY0 + y * 63 / 127));
+#elif defined(UR_STE)
+    for (y = 100; y < 128; y++) {                      /* two-shade STe dusk      */
+        uint16_t c = (y >= 120) ? C_DUSK : C_DUSK2;
+        if (y >= 110 || (y & 1)) frectw(0, y, SCRW, 1, c);
+    }
 #else
     for (y = 104; y < 128; y++)                        /* banded dusk glow        */
         if (y >= 118 || (y & 1)) frectw(0, y, SCRW, 1, C_DUSK);
@@ -161,6 +226,9 @@ static void title_scene(void)
     frectw(0, 128, SCRW, 1, C_BRICK);                  /* horizon line            */
 #ifdef UR_FALCON
     grad_v(0, 129, SCRW, 17, C_SAND, C_BRICK);         /* sand fading into dusk   */
+#elif defined(UR_TT)
+    for (y = 129; y < 146; y++)                        /* 16-shade sand ramp      */
+        frectw(0, y, SCRW, 1, (uint16_t)(TT_SAND0 + (y - 129) * 15 / 16));
 #else
     frectw(0, 129, SCRW, 17, C_SAND);
 #endif
@@ -236,6 +304,15 @@ static void draw_cell(int col, int row)
     int x = cellx(col), y = celly(row), cx = x + CELL/2, cy = y + CELL/2;
 #ifdef UR_FALCON
     grad_v(x, y, CELL, CELL, C_HI, C_SH);      /* truecolor lit-from-top face   */
+    frectw(x, y, CELL, 1, C_WHITE);            /* crisp top edge                */
+    frect(x + CELL - 2, y + 1, 2, CELL - 1, C_SH);      /* right-side form      */
+    frectw(x, y + CELL - 1, CELL, 1, C_SHADOW);         /* dark seat line       */
+#elif defined(UR_TT)
+    {   /* 256-colour ramp: the same lit-from-top face as the Falcon */
+        int r;
+        for (r = 0; r < CELL; r++)
+            frectw(x, y + r, CELL, 1, (uint16_t)(TT_FACE0 + r * 31 / (CELL - 1)));
+    }
     frectw(x, y, CELL, 1, C_WHITE);            /* crisp top edge                */
     frect(x + CELL - 2, y + 1, 2, CELL - 1, C_SH);      /* right-side form      */
     frectw(x, y + CELL - 1, CELL, 1, C_SHADOW);         /* dark seat line       */
@@ -450,6 +527,16 @@ uint8_t plat_pick_level(void)
 }
 
 /* ---- video init + title / menu ----------------------------------------- */
+#ifdef UR_TT
+static uint16_t lerp444(uint16_t a, uint16_t b, int t, int n)  /* 0x0RGB, 4b/ch */
+{
+    int ar=(a>>8)&15, ag=(a>>4)&15, ab=a&15;
+    int br=(b>>8)&15, bg=(b>>4)&15, bb=b&15;
+    int r = ar + (br-ar)*t/n, g = ag + (bg-ag)*t/n, bl = ab + (bb-ab)*t/n;
+    return (uint16_t)((r<<8)|(g<<4)|bl);
+}
+#endif
+
 static void video_init(void)
 {
 #ifdef UR_FALCON
@@ -459,9 +546,22 @@ static void video_init(void)
     old_mode = VsetMode(-1);
     VsetMode(BPS16 | COL40);                   /* set truecolor bit-depth first… */
     VsetScreen((long)fbuf, (long)fbuf, -1, -1); /* …then show our buffer          */
+#elif defined(UR_TT)
+    long sz = 480L * STRIDE, i;                /* TT low: 320x480x8 = 153600     */
+    void *raw = (void *)Mxalloc(sz + 256, 0);  /* ST-RAM (video must be)         */
+    scr = (uint8_t *)(((long)raw + 255) & ~255L);
+    for (i = 0; i < sz; i++) scr[i] = 0;       /* margins stay colour 0 = lapis  */
+    for (i = 0; i < 16; i++) tt_pal[i] = tt_base[i];
+    for (i = 0; i < 64; i++) tt_pal[TT_SKY0  + i] = lerp444(0x0014, 0x0D72, (int)i, 63);
+    for (i = 0; i < 32; i++) tt_pal[TT_FACE0 + i] = lerp444(0x04AF, 0x0026, (int)i, 31);
+    for (i = 0; i < 16; i++) tt_pal[TT_SAND0 + i] = lerp444(0x0FEC, 0x0B82, (int)i, 15);
+    for (i = TT_SAND0 + 16; i < 256; i++) tt_pal[i] = 0;
+    Setscreen((void *)scr, (void *)scr, -1);   /* our buffer; rez via EsetShift  */
+    EsetShift(0x0700);                         /* TT shifter: TT low 320x480x8   */
+    EsetPalette(0, 256, tt_pal);               /* TT XBIOS: all 256 entries      */
 #else
     Setscreen((void *)-1L, (void *)-1L, 0);    /* low-res 320x200x4 */
-    Setpalette((void *)ur_palette);
+    Setpalette((void *)ur_palette);            /* ST 3-bit or STe 4096-colour    */
     Cconws("\033f");                            /* VT52: hide the text cursor */
     scr = (uint8_t *)Physbase();
 #endif
@@ -477,8 +577,12 @@ static int title_menu(void)        /* returns vs_ai (1 = vs computer) */
     text(88, 152, "1) TWO PLAYERS", C_WHITE);
     text(60, 164, "2) ONE PLAYER VS COMPUTER", C_WHITE);
     text(104, 180, "SELECT 1 OR 2:", C_SHELL);
-#ifdef UR_FALCON
+#if defined(UR_FALCON)
     text(224, 192, "ATARI FALCON", C_GREY);
+#elif defined(UR_TT)
+    text(248, 192, "ATARI TT", C_GREY);
+#elif defined(UR_STE)
+    text(240, 192, "ATARI STE", C_GREY);
 #else
     text(256, 192, "ATARI ST", C_GREY);
 #endif

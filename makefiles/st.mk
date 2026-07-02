@@ -7,12 +7,23 @@ ST_CC      ?= m68k-atari-mint-gcc
 # Uses the shared controller (ur_game.c via $(UR_GAME_SRC)); font8.h is shared from
 # src/sms (-I). Full GCC, so no toolchain-specific flags needed.
 # `make st`           -> plain ST: 320x200 16-colour planar (ur.prg).
+# `make st STE=1`     -> Atari STe: same planar board, 4096-colour palette (ur-ste.prg).
+# `make st TT=1`      -> Atari TT: TT-low 320x480 doubled, 256 colours + gradient
+#                        sky/cells from palette ramps (ur-tt.prg).
 # `make st FALCON=1`  -> enhanced Atari Falcon: 320x200 TRUECOLOR chunky (ur-falcon.prg).
 ST_DEFS    :=
 ST_PRG     := ur.prg
 ifeq ($(FALCON),1)
 ST_DEFS    += -DUR_FALCON
 ST_PRG     := ur-falcon.prg
+endif
+ifeq ($(STE),1)
+ST_DEFS    += -DUR_STE
+ST_PRG     := ur-ste.prg
+endif
+ifeq ($(TT),1)
+ST_DEFS    += -DUR_TT
+ST_PRG     := ur-tt.prg
 endif
 ST_FLAGS   := -std=c99 -O2 -Wall -Wextra $(ST_DEFS) -I$(SRC_DIR)/st -I$(SRC_DIR)/sms $(COMMON_INC)
 ST_SOURCES := $(COMMON_SOURCES) $(UR_GAME_SRC) $(wildcard $(SRC_DIR)/st/*.c)
