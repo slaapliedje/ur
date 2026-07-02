@@ -697,6 +697,7 @@ static bool title_menu(void)         /* returns ai1 (true = vs computer) */
 #  define MENU_B_Y 12
 #endif
     display_on();
+    play_hymn();                     /* hymn plays with the title on screen (skippable) */
     for (;;) {
         put_ch(MENU_SEL_X, MENU_A_Y, sel == 0 ? '>' : ' ');
         put_ch(MENU_SEL_X, MENU_B_Y, sel == 1 ? '>' : ' ');
@@ -716,10 +717,11 @@ int main(void)
     snd_silence();
 
     for (;;) {
-        play_hymn();                 /* the Hurrian Hymn (once at boot, skippable) */
         /* The shared controller (ur_game.c) drives the turn loop; it seeds the RNG
          * from plat_seed() (g_seed, folded from the menu's input timing — replacing
-         * the old fixed seed that made every game roll the same). */
+         * the old fixed seed that made every game roll the same). title_menu() draws
+         * the title FIRST, then plays the hymn (so the screen isn't blank while the
+         * seconds-long busy-wait hymn runs), then handles the menu. */
         winner = ur_run_game(title_menu() ? 1 : 0);
         plat_draw(NO_ROLL, winner == 0 ? "LIGHT WINS! - FIRE"
                                        : "DARK WINS! - FIRE");
