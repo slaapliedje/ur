@@ -60,6 +60,7 @@ static const uint16_t cgb_pal[4] = {
 #define TILE_TOKD  (FONT8_COUNT + 20)      /* 4: lapis token              */
 #define TILE_TRYL  (FONT8_COUNT + 24)      /* 1: shell tray bead          */
 #define TILE_TRYD  (FONT8_COUNT + 25)      /* 1: lapis tray bead          */
+#define TILE_GFRAME (FONT8_COUNT + 26)     /* 4: move-destination frame   */
 
 /* ---- procedural tiles: a 16x16 colour grid baked into four 2bpp tiles --- */
 static uint8_t grid[256];
@@ -194,6 +195,17 @@ static void build_bead(uint8_t body, uint8_t ring, uint8_t tno)
 
 static void load_font(void);            /* defined just below */
 
+/* Bright shell/white hollow 16x16 frame — the move-destination highlight (cream on
+ * GBC, white on DMG). Drawn as a BG cell over each legal landing square in the
+ * chooser; cleared by the next full board redraw. */
+static void build_gframe(void)
+{
+    uint8_t x, y;
+    for (y = 0; y < 16; y++)
+        for (x = 0; x < 16; x++)
+            grid[(y << 4) + x] = (x < 2 || x > 13 || y < 2 || y > 13) ? C_SHELL : C_FIELD;
+}
+
 static void video_init(void)
 {
     DISPLAY_OFF;
@@ -213,6 +225,7 @@ static void video_init(void)
     load_cell_sprite(SPR_TOKD);
     build_bead(C_SHELL, C_FACE,  TILE_TRYL);
     build_bead(C_FACE,  C_SHELL, TILE_TRYD);
+    build_gframe();  load_cell(TILE_GFRAME);            /* move-destination highlight */
 
     /* sprite palette = the board palette (colour 0 is transparent for sprites). */
     if (_cpu == CGB_TYPE)
@@ -390,6 +403,15 @@ int8_t plat_choose_move(uint8_t player, uint8_t roll)
         seen = false;
         for (j = 0; j < nsrc; j++) if (srcs[j] == pos) { seen = true; break; }
         if (!seen) srcs[nsrc++] = pos;
+    }
+
+    {   /* mark every legal landing square with a bright frame (cleared next redraw) */
+        uint8_t d, r, c;
+        for (i = 0; i < nsrc; i++) {
+            d = (uint8_t)(srcs[i] + roll);
+            if (pos_to_cell(player, d, &r, &c))
+                put_cell(cellx(c), celly(r), TILE_GFRAME);
+        }
     }
 
     put_str(MSG_X, MSG_Y, "U/D pick A go ");
