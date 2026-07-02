@@ -40,11 +40,12 @@ enum {
     C_SHELL,        /* 6 - shell / cream       */
     C_RED,          /* 7 - carnelian           */
     C_GREY,         /* 8 - token shadow        */
-    C_DGOLD         /* 9 - dark gold           */
+    C_DGOLD,        /* 9 - dark gold           */
+    C_GREEN2        /* 10 - move-dest frame    */
 };
 static const unsigned char palette0[16] = {
     0x10, 0x3F, 0x20, 0x35, 0x00, 0x0B, 0x2F, 0x03, 0x15, 0x06,
-    0,0,0,0,0,0
+    0x0C, 0,0,0,0,0     /* [10] = bright green: the move-destination frame */
 };
 /* CRAM 16..31: doubles as the BG "bank 1" (index 0 = field backdrop, index 1 =
  * gold for INK_GOLD title text) AND the sprite palette for the gliding tokens.
@@ -70,6 +71,7 @@ enum { S_GOLD = 1, S_SHELL, S_LAPIS, S_HI, S_SH, S_GREY, S_WHITE };
 #define TILE_TRYD  (FONT8_COUNT + 25)      /* 1: 8x8 lapis tray bead          */
 #define TILE_SPRL  (FONT8_COUNT + 26)      /* 4: shell token, sprite palette  */
 #define TILE_SPRD  (FONT8_COUNT + 30)      /* 4: lapis token, sprite palette  */
+#define TILE_GFRAME (FONT8_COUNT + 34)     /* 4: green move-destination frame */
 
 /* SMS VDP R1: bit6 = display enable, bit7 = (legacy, kept set); no frame IRQ. */
 #define display_on()   vdp_set_reg(0x01, 0xC0)
@@ -248,6 +250,17 @@ static void build_bead8(unsigned char body, unsigned char hi, unsigned char sh,
     load_quad(0, 0, tno);
 }
 
+/* Hollow bright-green 16x16 border on the lapis field — the move-destination
+ * highlight. Drawn as a BG cell over each legal landing square in the chooser
+ * (cleared by the next full board redraw). */
+static void build_gframe(void)
+{
+    unsigned char x, y;
+    for (y = 0; y < 16; y++)
+        for (x = 0; x < 16; x++)
+            grid[(y << 4) + x] = (x < 2 || x > 13 || y < 2 || y > 13) ? C_GREEN2 : C_FIELD;
+}
+
 static void video_init(void)
 {
     clear_vram();
@@ -269,6 +282,7 @@ static void video_init(void)
      * corner index 0 is transparent for sprites) — used for the glide animation */
     build_token16(S_SHELL, S_WHITE, S_GREY, S_SH,   S_GREY,  TILE_SPRL);
     build_token16(S_LAPIS, S_HI,    S_SH,   S_GOLD, S_SHELL, TILE_SPRD);
+    build_gframe(); load_cell16(TILE_GFRAME);            /* move-dest highlight frame */
 
     vdp_set_reg(0x07, C_FIELD);                          /* backdrop = field  */
     sprites_off();
@@ -558,6 +572,15 @@ int8_t plat_choose_move(unsigned char player, unsigned char roll)
         for (j = 0; j < nsrc; j++)
             if (srcs[j] == pos) { seen = true; break; }
         if (!seen) srcs[nsrc++] = pos;
+    }
+
+    {   /* green frame on every legal landing square (cleared by the next redraw) */
+        unsigned char d, r, c;
+        for (i = 0; i < nsrc; i++) {
+            d = (unsigned char)(srcs[i] + roll);
+            if (pos_to_cell(player, d, &r, &c))
+                put_cell(cellx(c), celly(r), TILE_GFRAME);
+        }
     }
 
     put_str(MSG_X, MSG_Y, "U/D pick FIRE go ");
