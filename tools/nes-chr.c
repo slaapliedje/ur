@@ -22,7 +22,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#define NTILES 0xD4
+#define NTILES 0xD8
 static unsigned char p0[NTILES][8];   /* plane 0 */
 static unsigned char p1[NTILES][8];   /* plane 1 */
 
@@ -154,6 +154,13 @@ static void cell_token(void)     /* round donut: body c1, pip hole c2 */
         if (d <= 36)  B[y][x] = 2;     /* pip */
     }
 }
+static void cell_frame(void)     /* hollow 2px border (c3) — move-destination marker */
+{
+    int x, y;
+    clear16();
+    for (y = 0; y < 16; y++) for (x = 0; x < 16; x++)
+        if (x < 2 || x > 13 || y < 2 || y > 13) B[y][x] = 3;
+}
 
 static void emit(void)
 {
@@ -181,6 +188,7 @@ int main(void)
     cell_dots();    pack(0xC8);
     cell_token();   pack(0xCC);   /* Light token (palette colours differ at runtime) */
     cell_token();   pack(0xD0);   /* Dark token  (same shape, different palette)      */
+    cell_frame();   pack(0xD4);   /* green move-destination frame (palette c3 = green) */
     emit();
     return 0;
 }

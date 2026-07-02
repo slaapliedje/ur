@@ -426,3 +426,11 @@
 .byte $07,$07,$03,$00,$00,$00,$00,$00
 .byte $1E,$1E,$3E,$FE,$FC,$F8,$F0,$00  ; tile $D3 plane0
 .byte $E0,$E0,$C0,$00,$00,$00,$00,$00
+.byte $FF,$FF,$C0,$C0,$C0,$C0,$C0,$C0  ; tile $D4 plane0
+.byte $FF,$FF,$C0,$C0,$C0,$C0,$C0,$C0
+.byte $FF,$FF,$03,$03,$03,$03,$03,$03  ; tile $D5 plane0
+.byte $FF,$FF,$03,$03,$03,$03,$03,$03
+.byte $C0,$C0,$C0,$C0,$C0,$C0,$FF,$FF  ; tile $D6 plane0
+.byte $C0,$C0,$C0,$C0,$C0,$C0,$FF,$FF
+.byte $03,$03,$03,$03,$03,$03,$FF,$FF  ; tile $D7 plane0
+.byte $03,$03,$03,$03,$03,$03,$FF,$FF
