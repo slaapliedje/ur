@@ -1,0 +1,110 @@
+<!--
+  itch.io DEVLOG post #3 for "The Royal Game of Ur".
+  HOW TO USE: project dashboard -> Devlog -> Create new post. Suggested title:
+    "v0.1.5 - The 16-bit era ships: four Ataris, a ziggurat, and download-and-go online"
+  In the post body click "</>" (HTML) and paste everything below this comment.
+  Replace each [ add screenshot: <file> ] line with that image via the editor's
+  image button — the files are staged in docs/itch/screenshots/ in the repo.
+-->
+
+<p>Three releases have landed since the last post (v0.1.3, v0.1.4, v0.1.5), and
+they add up to the biggest update this project has had: <strong>the 16-bit era is
+here</strong>, every port got smarter about showing you your moves, online play is
+now zero-setup, and <strong>the whole source code is public</strong>. Let's go
+oldest-city-first.</p>
+
+<h2>The ziggurat rises: Atari ST, STe, TT &amp; Falcon</h2>
+<p>The shared game brain that runs every 8-bit port made its third leap &mdash;
+after the 6502 and the Z80 it now compiles for the <strong>68000</strong> &mdash;
+and the result is <strong>four new Atari downloads from one platform layer</strong>:</p>
+<ul>
+  <li><strong>Atari ST</strong> &mdash; 320&times;200 in 16 colours from 512.</li>
+  <li><strong>Atari STe</strong> &mdash; the same board, but every colour re-picked
+      from the STe's 4096-colour palette. Subtle everywhere, obvious at sunset.</li>
+  <li><strong>Atari TT</strong> &mdash; 256 colours on screen: a <em>real</em>
+      gradient sky, and cell faces lit top-to-bottom the way only the Falcon could
+      do before.</li>
+  <li><strong>Atari Falcon</strong> &mdash; the flagship: true-colour RGB565,
+      gradient everything.</li>
+</ul>
+<p>They all open on a new title screen: <strong>the Great Ziggurat of Ur at
+dusk</strong> &mdash; stepped mud-brick terraces, the grand staircase, a setting
+sun, and the shrine on top glazed <em>blue</em>, because the accounts of the real
+ziggurat at Ur say the temple crowning it was faced in blue-glazed brick. Like all
+the art in this project it's drawn procedurally &mdash; there isn't a single image
+file in the ROMs; the ziggurat is maths.</p>
+
+<p><em>[ add screenshot: 12-atari-st-ziggurat.png ]</em></p>
+<p><em>[ add screenshot: 14-atari-tt-ziggurat.png ]</em></p>
+<p><em>[ add screenshot: 16-atari-falcon-ziggurat.png ]</em></p>
+
+<p>The board got a dimension too: the whole playfield now sits on the screen like a
+<strong>raised stone slab</strong> &mdash; a drop shadow under the board's
+silhouette, crisper carved bevels, and pieces that cast their own little shadows
+with a specular glint on top.</p>
+
+<p><em>[ add screenshot: 15-atari-tt-board.png ]</em></p>
+
+<p>Two new download buttons on the page: <strong>Atari ST</strong> (the ST, STe and
+TT programs together) and <strong>Atari Falcon</strong>. All four are GEMDOS
+programs &mdash; drop one on a drive and run it, on real hardware or in Hatari
+(EmuTOS works fine for the ST/STe/TT; the Falcon wants TOS&nbsp;4).</p>
+
+<h2>See the play before you make it</h2>
+<p>Every port now <strong>lights up the square you'd land on</strong> while you're
+choosing a move &mdash; and on the tile-based machines it's done as a tinted cell:
+the square turns green <em>with its rosette or mosaic still visible</em>, so the
+board stays readable. One fun constraint: the Game Boy's four colours don't include
+a green, so on the GB the destination cell glows <strong>gold</strong> instead
+&mdash; the palette swap keeps the motif legible in both colour and original
+grey-brick DMG mode.</p>
+
+<p><em>[ add screenshot: 17-sms-tinted-highlight.png ]</em></p>
+<p><em>[ add screenshot: 18-gameboy-gold-highlight.png ]</em></p>
+<p><em>[ add screenshot: 19-nes-green-highlight.png ]</em></p>
+
+<p>Alongside that, the move list flags captures everywhere (no more losing a piece
+to a surprise), and the consoles got a proper <strong>difficulty menu</strong>
+&mdash; a little gold rosette cursor you move with the D-pad &mdash; instead of the
+old &ldquo;Up for Easy, Down for Hard&rdquo; guesswork.</p>
+
+<h2>The case of the garbled C64 board</h2>
+<p>A fix worth confessing: the Commodore 64 build had started drawing its board as
+garbage glyphs, and the cause is peak 8-bit. The program loads at $0801 and grows
+upward; the custom character set lived at $3800; and the game had quietly grown to
+the point where <strong>the font was being copied over the program's own running
+code</strong>. A 13K program and a 2K charset simply don't fit under $4000
+together. The C64 now renders with the ROM charset plus its hardware-sprite
+tokens (the same renderer the FujiNet build uses) &mdash; clean board, no more
+memory Tetris. If your C64 copy ever looked scrambled: grab the new one.</p>
+
+<h2>Online is now download-and-go</h2>
+<p>The FujiNet side took two steps this cycle. First, the <strong>C64 and Apple
+II</strong> each gained a dedicated online build (<code>ur-online</code> in their
+downloads) speaking the same wire protocol as the Atari and Adam &mdash; so all
+four machines can meet at the same table. Second, as of v0.1.5 every online build
+<strong>points at the live server out of the box</strong>. Pick
+&ldquo;Online&rdquo; and you're connecting &mdash; no host to type, nothing to
+configure. (It's still changeable in-game, and the FujiNet Lobby handoff still
+overrides it, but the default now Just Works.)</p>
+
+<p><em>[ add screenshot: 20-atari-online-server.png ]</em></p>
+
+<h2>The source is public</h2>
+<p>As of this week the whole project is open: <strong>one portable C core</strong>
+(rules, AI, protocol) driving thin per-machine layers across <strong>three CPU
+families</strong> &mdash; 6502, Z80, and now 68000 &mdash; and thirteen downloads.
+GPLv3, warts and build scripts and all:
+<a href="https://github.com/slaapliedje/ur">github.com/slaapliedje/ur</a>. If
+you're curious how the same game fits in an NES cart, an Apple II disk, and a
+Falcon program, it's all there.</p>
+
+<h2>What's next</h2>
+<p>The 68000 door is open, so: <strong>Mega Drive / Genesis</strong> and
+<strong>Amiga</strong> are next in line, plus some ST-family polish (STe DMA sound,
+the blitter). And as ever &mdash; if you run any of these on <strong>real
+hardware</strong>, especially the new ST/STe/TT/Falcon builds, I'd love to hear how
+they behave. The best fixes in this project have come from real CRTs and real
+machines catching what emulators politely hide.</p>
+
+<p>May the rosettes favour you. 🌺</p>

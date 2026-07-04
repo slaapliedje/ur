@@ -23,3 +23,12 @@ NOT captured here (grab yourself when handy — VICE/these emulators are hard to
 drive headless in this setup): a Commodore 64 *board*, Game Gear, Coleco Adam.
 The C64 looks like its menu shot; Game Gear mirrors the Master System; the Adam
 mirrors the ColecoVision board above.
+12-atari-st-ziggurat.png      - Atari ST title: the Great Ziggurat of Ur at dusk (16 colours, banded sky)
+13-atari-ste-ziggurat.png     - Atari STe title: same scene, finer dusk from the 4096-colour palette
+14-atari-tt-ziggurat.png      - Atari TT title: 256 colours - a real gradient sky
+15-atari-tt-board.png         - Atari TT board: gradient-lit cells + the raised-slab shadow
+16-atari-falcon-ziggurat.png  - Atari Falcon title: the ziggurat in truecolor
+17-sms-tinted-highlight.png   - Master System: the legal destination cell tinted green, motif intact
+18-gameboy-gold-highlight.png - Game Boy Color: gold-lit destination cell (no green in 4 colours!)
+19-nes-green-highlight.png    - NES: green destination cell in the move chooser
+20-atari-online-server.png    - Atari 8-bit title: online now points at the live server out of the box
