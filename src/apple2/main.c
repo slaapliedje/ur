@@ -70,7 +70,7 @@ static unsigned char celly(unsigned char row) { return (unsigned char)(1 + row *
 static uint16_t  g_seed = 0xACE1u;   /* RNG entropy (accumulated in the menu) */
 
 #ifdef UR_ONLINE
-#define UR_DEFAULT_HOST "localhost"   /* server host; runtime-configurable (menu 5) */
+#define UR_DEFAULT_HOST "thefnords.com"   /* the Ur server; runtime-configurable (menu 5) */
 /* FujiNet AppKey profile (creator 0x5552='UR'), shared with the Atari/Adam/C64. */
 #define UR_CREATOR_ID  0x5552u
 #define UR_APP_ID      0x01

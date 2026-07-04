@@ -47,7 +47,7 @@
 #define ANIM_STEP 6         /* frames per cell while a piece glides (~0.1s/cell) */
 #define ANIM_FLY  3         /* frames per cell for a captured piece flying back (faster) */
 #define NO_ROLL  0xFF
-#define UR_DEFAULT_HOST "localhost"   /* server host; runtime-configurable (menu 7) */
+#define UR_DEFAULT_HOST "thefnords.com"   /* the Ur server; runtime-configurable (menu 7) */
 #define DIE_MARKED   '^'
 #define DIE_UNMARKED '_'
 

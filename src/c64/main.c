@@ -91,7 +91,7 @@
 static uint16_t  g_seed = 0xACE1u;   /* RNG entropy (accumulated in the menu) */
 
 #ifdef UR_ONLINE
-#define UR_DEFAULT_HOST "localhost"   /* server host; runtime-configurable (menu 5) */
+#define UR_DEFAULT_HOST "thefnords.com"   /* the Ur server; runtime-configurable (menu 5) */
 
 /* FujiNet AppKey (persistent SD storage) for the local player profile. 0x5552='UR'.
  * Mirrors the Atari/Adam builds so a profile set on one shows on all. */
