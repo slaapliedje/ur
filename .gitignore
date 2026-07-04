@@ -20,6 +20,9 @@
 /lib/
 /vendor/
 
+# Local reference material (rogi's licensed Ultima V source — never publish)
+/files/
+
 # Compiled Go game server + its runtime data
 /server/server
 /server/ur-server
