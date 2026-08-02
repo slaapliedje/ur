@@ -10,11 +10,14 @@
  * the deep-ember dusk band (C_DUSK2) the plain ST can't mix.
  *
  * OS-friendly and Kickstart 1.3-safe throughout (V33 calls only): a CUSTOMSCREEN
- * + backdrop window from intuition, direct bitplane writes (ours to make on a
- * custom screen), IDCMP VANILLAKEY keyboard input, WaitTOF timing, and Paula
- * driven politely through audio.device — one endlessly-looping square wave whose
- * period/volume we steer with ADCMD_PERVOL, the Paula twin of the ST's YM
- * register pokes. Number-key menus + move picks, like the other keyboard ports.
+ * + backdrop window from intuition, rect fills through graphics.library's
+ * RectFill (i.e. THE BLITTER — full redraws are a blink, not a 68000 crawl)
+ * with direct bitplane writes for single pixels, IDCMP VANILLAKEY keyboard
+ * input, WaitTOF timing, and Paula driven politely through audio.device: three
+ * allocated channels looping a plucked-string wavetable, steered per-frame with
+ * ADCMD_PERVOL — the hymn plays as melody + octave double + deep tonic drone,
+ * with a real pluck envelope. Number-key menus + move picks, like the other
+ * keyboard ports.
  *
  * Built with the AmigaPorts m68k-amigaos-gcc (bebbo's toolchain) -> AmigaDOS hunk
  * executable; packaged onto a self-booting ADF by makefiles/amiga.mk (xdftool).
@@ -52,8 +55,9 @@ static const UBYTE ur_rgb[16][3] = {      /* 4 bits/channel (OCS = 4096 colours)
 };
 
 /* ---- screen / bitplane primitives --------------------------------------- */
-static struct Screen *scr;
-static struct Window *win;
+static struct Screen   *scr;
+static struct Window   *win;
+static struct RastPort *rport;            /* the screen's RastPort: blitter fills */
 static UBYTE  *plane[4];
 static UWORD   bpr;                       /* bytes per bitplane row (40) */
 
@@ -66,39 +70,34 @@ static void pix(int x, int y, uint16_t c)
         if ((c >> p) & 1) plane[p][off] |= m; else plane[p][off] &= (UBYTE)~m;
     }
 }
-static void frectw(int x, int y, int w, int h, uint16_t c)   /* fast 16-px-aligned fill */
+/* Rect fills go through graphics.library RectFill — i.e. THE BLITTER — which
+ * turned the ~1-2s full-screen 68000 redraws into a blink. (KS1.3-safe; fills
+ * all four planes per the pen, exactly the old per-plane word loop's result.) */
+static void frectw(int x, int y, int w, int h, uint16_t c)
 {
-    int g0 = x >> 4, gw = w >> 4, yy, g, p;
-    for (p = 0; p < 4; p++) {
-        UWORD v = ((c >> p) & 1) ? 0xFFFFu : 0;
-        for (yy = y; yy < y + h; yy++) {
-            UWORD *r = (UWORD *)(plane[p] + (ULONG)yy * bpr) + g0;
-            for (g = 0; g < gw; g++) r[g] = v;
-        }
-    }
+    SetAPen(rport, c);
+    RectFill(rport, x, y, x + w - 1, y + h - 1);
 }
-/* shared higher-level fills (build on pix/frectw) */
-static void frect(int x, int y, int w, int h, uint16_t c)
-{
-    int xx, yy;
-    for (yy = y; yy < y + h; yy++) for (xx = x; xx < x + w; xx++) pix(xx, yy, c);
-}
+static void frect(int x, int y, int w, int h, uint16_t c) { frectw(x, y, w, h, c); }
 static void clr(uint16_t c) { frectw(0, 0, SCRW, SCRH, c); }
+static void hline(int x, int y, int w, uint16_t c) { frectw(x, y, w, 1, c); }
 
-/* filled circle + filled diamond (motifs / tokens) */
+/* filled circle + filled diamond (motifs / tokens) as blitter runs, one per
+ * scanline — 25 RectFills beat ~500 four-plane read-modify-write pixels */
 static void disc(int cx, int cy, int r, uint16_t c)
 {
     int dx, dy;
-    for (dy = -r; dy <= r; dy++)
-        for (dx = -r; dx <= r; dx++)
-            if (dx*dx + dy*dy <= r*r) pix(cx + dx, cy + dy, c);
+    for (dy = -r; dy <= r; dy++) {
+        for (dx = r; dx > 0 && dx*dx + dy*dy > r*r; dx--) ;
+        hline(cx - dx, cy + dy, 2*dx + 1, c);
+    }
 }
 static void diamond(int cx, int cy, int r, uint16_t c)
 {
-    int dx, dy;
+    int dy;
     for (dy = -r; dy <= r; dy++) {
         int w = r - (dy < 0 ? -dy : dy);
-        for (dx = -w; dx <= w; dx++) pix(cx + dx, cy + dy, c);
+        hline(cx - w, cy + dy, 2*w + 1, c);
     }
 }
 
@@ -320,87 +319,136 @@ uint16_t plat_seed(void) { return (uint16_t)(g_seed ^ (uint16_t)VBeamPos()); }
 void     plat_animate(uint8_t player, uint8_t from, uint8_t to) { (void)player; (void)from; (void)to; }
 
 /* ---- Paula sound via audio.device (KS1.3-polite) ------------------------- *
- * One endlessly-looping 8-sample square wave on an allocated channel; every
- * "register poke" is an ADCMD_PERVOL steering its period/volume — silence is
- * just volume 0. Paula period = 3546895 / (freq * 8) (PAL clock). */
+ * THREE allocated channels, each endlessly looping a 16-sample plucked-string
+ * wavetable (fundamental + 2nd + 3rd harmonics) at volume 0; every "register
+ * poke" is an ADCMD_PERVOL steering one channel's period/volume. The hymn is a
+ * three-voice arrangement: the melody with a per-frame pluck envelope, an
+ * octave double underneath, and a deep tonic drone (B2) — drone accompaniment
+ * being about as period-authentic as arrangement gets for ancient modal music.
+ * Paula period = 3546895 / (freq * 16). SFX use the melody channel. */
+#define CH_MEL   0
+#define CH_OCT   1
+#define CH_DRONE 2
+
 static struct MsgPort *aport;
-static struct IOAudio *awrite, *apv;
-static BYTE  *sqwave;
-static UBYTE  achans[4] = { 1, 2, 4, 8 };
+static struct IOAudio *awr[3], *apv;
+static BYTE  *wave;
+static UBYTE  amasks[4] = { 0x07, 0x0B, 0x0D, 0x0E };  /* any three channels */
+static UBYTE  chbit[3];
 static int    audio_ok = 0;
+
+/* one cycle of the "string": fundamental + 2nd + 3rd harmonics, peak ±76 */
+static const BYTE wave16[16] = {
+    0, 53, 76, 67, 45, 30, 24, 16, 0, -16, -24, -30, -45, -67, -76, -53
+};
 
 static void audio_init(void)
 {
-    int i;
+    ULONG mask;
+    int   i, n;
+
     aport = CreatePort(NULL, 0);
     if (!aport) return;
-    awrite = (struct IOAudio *)CreateExtIO(aport, sizeof(struct IOAudio));
+    awr[0] = (struct IOAudio *)CreateExtIO(aport, sizeof(struct IOAudio));
     apv    = (struct IOAudio *)CreateExtIO(aport, sizeof(struct IOAudio));
-    sqwave = (BYTE *)AllocMem(8, MEMF_CHIP);
-    if (!awrite || !apv || !sqwave) return;
-    for (i = 0; i < 4; i++) sqwave[i] = 100;
-    for (i = 4; i < 8; i++) sqwave[i] = -100;
+    wave   = (BYTE *)AllocMem(16, MEMF_CHIP);
+    if (!awr[0] || !apv || !wave) return;
+    for (i = 0; i < 16; i++) wave[i] = wave16[i];
 
-    awrite->ioa_Request.io_Message.mn_Node.ln_Pri = 10;   /* don't get stolen */
-    awrite->ioa_Data   = achans;                          /* any one channel  */
-    awrite->ioa_Length = sizeof(achans);
-    if (OpenDevice((STRPTR)"audio.device", 0, (struct IORequest *)awrite, 0) != 0)
+    awr[0]->ioa_Request.io_Message.mn_Node.ln_Pri = 10;   /* don't get stolen */
+    awr[0]->ioa_Data   = amasks;
+    awr[0]->ioa_Length = sizeof(amasks);
+    if (OpenDevice((STRPTR)"audio.device", 0, (struct IORequest *)awr[0], 0) != 0)
         return;
 
-    *apv = *awrite;                       /* same unit + allocation key       */
+    /* which three channels did we get? (a stock machine always grants three) */
+    mask = (ULONG)awr[0]->ioa_Request.io_Unit & 0x0F;
+    n = 0;
+    for (i = 0; i < 4; i++)
+        if ((mask & (1u << i)) && n < 3) chbit[n++] = (UBYTE)(1u << i);
+    while (n < 3) { chbit[n] = chbit[0]; n++; }   /* degrade: roles share      */
 
-    awrite->ioa_Request.io_Command = CMD_WRITE;
-    awrite->ioa_Request.io_Flags   = ADIOF_PERVOL;
-    awrite->ioa_Data   = (UBYTE *)sqwave;
-    awrite->ioa_Length = 8;
-    awrite->ioa_Cycles = 0;                               /* loop forever     */
-    awrite->ioa_Period = 500;
-    awrite->ioa_Volume = 0;                               /* born silent      */
-    SendIO((struct IORequest *)awrite);
+    *apv = *awr[0];                       /* same device + allocation key      */
+
+    for (i = 0; i < 3; i++) {             /* one looping wave per channel      */
+        if (i > 0) {
+            awr[i] = (struct IOAudio *)CreateExtIO(aport, sizeof(struct IOAudio));
+            if (!awr[i]) return;
+            *awr[i] = *awr[0];
+        }
+        awr[i]->ioa_Request.io_Unit    = (APTR)(ULONG)chbit[i];
+        awr[i]->ioa_Request.io_Command = CMD_WRITE;
+        awr[i]->ioa_Request.io_Flags   = ADIOF_PERVOL;
+        awr[i]->ioa_Data   = (UBYTE *)wave;
+        awr[i]->ioa_Length = 16;
+        awr[i]->ioa_Cycles = 0;                           /* loop forever     */
+        awr[i]->ioa_Period = 500;
+        awr[i]->ioa_Volume = 0;                           /* born silent      */
+        SendIO((struct IORequest *)awr[i]);
+    }
     audio_ok = 1;
 }
-static void pervol(UWORD per, UWORD vol)
+static void pv(int ch, UWORD per, UWORD vol)   /* steer one channel */
 {
     if (!audio_ok) return;
+    apv->ioa_Request.io_Unit    = (APTR)(ULONG)chbit[ch];
     apv->ioa_Request.io_Command = ADCMD_PERVOL;
     apv->ioa_Request.io_Flags   = ADIOF_PERVOL;
     apv->ioa_Period = per;
     apv->ioa_Volume = vol;
     DoIO((struct IORequest *)apv);
 }
-static void snd_silence(void) { pervol(500, 0); }
+static void snd_silence(void)
+{ pv(CH_MEL, 500, 0); pv(CH_OCT, 500, 0); pv(CH_DRONE, 500, 0); }
 static void vbl(int n) { while (n-- > 0) WaitTOF(); }
 
-/* Paula periods for the hymn range B4(71)..A5(81): 3546895/(f*8). */
-static const UWORD am_period[11] = { 897,847,800,755,713,672,635,599,565,533,503 };
-#define VOL_MUS 44
+/* Paula periods for the hymn range B4(71)..A5(81): 3546895/(f*16). */
+static const UWORD am_period[11] = { 449,424,400,377,356,336,317,300,283,267,252 };
+#define PER_DRONE 1795                 /* B2 — two octaves under the tonic */
 #define VOL_SFX 52
 
+/* One melody step as a three-voice pluck: attack at 62, fast decay to a
+ * sustain plateau, then a slow string-fade — octave double at 5/8 volume,
+ * the drone humming untouched underneath. */
 static void am_music_note(unsigned char midi, unsigned char eighths)
 {
+    int f, frames = (int)eighths * 13, v;
+    UWORD per;
     if (midi == MUSIC_REST) {
-        pervol(500, 0);
-    } else {
+        pv(CH_MEL, 500, 0); pv(CH_OCT, 500, 0);
+        vbl(frames);
+        return;
+    }
+    {
         uint8_t idx = (uint8_t)(midi - music_note_lo);
         if (idx > 10) idx = 10;
-        pervol(am_period[idx], VOL_MUS);
+        per = am_period[idx];
     }
-    vbl((int)eighths * 13);
-    pervol(500, 0); vbl(1);            /* note-off gap (articulation) */
+    for (f = 0; f < frames; f++) {
+        v = 62 - f * 5;                            /* pluck attack->sustain  */
+        if (v < 24) v = 24 - ((f - 8) >> 1);       /* ...then slow fade      */
+        if (v < 12) v = 12;
+        pv(CH_MEL, per, (UWORD)v);
+        pv(CH_OCT, (UWORD)(per * 2), (UWORD)((v * 5) >> 3));
+        WaitTOF();
+    }
+    pv(CH_MEL, per, 6); pv(CH_OCT, (UWORD)(per * 2), 4);
+    vbl(1);                                        /* articulation dip       */
 }
 static void play_hymn(void)            /* once on the title; skippable by a key */
 {
     uint16_t i;
     snd_silence();
+    pv(CH_DRONE, PER_DRONE, 9);        /* the drone breathes in */
     for (i = 0; i < ur_hymn_len; i++) {
         if (key_avail()) break;        /* key waiting -> skip (don't consume it) */
         am_music_note(ur_hymn[i].note, ur_hymn[i].dur);
     }
-    snd_silence();
+    snd_silence();                     /* melody, octave and drone all out */
 }
 
 static void sfx_tone(UWORD per, UWORD vol, int v)
-{ pervol(per, vol); vbl(v); snd_silence(); }
+{ pv(CH_MEL, per, vol); vbl(v); snd_silence(); }
 
 static uint16_t sfx_rng = 0xBEEF;      /* local xorshift — never touches the game RNG */
 static uint16_t srnd(void)
@@ -409,17 +457,17 @@ static uint16_t srnd(void)
 static void sfx_roll(void)             /* dice rattle: jittered low clatter */
 {
     int i;
-    for (i = 0; i < 10; i++) { pervol((UWORD)(1300 + (srnd() & 511)), 30); vbl(1); }
+    for (i = 0; i < 10; i++) { pv(CH_MEL, (UWORD)(650 + (srnd() & 255)), 30); vbl(1); }
     snd_silence();
 }
 static void sfx_for_result(const ur_move_result *res)
 {
-    if (res->won)           { sfx_tone(755,VOL_SFX,8); sfx_tone(565,VOL_SFX,8); sfx_tone(376,VOL_SFX,16); }
-    else if (res->captured) { int i; for (i = 0; i < 6; i++) { pervol((UWORD)(900 + (srnd() & 255)), 40); vbl(1); }
-                              sfx_tone(1348,VOL_SFX,8); }
-    else if (res->scored)   { sfx_tone(674,VOL_SFX,7); sfx_tone(451,VOL_SFX,12); }
-    else if (res->rosette)  { sfx_tone(755,VOL_SFX,6); sfx_tone(603,VOL_SFX,6); sfx_tone(504,VOL_SFX,10); }
-    else                    { sfx_tone(674,40,5); }
+    if (res->won)           { sfx_tone(378,VOL_SFX,8); sfx_tone(283,VOL_SFX,8); sfx_tone(188,VOL_SFX,16); }
+    else if (res->captured) { int i; for (i = 0; i < 6; i++) { pv(CH_MEL, (UWORD)(450 + (srnd() & 127)), 40); vbl(1); }
+                              sfx_tone(674,VOL_SFX,8); }
+    else if (res->scored)   { sfx_tone(337,VOL_SFX,7); sfx_tone(226,VOL_SFX,12); }
+    else if (res->rosette)  { sfx_tone(378,VOL_SFX,6); sfx_tone(302,VOL_SFX,6); sfx_tone(252,VOL_SFX,10); }
+    else                    { sfx_tone(337,40,5); }
 }
 
 void plat_roll(uint8_t roll) { (void)roll; sfx_roll(); }
@@ -524,6 +572,8 @@ static int video_init(void)
 
     bpr = scr->BitMap.BytesPerRow;
     for (i = 0; i < 4; i++) plane[i] = (UBYTE *)scr->BitMap.Planes[i];
+    rport = &scr->RastPort;
+    SetDrMd(rport, JAM1);              /* plain pen fills for the blitter path */
 
     audio_init();
     snd_silence();

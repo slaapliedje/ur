@@ -7,9 +7,14 @@
 > Standard-of-Ur board, raised-slab shadows, ziggurat title scene, number-key
 > menus, and the shared `plat.h` controller. The Amiga's OCS palette is 4096
 > colours — exactly the STe's space — so this build uses the **STe colour
-> table** including the deep-ember dusk band (`C_DUSK2`). **Paula sound** via
-> audio.device: the Hurrian Hymn (FFT-verified F5-E5-D5-C5-B4) + roll/capture/
-> rosette/score/win SFX. Kickstart 1.3-safe (V33 calls only, `-mcrt=nix13`).
+> table** including the deep-ember dusk band (`C_DUSK2`). Rect fills go through
+> **the blitter** (graphics.library `RectFill`), so full redraws are a blink
+> instead of a ~1-2s 68000 crawl. **Paula sound** via audio.device: the Hurrian
+> Hymn as a **three-voice arrangement** — plucked-string wavetable melody with a
+> per-frame volume envelope, an octave double, and a deep B2 tonic drone
+> (FFT-verified: 123Hz drone + octave line + F5-E5-D5-C5-B4 melody) — plus
+> roll/capture/rosette/score/win SFX. Kickstart 1.3-safe (V33 calls only,
+> `-mcrt=nix13`).
 > Verified end-to-end in MAME `a500` (KS1.3): boot from ADF → title → menus →
 > full vs-AI game with green destination markers.
 
@@ -21,22 +26,29 @@
 
 - **OS-friendly throughout** (no custom copper lists, no direct chip pokes):
   intuition `OpenScreen` (`CUSTOMSCREEN|SCREENQUIET`, 320×200×4, `ShowTitle`
-  FALSE) + a borderless BACKDROP window for input, `SetRGB4` palette, direct
-  writes to the screen's **separate bitplanes** (`scr->BitMap.Planes[p]`,
-  `BytesPerRow` 40) — `pix()` RMWs a bit in each plane, `frectw()` fills whole
-  words per plane (the ST's word-interleaved primitives, re-laid-out). A blank
-  chip-RAM `SetPointer` hides the mouse. 320×200 (not 256) keeps one layout for
-  PAL and NTSC; PAL just shows border below.
+  FALSE) + a borderless BACKDROP window for input, `SetRGB4` palette. **Fills =
+  the blitter:** `frectw`/`frect`/`clr` are `SetAPen` + `RectFill` on the
+  screen's RastPort (KS1.3-safe, fills all four planes per the pen), and
+  `disc`/`diamond` draw as one `RectFill` run per scanline; only single pixels
+  (`pix()` for glyphs/stars) still RMW the **separate bitplanes** directly
+  (`scr->BitMap.Planes[p]`, `BytesPerRow` 40). A blank chip-RAM `SetPointer`
+  hides the mouse. 320×200 (not 256) keeps one layout for PAL and NTSC; PAL
+  just shows border below.
 - **Input:** IDCMP `VANILLAKEY` on the backdrop window. `key_avail()` drains
   the port into a one-key pushback buffer — the `Cconis()` twin, so the hymn
   polls for a skip without eating the menu key. RNG entropy = `VBeamPos()`
   folded in at each keypress (beam position when a human presses is random).
-- **Sound — the audio.device pattern:** allocate any one channel at OpenDevice
-  (`ioa_Data` = channel mask array, `ln_Pri` 10), start **one endlessly-looping
-  8-sample square wave at volume 0** (`CMD_WRITE`, `ioa_Cycles=0`), then every
-  note/SFX is just `ADCMD_PERVOL` steering period+volume — the Paula twin of
-  the ST's YM register pokes; silence = volume 0. Paula period =
-  3546895 / (freq × 8). The wave lives in `AllocMem(…, MEMF_CHIP)`.
+- **Sound — the audio.device pattern:** allocate **any three channels** at
+  OpenDevice (`ioa_Data` = an array of 3-bit channel masks, `ln_Pri` 10; the
+  granted set comes back in `io_Unit`), start an endlessly-looping **16-sample
+  plucked-string wavetable** (fundamental + 2nd + 3rd harmonics, chip RAM) at
+  volume 0 on each, then steer each channel with `ADCMD_PERVOL` through one
+  cloned request whose `io_Unit` is retargeted per call. The hymn = melody
+  (attack-62 → sustain → slow-fade envelope, stepped **every frame**) + octave
+  double at 5/8 volume + a constant B2 drone; silence = volume 0 everywhere.
+  Paula period = 3546895 / (freq × 16) — the 16-sample wave keeps the whole
+  range (SFX up to C6, drone down to B2) inside Paula's legal periods, where an
+  older 32-sample draft pushed C6 below the ~124 hardware minimum.
 - Timing via `WaitTOF()` (13 frames per eighth-note ≈ the ST tempo).
 
 ## Toolchain / build gotchas (all hit during bring-up)
@@ -74,8 +86,6 @@
   hardware from KS1.3 up.
 
 ### Still to do
-1. **Blitter fills + double buffering** — the full-screen redraw is the slow
-   spot; the blitter could do the cell faces nearly for free.
-2. Paula 4-channel arrangement of the hymn (chords!) or a sampled lyre voice —
-   the machine that invented tracker music deserves more than one square wave.
-3. Token glide + dice animation (`plat_animate` is a stub, same as the ST).
+1. Token glide + dice animation (`plat_animate` is a stub, same as the ST).
+2. Double-buffering if the (now blitter-fast) redraw ever shows flicker on
+   real hardware.
