@@ -6,6 +6,7 @@
 #include <stdint.h>
 #include "ur.h"             /* ur_move_result */
 
+void snd_init(void);        /* program the YM2612 lyre patch (holds the Z80 bus) */
 void snd_silence(void);
 void sfx_roll(void);
 void sfx_for_result(const ur_move_result *r);

@@ -10,11 +10,13 @@
 > leaves), and the **moving piece glides as a 16x16 hardware sprite**. Move
 > destinations tint green with the motif kept visible (`greenify()`), the move
 > list flags captures/rosettes, and the difficulty menu uses the gold-rosette
-> cursor — full feature parity with the other tile ports. **PSG sound**: the
-> Genesis keeps the SMS's SN76489 (same chip, same clock), so `sound.c` is
-> `src/sms/sound.c` ported to SGDK's `PSG_write()` with identical tuning; the
-> Hurrian Hymn plays on the title (skippable — polled **every frame**, better
-> than the Z80 ports' between-notes poll). No FujiNet (cartridge console).
+> cursor — full feature parity with the other tile ports. **Sound**: the
+> Hurrian Hymn plays on a **YM2612 FM plucked-lyre voice** (registers programmed
+> directly from the 68000 — no XGM/VGM assets; each note retriggers the
+> envelope so held notes ring and decay like a string; skippable, polled
+> **every frame**), while SFX stay on the SN76489 PSG — the SMS's exact chip at
+> the exact clock, so `sound.c`'s PSG half is `src/sms/sound.c` ported to
+> SGDK's `PSG_write()` with identical tuning. No FujiNet (cartridge console).
 > `make genesis` → `build/genesis/ur.bin`.
 
 > Parent context: [`/CLAUDE.md`](../../CLAUDE.md). This layer implements the
@@ -57,6 +59,15 @@
 - **PSG envelope is inverted** (`PSG_ENVELOPE_MAX` = 0, attenuation 15 =
   silent) — irrelevant here since we drive raw `PSG_write` bytes, but easy to
   trip on if switching to the PSG_* API.
+- **YM2612 rules:** the 68000 must **hold the Z80 bus** while touching the chip
+  (`Z80_requestBus(TRUE)` — held forever in `snd_init()`; safe because SGDK
+  boots the null Z80 driver and we never load another). Slot registers in
+  $30–$9F are ordered **S1,S3,S2,S4** at +0/+4/+8/+12 — the lyre patch is
+  *symmetric* (identical modulators, identical carriers, algorithm 4) partly to
+  sidestep that trap. Write `$A4` (block+fnum-hi) **before** `$A0` (latch
+  order). And an FFT-caught timbre lesson: a **MUL=2 modulator produces
+  odd-only harmonics** (clarinet, not lyre) — the 1:1 MUL ratio gives the full
+  harmonic series a plucked string needs.
 - **Redraw tearing:** `plat_draw` brackets its full plane-A rebuild in
   `VDP_setEnable(FALSE/TRUE)` like the SMS `display_off/on` — writes during
   active display showed torn frames on the busier redraws.
@@ -94,8 +105,8 @@
   it obviously non-silent).
 
 ### Still to do
-1. **YM2612 FM voice** for the hymn (a lyre-ish patch) with PSG as SFX — the
-   audio upgrade this hardware deserves.
-2. **Capture knock-back animation** (same gap as the SMS port).
-3. A raised-slab board shadow + richer backdrop à la the ST-family ports —
+1. **Capture knock-back animation** (same gap as the SMS port).
+2. A raised-slab board shadow + richer backdrop à la the ST-family ports —
    the VDP has the colours for it.
+3. FM **SFX** too, or a second FM voice harmonising the hymn — channel 0 is
+   the only one in use.

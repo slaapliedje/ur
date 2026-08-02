@@ -711,6 +711,7 @@ int main(bool hardReset)
     (void)hardReset;
 
     video_init();
+    snd_init();                        /* YM2612 lyre patch for the hymn */
     snd_silence();
 
     for (;;) {
