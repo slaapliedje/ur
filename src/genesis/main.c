@@ -406,6 +406,8 @@ static void sprite_show(s16 x, s16 y, u16 base)
 
 /* ---- video ---------------------------------------------------------------- */
 static bool board_shown = FALSE;    /* the carved board is on plane B */
+static u8 shown[UR_NUM_PLAYERS][UR_PIECES];  /* positions as last drawn — the
+                                              * pre-move frame, for knock-back */
 
 static void video_init(void)
 {
@@ -492,6 +494,7 @@ void plat_draw(uint8_t roll, const char *msg)
     for (pl = 0; pl < UR_NUM_PLAYERS; pl++)
         for (i = 0; i < UR_PIECES; i++) {
             pos = ur_g.piece[pl][i];
+            shown[pl][i] = pos;               /* snapshot -> knock-back check */
             if (pos_to_cell(pl, pos, &rr, &cc))
                 put_cell(BG_A, cellx(cc), celly(rr), pl ? T_TOKD : T_TOKL);
         }
@@ -556,6 +559,21 @@ static void anim_move(u8 player, u8 p0, u8 p1)
         cell_px(player, p, &nx, &ny);
         glide(x, y, nx, ny, base);
         x = nx; y = ny;
+    }
+    /* capture knock-back: if an enemy token sat on the landing square (the
+     * board still shows the pre-move frame), send it flying home — the mover
+     * becomes a plane-A tile so the sprite is free to carry the victim. */
+    if (p1 >= UR_SHARED_FIRST && p1 <= UR_SHARED_LAST) {
+        u8 opp = (u8)(player ^ 1), i;
+        for (i = 0; i < UR_PIECES; i++)
+            if (shown[opp][i] == p1) {
+                s16 tx, ty;
+                if (pos_to_cell(player, p1, &r, &c))
+                    put_cell(BG_A, cellx(c), celly(r), player ? T_TOKD : T_TOKL);
+                cell_px(opp, 0, &tx, &ty);
+                glide(x, y, tx, ty, base_for(opp));
+                break;
+            }
     }
     sprite_park();
 }

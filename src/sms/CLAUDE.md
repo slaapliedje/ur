@@ -165,9 +165,11 @@ MAME `-nothrottle` the glide flies by, and *with* throttle the busy-wait boot hy
 runs at real Z80 speed and dominates — so verify motion live, not by one capture.)
 
 ### Still to do
-1. **Capture knock-back** — when a move captures, glide the victim back to its tray
-   too (only the mover animates today; the capture just redraws).
-2. **In-game music / richer SFX** — the hymn is title-only; a per-frame PSG tick
+1. **In-game music / richer SFX** — the hymn is title-only; a per-frame PSG tick
    (vblank) could play under the board, a future Atari/Adam parity pass.
-3. The core + protocol are unchanged; if FujiNet-for-SMS ever lands, the online
+2. The core + protocol are unchanged; if FujiNet-for-SMS ever lands, the online
    path mirrors the other targets.
+
+(**Capture knock-back: done** — `anim_move` checks the pre-move `shown[][]`
+snapshot; on a shared-row capture the mover becomes a BG cell and the victim
+glides home to its tray as the sprite. Same pattern as the Genesis port.)

@@ -349,6 +349,9 @@ static void spin(unsigned int n) { volatile unsigned int i; for (i = 0; i < n; i
 
 static uint16_t g_seed = 0xACE1u;    /* RNG entropy (accumulated in wait_press) */
 
+/* positions as last drawn — the pre-move frame, for the capture knock-back */
+static unsigned char shown[UR_NUM_PLAYERS][UR_PIECES];
+
 static int wait_press(void)
 {
     int now;
@@ -481,6 +484,7 @@ void plat_draw(unsigned char roll, const char *msg)
     for (pl = 0; pl < UR_NUM_PLAYERS; pl++)
         for (i = 0; i < UR_PIECES; i++) {
             pos = ur_g.piece[pl][i];
+            shown[pl][i] = pos;              /* snapshot -> knock-back check */
             if (pos_to_cell(pl, pos, &rr, &cc))
                 put_cell(cellx(cc), celly(rr), pl ? TILE_TOKD : TILE_TOKL);
         }
@@ -565,6 +569,21 @@ static void anim_move(unsigned char player, unsigned char p0, unsigned char p1)
         cell_px(player, p, &nx, &ny);
         glide(x, y, nx, ny, base);
         x = nx; y = ny;
+    }
+    /* capture knock-back: if an enemy token sat on the landing square (the
+     * board still shows the pre-move frame), send it flying home — the mover
+     * becomes a BG cell so the sprite is free to carry the victim. */
+    if (p1 >= UR_SHARED_FIRST && p1 <= UR_SHARED_LAST) {
+        unsigned char opp = (unsigned char)(player ^ 1), i;
+        for (i = 0; i < UR_PIECES; i++)
+            if (shown[opp][i] == p1) {
+                int tx, ty;
+                if (pos_to_cell(player, p1, &r, &c))
+                    put_cell(cellx(c), celly(r), player ? TILE_TOKD : TILE_TOKL);
+                cell_px(opp, 0, &tx, &ty);
+                glide(x, y, tx, ty, opp ? TILE_SPRD : TILE_SPRL);
+                break;
+            }
     }
     sprites_off();
 }

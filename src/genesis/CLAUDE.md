@@ -105,8 +105,12 @@
   it obviously non-silent).
 
 ### Still to do
-1. **Capture knock-back animation** (same gap as the SMS port).
-2. A raised-slab board shadow + richer backdrop à la the ST-family ports —
+1. A raised-slab board shadow + richer backdrop à la the ST-family ports —
    the VDP has the colours for it.
-3. FM **SFX** too, or a second FM voice harmonising the hymn — channel 0 is
+2. FM **SFX** too, or a second FM voice harmonising the hymn — channel 0 is
    the only one in use.
+
+(**Capture knock-back: done** — `plat_draw` snapshots piece positions into
+`shown[][]` (the pre-move frame); on a shared-row capture `anim_move` turns the
+landed mover into a plane-A tile and glides the victim sprite home to its tray.
+Verified live in MAME with a staged capture position.)
