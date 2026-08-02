@@ -66,6 +66,18 @@ No container required if you install the toolchains directly:
 - **z88dk** — `z88dk` in the AUR (Arch), or build from
   https://github.com/z88dk/z88dk (nightly builds recommended; the `coleco`/`adam`
   target needs a current build). Set `ZCCCFG`/`PATH` per its docs.
+- **SGDK 2.11 (Mega Drive / Genesis)** — needs a *bare-metal* `m68k-elf` GCC
+  (the ST family's `m68k-atari-mint-gcc` will not do) plus an SGDK checkout with
+  its library built. No root required:
+  1. Unpack [marsdev](https://github.com/andwn/marsdev)'s prebuilt Linux
+     toolchain tarball (m68k-elf GCC + sjasm + bintos) anywhere, e.g.
+     `~/dev/toolchains/mars/`.
+  2. `git clone -b v2.11 https://github.com/Stephane-D/SGDK ~/dev/toolchains/sgdk211`
+  3. `cd sgdk211 && PATH=~/dev/toolchains/mars/m68k-elf/bin:$PATH GDK=$PWD \
+     make -f makelib.gen release` → builds `lib/libmd.a` (rescomp/sizebnd are
+     Java jars, so `java` must be installed).
+  `makefiles/genesis.mk` defaults `GDK`/`M68KELF_BIN` to those paths — override
+  them if yours differ. `make genesis` skips with a notice when SGDK is absent.
 
 The `Makefile` finds tools on your `PATH` (`cl65`, `zcc`, host `cc`), so a native
 install and the container are interchangeable for building.
@@ -78,6 +90,7 @@ install and the container are interchangeable for building.
 | Coleco Adam | **MAME** (`adam` driver) / **ADAMEm** | https://www.mamedev.org/ |
 | Commodore 64 | **VICE** (`x64sc`) | https://vice-emu.sourceforge.io/ |
 | Apple II | **AppleWin** / **MAME** / Virtual ][ | https://github.com/AppleWin/AppleWin |
+| Mega Drive / Genesis | **BlastEm** / **Genesis Plus GX** / **MAME** (`genesis`, the NTSC machine) | https://www.retrodev.com/blastem/ |
 | Networking (all) | **FujiNet-PC** | https://github.com/FujiNetWIFI/fujinet-pc |
 
 **FujiNet-PC** emulates the FujiNet device so you can test networking with no
@@ -108,6 +121,9 @@ make gamegear      # -> build/sms/ur-gg.gg            (z88dk; -DUR_GG)
 make gb            # -> build/gb/ur.gb                (z88dk; GB + GBC dual-mode)
 make a5200         # -> build/a5200/ur.a52            (cc65; -DUR_A5200)
 make nes           # -> build/nes/ur.nes              (cc65; iNES NROM)
+# --- 16-bit / 68000 era ---
+make st            # -> build/st/ur.prg               (m68k-atari-mint-gcc; +STE/TT/FALCON=1)
+make genesis       # -> build/genesis/ur.bin          (SGDK 2.11; see toolchain note above)
 make all           # the four primary platforms
 make clean
 ```

@@ -210,9 +210,13 @@ the 6502 (cc65) and Z80 (z88dk).
       the pixel format + palette; geometry/controller/sound/input all shared.
 - [ ] **Atari STe / TT variants** (planned): STe 4096-colour palette; TT 256-colour;
       STe/Falcon DMA sound + the blitter.
-- [ ] **Sega Mega Drive / Genesis** — the 16-bit console showpiece (VDP, 64 on-screen
-      colours, hardware sprites, PSG+FM). Needs an SGDK/marsdev toolchain; verifies in
-      MAME (`megadriv`).
+- [x] **Sega Mega Drive / Genesis — playable** (`make genesis` → `build/genesis/ur.bin`;
+      SGDK 2.11 + marsdev m68k-elf GCC). The SMS Standard-of-Ur showpiece on 16-bit
+      hardware: carved board drawn once on plane B, transparent-cornered token tiles
+      floating over the stonework on plane A, the mover gliding as a hardware sprite,
+      green tinted destinations, rosette difficulty menu, and the Hurrian Hymn on the
+      **same SN76489 PSG as the SMS** (FM upgrade queued). Verified in MAME (`genesis`)
+      + Genesis Plus GX. See [`src/genesis/CLAUDE.md`](src/genesis/CLAUDE.md).
 - [ ] **Commodore Amiga** — the defining 16-bit home computer (OCS/AGA, copper, Paula).
       Needs amiga-gcc/vbcc; verifies in MAME (`a500`).
 - [ ] (later) Sharp X68000, Neo Geo — also 68000, drivers present in MAME.

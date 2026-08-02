@@ -37,6 +37,7 @@ $BUILD/st/ur.prg|ur-st-$VERSION.prg|Atari ST — GEMDOS .prg; Hatari (EmuTOS) or
 $BUILD/st/ur-ste.prg|ur-ste-$VERSION.prg|Atari STe — 4096-colour palette edition; Hatari --machine ste
 $BUILD/st/ur-tt.prg|ur-tt-$VERSION.prg|Atari TT — 256-colour gradient edition; Hatari --machine tt
 $BUILD/st/ur-falcon.prg|ur-falcon-$VERSION.prg|Atari Falcon — truecolor edition; Hatari --machine falcon (TOS 4)
+$BUILD/genesis/ur.bin|ur-genesis-$VERSION.bin|Sega Mega Drive / Genesis — BlastEm / Genesis Plus GX / MAME genesis (cartridge)
 EOF
 }
 

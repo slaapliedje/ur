@@ -30,6 +30,7 @@ load it in that machine's emulator, and play.
   ur-ste-*.prg        Atari STe (4096-colour look)  - Hatari --machine ste
   ur-tt-*.prg         Atari TT (256-colour look)    - Hatari --machine tt
   ur-falcon-*.prg     Atari Falcon (truecolor look) - Hatari --machine falcon (TOS 4)
+  ur-genesis-*.bin    Sega Mega Drive / Genesis     - BlastEm, Genesis Plus GX, MAME
 
 (SHA256SUMS.txt lists checksums for every file.)
 
@@ -68,9 +69,11 @@ Atari 5200: use the controller KEYPAD numbers (same as above).
 Coleco Adam / ColecoVision: controller KEYPAD to choose, FIRE to
   roll / confirm (the Adam also accepts its keyboard).
 
-Consoles & handhelds (Master System, Game Gear, Game Boy, NES):
+Consoles & handhelds (Master System, Game Gear, Game Boy, NES,
+Mega Drive / Genesis):
   - Menu / move list: D-pad UP/DOWN moves the ">" cursor.
-  - Roll & confirm: press the action button (A / Start / FIRE).
+  - Roll & confirm: press the action button (A / Start / FIRE;
+    A, B or C on the Genesis).
 
 ----------------------------------------------------------------
   CREDITS & LICENSE

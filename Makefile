@@ -16,6 +16,7 @@ include makefiles/sms.mk
 include makefiles/gb.mk
 include makefiles/nes.mk
 include makefiles/st.mk
+include makefiles/genesis.mk
 include makefiles/c64.mk
 include makefiles/apple2.mk
 include makefiles/host-test.mk

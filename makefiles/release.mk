@@ -10,10 +10,11 @@ UR_VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo d
 # FujiNet-online variants for the two platforms that gate online behind a build
 # flag (Atari and Adam already bake online into their default binary; the C64 and
 # Apple II ship an extra ur-online.* alongside their local default), PLUS the
-# 16-bit Atari ST family (ST + STe + TT + Falcon variants of the shared layer).
+# 16-bit Atari ST family (ST + STe + TT + Falcon variants of the shared layer),
+# PLUS the Sega Mega Drive / Genesis (SGDK; skips with a notice if SGDK absent).
 RELEASE_TARGETS := atari a5200 c64 c64-online apple2 apple2-online \
                    adam coleco sms gamegear gb nes \
-                   st st-ste st-tt st-falcon
+                   st st-ste st-tt st-falcon genesis
 
 .PHONY: release release-clean
 release: $(RELEASE_TARGETS) ## Build all platforms and bundle distributables into build/release/

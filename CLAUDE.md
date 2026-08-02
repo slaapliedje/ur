@@ -26,11 +26,13 @@ so no online): **Sega Master System** (`make sms`) and its **Game Gear** sibling
 **Atari 5200** (`make a5200`), and the **NES / Famicom** (`make nes`). See each
 `src/<platform>/CLAUDE.md` and [`ROADMAP.md`](ROADMAP.md).
 
-…and now the start of the **16-bit / 68000 era**: an **Atari ST** port (`make st`,
-built with `m68k-atari-mint-gcc`, run in Hatari) — the first of the 68000 computers
-and consoles (Mega Drive / Genesis and Amiga to follow). The shared C core compiles
-unchanged under GCC for the 68000, a third CPU family after the 6502 and Z80. See
-[`src/st/CLAUDE.md`](src/st/CLAUDE.md).
+…and now the **16-bit / 68000 era**: the **Atari ST family** (`make st`, built with
+`m68k-atari-mint-gcc`, run in Hatari; STe/TT/Falcon variants via `STE=1`/`TT=1`/
+`FALCON=1`) and the **Sega Mega Drive / Genesis** (`make genesis`, built with
+**SGDK 2.11** + a bare-metal m68k-elf GCC, local-only like the other consoles) —
+with Amiga to follow. The shared C core compiles unchanged under GCC for the 68000,
+a third CPU family after the 6502 and Z80. See [`src/st/CLAUDE.md`](src/st/CLAUDE.md)
+and [`src/genesis/CLAUDE.md`](src/genesis/CLAUDE.md).
 
 All four targets now have a working platform layer with local play **and FujiNet
 online**: **Atari** (carved board + PMG two-tone tokens + DLI sheen + POKEY),
@@ -176,6 +178,7 @@ src/
   c64/CLAUDE.md      ← Commodore 64 platform layer (3rd target, 6502)
   apple2/CLAUDE.md   ← Apple II platform layer (4th target, 6502)
   nes/CLAUDE.md      ← NES / Famicom platform layer (6502 / cc65, local-only, no FujiNet)
+  genesis/CLAUDE.md  ← Sega Mega Drive / Genesis layer (68000 / SGDK, local-only, no FujiNet)
 tests/               ← host unit tests for src/common
 server/              ← modern game server (future); see src/net/CLAUDE.md
 lib/                 ← fetched deps (fujinet-lib); git-ignored
