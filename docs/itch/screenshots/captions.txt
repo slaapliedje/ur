@@ -32,3 +32,9 @@ mirrors the ColecoVision board above.
 18-gameboy-gold-highlight.png - Game Boy Color: gold-lit destination cell (no green in 4 colours!)
 19-nes-green-highlight.png    - NES: green destination cell in the move chooser
 20-atari-online-server.png    - Atari 8-bit title: online now points at the live server out of the box
+21-genesis-title.png          - Mega Drive / Genesis title: Standard-of-Ur menu, rosettes flanking
+22-genesis-tinted-highlight.png - Genesis: green-tinted destination cell, motif intact (two VDP planes)
+23-genesis-token-on-stone.png - Genesis: a token resting ON the carved stone (plane-A transparency)
+24-amiga-ziggurat.png         - Amiga title: the ziggurat at dusk from the STe-class 4096-colour palette
+25-amiga-move-marker.png      - Amiga: the green destination marker in the move chooser
+26-amiga-board.png            - Amiga board: raised slab, drop shadows, Paula singing underneath

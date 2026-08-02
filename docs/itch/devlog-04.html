@@ -1,0 +1,80 @@
+<!--
+  itch.io DEVLOG post #4 for "The Royal Game of Ur".
+  HOW TO USE: project dashboard -> Devlog -> Create new post. Suggested title:
+    "v0.1.6 - Genesis and Amiga join the table: fifteen machines, one ancient game"
+  In the post body click "</>" (HTML) and paste everything below this comment.
+  Replace each [ add screenshot: <file> ] line with that image via the editor's
+  image button — the files are staged in docs/itch/screenshots/ in the repo.
+-->
+
+<p>Last time I said the Mega Drive and the Amiga were next in line. They didn't
+wait long: <strong>v0.1.6 adds native ports for both</strong>, which means the
+world's oldest board game now runs on <strong>fifteen machines</strong> — and the
+great 16-bit rivalry of the late 80s gets settled the old way, over a 4,600-year-old
+board.</p>
+
+<h2>Sega's turn: the Mega Drive / Genesis</h2>
+<p>The Genesis port is the Master System's showpiece look, done the way 16-bit
+hardware wants it done. The Genesis VDP gives you <strong>two independent tile
+planes</strong>, so the carved lapis board is drawn <em>once</em> on the back plane
+and the tokens live on the front plane with transparent corners — each disc
+literally rests <em>on</em> the stonework, with the carving visible around its rim.
+The moving piece glides as a hardware sprite, legal destinations tint green with
+their rosette or eye still showing, and the difficulty menu keeps its little gold
+rosette cursor.</p>
+
+<p><em>[ add screenshot: 21-genesis-title.png ]</em></p>
+<p><em>[ add screenshot: 22-genesis-tinted-highlight.png ]</em></p>
+<p><em>[ add screenshot: 23-genesis-token-on-stone.png ]</em></p>
+
+<p>My favourite detail: when Sega designed the Mega Drive, they kept the Master
+System's sound chip on board for the PSG — <em>the same chip at the same
+clock</em>. So the SMS port's sound code, and with it the 3,400-year-old Hurrian
+Hymn on the title screen, carried over <strong>byte for byte</strong>. I pointed a
+frequency analyser at the recording to be sure: F5, E5, D5, C5, B4 — the same
+descending line the Ugarit tablet has been holding onto since the Bronze Age, now
+in its third CPU family.</p>
+
+<h2>And the Amiga answers</h2>
+<p>The Amiga build is, fittingly, a port of the <strong>Atari ST version</strong> —
+the two great rivals running the same code, each showing off what it can. The
+Amiga picks its 16 colours from 4096 (the same palette space as the STe), so it
+gets the richer colour table: the deep-ember dusk behind the ziggurat, the warmer
+brick, the works. And it does it all <em>politely</em>: the port is OS-friendly and
+<strong>Kickstart 1.3-safe</strong>, opening a proper custom screen and driving
+Paula through audio.device — so it should behave on everything from a stock A500
+to your accelerated 1200.</p>
+
+<p><em>[ add screenshot: 24-amiga-ziggurat.png ]</em></p>
+<p><em>[ add screenshot: 25-amiga-move-marker.png ]</em></p>
+
+<p>The download is a <strong>self-booting ADF</strong> — write it to a floppy or
+mount it and it boots straight into the ziggurat — plus the bare executable if
+you'd rather drop it on your hard drive.</p>
+
+<p>Two war stories for the retro devs in the room. One: the classic Amiga GCC
+toolchain (bebbo's) quietly vanished from GitHub since I last looked — it lives on
+as the AmigaPorts project, which is what builds this port. Two: MAME's A500 driver
+greets you with a red screen declaring <em>"THIS SYSTEM DOESN'T WORK."</em> Press
+any key, and it proceeds to boot Kickstart 1.3 and run the game flawlessly for
+hours. Never trust a warning label.</p>
+
+<h2>One brain, fifteen machines</h2>
+<p>Every port on this page — Atari 8-bit to Falcon, Apple II, C64, the Coleco
+machines, Sega's three, Nintendo's three, and now the Amiga — runs the <em>same</em>
+portable C rules engine, byte for byte, across three CPU families: 6502, Z80, and
+68000. The platform layers just draw. The whole thing is open source (GPLv3):
+<a href="https://github.com/slaapliedje/ur">github.com/slaapliedje/ur</a>.</p>
+
+<p><em>[ add screenshot: 26-amiga-board.png ]</em></p>
+
+<h2>What's next</h2>
+<p>Polish for the new arrivals: the Genesis has a <strong>YM2612 FM synth</strong>
+sitting idle that deserves a proper lyre arrangement of the hymn, and the Amiga has
+a blitter and four Paula channels that could make this port sing in harmony —
+the machine that invented tracker music shouldn't settle for one square wave. And
+as always: if you run these on <strong>real hardware</strong> — a real A500, a real
+Genesis with a flashcart — I'd love to hear how they behave. That feedback has
+fixed more bugs than any emulator.</p>
+
+<p>May the rosettes favour you. 🌺</p>
