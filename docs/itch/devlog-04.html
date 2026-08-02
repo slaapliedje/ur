@@ -68,6 +68,26 @@ portable C rules engine, byte for byte, across three CPU families: 6502, Z80, an
 
 <p><em>[ add screenshot: 26-amiga-board.png ]</em></p>
 
+<h2>Bonus bug story: the linker that lied for two months</h2>
+<p>While shipping this release I finally chased down why the project's CI had been
+quietly red since July — every failure pointing at one build: the Apple II port's
+<strong>double-hi-res</strong> variant. The cause is a lovely piece of 8-bit
+archaeology. That build's memory map carved out its variable space between the end
+of the program and the C stack — and the program had <em>grown past the boundary
+months ago</em>, making that region mathematically negative in size. The old linker
+everyone has installed just… allowed it, silently letting variables overlap the
+stack's territory. The brand-new linker that CI compiles from source did the
+arithmetic honestly and refused. The machine wasn't broken; the map was, and only
+the newest tools could see it.</p>
+<p>The fix is very Apple II: the double-hi-res screen uses page 2 of video memory,
+which leaves page 1 — a full 8&nbsp;KB hole in the middle of the program — sitting
+empty. The variables now live <em>inside the unused video page</em>, under the
+graphics. Verified the honest way: booted it in an emulated enhanced IIe and played
+the computer with every variable relocated. Board fine, dice fine, green
+destination frames fine.</p>
+
+<p><em>[ add screenshot: 27-apple2-dhgr-highlight.png ]</em></p>
+
 <h2>What's next</h2>
 <p>Polish for the new arrivals: the Genesis has a <strong>YM2612 FM synth</strong>
 sitting idle that deserves a proper lyre arrangement of the hymn, and the Amiga has

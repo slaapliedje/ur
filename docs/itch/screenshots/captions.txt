@@ -38,3 +38,4 @@ mirrors the ColecoVision board above.
 24-amiga-ziggurat.png         - Amiga title: the ziggurat at dusk from the STe-class 4096-colour palette
 25-amiga-move-marker.png      - Amiga: the green destination marker in the move chooser
 26-amiga-board.png            - Amiga board: raised slab, drop shadows, Paula singing underneath
+27-apple2-dhgr-highlight.png  - Apple IIe double-hi-res build: roll 3, move list, green destination frame
