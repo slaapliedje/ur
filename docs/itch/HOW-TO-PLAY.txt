@@ -31,6 +31,8 @@ load it in that machine's emulator, and play.
   ur-tt-*.prg         Atari TT (256-colour look)    - Hatari --machine tt
   ur-falcon-*.prg     Atari Falcon (truecolor look) - Hatari --machine falcon (TOS 4)
   ur-genesis-*.bin    Sega Mega Drive / Genesis     - BlastEm, Genesis Plus GX, MAME
+  ur-amiga-*.adf      Commodore Amiga (bootable)    - amiberry, FS-UAE, WinUAE, MAME
+  ur-amiga-*          (the bare Amiga executable, for your own HDD setup)
 
 (SHA256SUMS.txt lists checksums for every file.)
 
@@ -57,7 +59,7 @@ and is in the separate "-online" C64 and Apple II downloads above.
   CONTROLS
 ----------------------------------------------------------------
 Keyboard machines (Atari 8-bit, C64, Apple II, Atari ST/STe/TT/
-Falcon):
+Falcon, Amiga):
   - Menu: press the number of the option you want.
   - Roll: press any key when prompted.
   - Pick a move: press the number shown next to the move you want.

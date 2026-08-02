@@ -217,8 +217,13 @@ the 6502 (cc65) and Z80 (z88dk).
       green tinted destinations, rosette difficulty menu, and the Hurrian Hymn on the
       **same SN76489 PSG as the SMS** (FM upgrade queued). Verified in MAME (`genesis`)
       + Genesis Plus GX. See [`src/genesis/CLAUDE.md`](src/genesis/CLAUDE.md).
-- [ ] **Commodore Amiga** — the defining 16-bit home computer (OCS/AGA, copper, Paula).
-      Needs amiga-gcc/vbcc; verifies in MAME (`a500`).
+- [x] **Commodore Amiga — playable** (`make amiga` → `build/amiga/ur` hunk exe + a
+      **self-booting `ur.adf`**; AmigaPorts m68k-amigaos-gcc + xdftool). The ST
+      layer ported to its old rival: same 320×200 16-colour carved board + ziggurat
+      title, but coloured from the Amiga's 4096 (the STe palette, ember dusk and
+      all), KS1.3-safe OS calls (custom screen + VANILLAKEY + WaitTOF), and
+      **Paula** singing the Hurrian Hymn through audio.device (FFT-verified).
+      Verified end-to-end in MAME `a500`. See [`src/amiga/CLAUDE.md`](src/amiga/CLAUDE.md).
 - [ ] (later) Sharp X68000, Neo Geo — also 68000, drivers present in MAME.
 
 ## Phase 8 — Polish & release

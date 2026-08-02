@@ -78,6 +78,14 @@ No container required if you install the toolchains directly:
      Java jars, so `java` must be installed).
   `makefiles/genesis.mk` defaults `GDK`/`M68KELF_BIN` to those paths — override
   them if yours differ. `make genesis` skips with a notice when SGDK is absent.
+- **amiga-gcc (Commodore Amiga)** — bebbo's toolchain, now maintained as
+  [`AmigaPorts/m68k-amigaos-gcc`](https://github.com/AmigaPorts/m68k-amigaos-gcc):
+  `git clone` it and `make all PREFIX=$HOME/dev/toolchains/amigaos -j$(nproc)`
+  (no root). If the bundled gdb fails against a modern host GCC, skip it:
+  `echo done > build-*/binutils/_gdb` and re-run `make all`. The ADF packaging
+  needs amitools (`pip install amitools` in any venv; `makefiles/amiga.mk`
+  defaults `XDFTOOL` to `~/dev/toolchains/pyenv/bin/xdftool`). `make amiga`
+  skips with a notice when the compiler is absent.
 
 The `Makefile` finds tools on your `PATH` (`cl65`, `zcc`, host `cc`), so a native
 install and the container are interchangeable for building.
@@ -91,6 +99,7 @@ install and the container are interchangeable for building.
 | Commodore 64 | **VICE** (`x64sc`) | https://vice-emu.sourceforge.io/ |
 | Apple II | **AppleWin** / **MAME** / Virtual ][ | https://github.com/AppleWin/AppleWin |
 | Mega Drive / Genesis | **BlastEm** / **Genesis Plus GX** / **MAME** (`genesis`, the NTSC machine) | https://www.retrodev.com/blastem/ |
+| Amiga | **amiberry** / **FS-UAE** / **MAME** (`a500`; ignore its "not working" warning) | https://github.com/BlitterStudio/amiberry |
 | Networking (all) | **FujiNet-PC** | https://github.com/FujiNetWIFI/fujinet-pc |
 
 **FujiNet-PC** emulates the FujiNet device so you can test networking with no
@@ -124,6 +133,7 @@ make nes           # -> build/nes/ur.nes              (cc65; iNES NROM)
 # --- 16-bit / 68000 era ---
 make st            # -> build/st/ur.prg               (m68k-atari-mint-gcc; +STE/TT/FALCON=1)
 make genesis       # -> build/genesis/ur.bin          (SGDK 2.11; see toolchain note above)
+make amiga         # -> build/amiga/ur + ur.adf       (amiga-gcc + xdftool; see note above)
 make all           # the four primary platforms
 make clean
 ```

@@ -38,6 +38,8 @@ $BUILD/st/ur-ste.prg|ur-ste-$VERSION.prg|Atari STe — 4096-colour palette editi
 $BUILD/st/ur-tt.prg|ur-tt-$VERSION.prg|Atari TT — 256-colour gradient edition; Hatari --machine tt
 $BUILD/st/ur-falcon.prg|ur-falcon-$VERSION.prg|Atari Falcon — truecolor edition; Hatari --machine falcon (TOS 4)
 $BUILD/genesis/ur.bin|ur-genesis-$VERSION.bin|Sega Mega Drive / Genesis — BlastEm / Genesis Plus GX / MAME genesis (cartridge)
+$BUILD/amiga/ur.adf|ur-amiga-$VERSION.adf|Commodore Amiga — self-booting disk; MAME a500 / amiberry / FS-UAE / real hardware (KS1.3+)
+$BUILD/amiga/ur|ur-amiga-$VERSION|Commodore Amiga — the bare AmigaDOS executable (for your own HDD/Workbench setup)
 EOF
 }
 
