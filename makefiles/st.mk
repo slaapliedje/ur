@@ -32,6 +32,8 @@ ST_SOURCES := $(COMMON_SOURCES) $(UR_GAME_SRC) $(wildcard $(SRC_DIR)/st/*.c)
 st: | $(ST_OUT) ## Build the Atari ST (68000; FALCON=1 for the Falcon truecolor build)
 ifeq ($(strip $(wildcard $(SRC_DIR)/st/*.c)),)
 	@echo "[st] no sources yet — add src/st/*.c. (skeleton)"
+else ifeq ($(shell command -v $(ST_CC) 2>/dev/null),)
+	@echo "[st] $(ST_CC) not found — skipping (see docs/development.md). Release bundles mark it NOT BUILT."
 else
 	$(ST_CC) $(ST_FLAGS) -o $(ST_OUT)/$(ST_PRG) $(ST_SOURCES)
 	@echo "[st] built $(ST_OUT)/$(ST_PRG) — Hatari (ST: EmuTOS / Falcon: TOS4 --machine falcon)"
