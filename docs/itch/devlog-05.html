@@ -1,0 +1,95 @@
+<!--
+  itch.io DEVLOG post #5 for "The Royal Game of Ur".
+  HOW TO USE: project dashboard -> Devlog -> Create new post. Suggested title:
+    "v0.1.7 - The IBM PC joins the table, and DOS goes ONLINE"
+  In the post body click "</>" (HTML) and paste everything below this comment.
+  Replace each [ add screenshot: <file> ] line with that image via the editor's
+  image button — the files are staged in docs/itch/screenshots/ in the repo.
+-->
+
+<p>v0.1.7 adds machine number sixteen, and it's the one everybody kept asking
+about: <strong>the IBM PC</strong>. A real-mode MS-DOS build — a 24&nbsp;KB
+<code>UR.EXE</code> that runs on anything from a 286 with VGA to DOSBox on the
+machine you're reading this on. And it doesn't just play locally:
+<strong>DOS is now the fifth platform with FujiNet online play</strong>, joining
+the Atari 8-bit, Coleco Adam, C64, and Apple II at the same server, speaking the
+same wire protocol, in the same cross-platform games.</p>
+
+<h2>The prettiest 24 kilobytes in DOS</h2>
+<p>VGA mode 13h turns out to be the friendliest canvas this project has ever had:
+320&times;200 — exactly the layout every port shares — with a straight
+byte-per-pixel framebuffer (no bitplanes, no attribute clash, no tile maps) and
+<strong>256 colours</strong>. So the PC build takes the Atari TT edition's
+gradient treatment and runs it as its everyday look: a 64-shade night-to-amber
+dusk behind the ziggurat, cell faces lit top-to-bottom through a 32-shade ramp,
+sand fading into the horizon. Sound is the humble PC speaker doing its one-voice
+best — the 3,400-year-old Hurrian Hymn as pure square waves off timer channel 2,
+plus the usual dice-clatter and capture sounds.</p>
+
+<p><em>[ add screenshot: 28-dos-title.png ]</em></p>
+
+<h2>Going online, DOS style</h2>
+<p>How does a 1980s PC reach a modern game server? With a
+<strong>FujiNet</strong>, of course — on the PC it's the RS-232 flavour, an
+ESP32 device that hangs off a COM port. A little driver
+(<code>FUJINET.SYS</code>, from the FujiNet MS-DOS project) loads in
+<code>CONFIG.SYS</code> and exposes the whole thing through a software
+interrupt, INT&nbsp;F5h — very much in the spirit of every DOS network stack
+ever. The game calls the interrupt, the driver frames it over the serial port,
+the FujiNet does TCP to the internet, and suddenly your DOS box is trading
+21-byte state packets with a Go server.</p>
+
+<p><em>[ add screenshot: 29-dos-lobby.png ]</em></p>
+
+<p>The full lobby came along: set your name, set your server, browse the
+leaderboard — your profile even lives on the FujiNet itself, in the same AppKey
+the Atari, Adam, C64, and Apple II builds share, so your name and win count
+follow you between machines. No FujiNet attached? The Online option politely
+tells you what's missing and the game plays locally like any other port.</p>
+
+<h2>Proving it without touching a screwdriver</h2>
+<p>Here's the part I enjoyed far too much. The whole online path was proven with
+<strong>no vintage hardware at all</strong>: FreeDOS booting inside DOSBox-X,
+the real <code>FUJINET.SYS</code> driver loaded from a floppy image, the
+emulator's COM port bridged over TCP to <strong>FujiNet-PC</strong> (the
+firmware compiled as a desktop program, pretending to be the RS-232 adapter),
+and from there out to the live server. Every layer is the genuine article — the
+driver banner even reads the firmware version over the wire and sets the DOS
+clock from the FujiNet's NTP before the game ever starts.</p>
+
+<p><em>[ add screenshot: 30-dos-online-wait.png ]</em></p>
+<p><em>[ add screenshot: 31-dos-online-game.png ]</em></p>
+
+<p>And then: a server-authoritative game of Ur, on DOS, against the server's
+computer opponent — the server rolls, the DOS box picks moves, the opponent's
+pieces march down their lane, captures knock beads back to the tray. Same
+server, same protocol, same games the other four online platforms play. If you
+have a FujiNet RS-232 and a real PC, it should be exactly a
+<code>CONFIG.SYS</code> edit away.</p>
+
+<h2>Also in v0.1.7</h2>
+<p>Everything that landed since the last release rides along on every
+channel:</p>
+<ul>
+<li><strong>Genesis: a real FM hymn.</strong> The title theme moved from the
+PSG to the YM2612 — a plucked-lyre patch programmed register by register, each
+note ringing and decaying like a string. (An FFT caught my first patch producing
+only odd harmonics — a clarinet, not a lyre. The things you learn about FM
+synthesis from a Bronze Age melody.)</li>
+<li><strong>Amiga: the blitter and a three-voice arrangement.</strong> Board
+redraws went from a visible crawl to a blink, and Paula now plays the hymn as a
+plucked melody with an octave double and a deep drone underneath — proper
+accompaniment for the oldest written song.</li>
+<li><strong>Captured pieces walk home.</strong> On the Genesis, Master System,
+and Game Gear, a captured token now visibly glides back to its owner's tray
+instead of teleporting.</li>
+<li><strong>Apple II double-hi-res fix.</strong> A linker-config bug that only
+newer cc65 releases catch — the build's variables were being squeezed into a
+negative-sized memory region. Two months of red CI, one line of config.</li>
+</ul>
+
+<p>Sixteen machines, four CPU families — 6502, Z80, 68000, and now x86 — five of
+them online against one server. The board is 4,600 years old; it has never been
+this connected. As ever: it's free, it's GPL, and the source (including the
+whole DOS FujiNet writeup) is on
+<a href="https://github.com/slaapliedje/ur">GitHub</a>.</p>

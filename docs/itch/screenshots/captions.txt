@@ -39,3 +39,7 @@ mirrors the ColecoVision board above.
 25-amiga-move-marker.png      - Amiga: the green destination marker in the move chooser
 26-amiga-board.png            - Amiga board: raised slab, drop shadows, Paula singing underneath
 27-apple2-dhgr-highlight.png  - Apple IIe double-hi-res build: roll 3, move list, green destination frame
+28-dos-title.png              - MS-DOS title: the ziggurat under a 64-shade VGA dusk gradient
+29-dos-lobby.png              - DOS lobby menu: Online, name, host, leaderboard - the fifth FujiNet platform
+30-dos-online-wait.png        - DOS online under FreeDOS + FUJINET.SYS: joined the live server, AI countdown
+31-dos-online-game.png        - A server-authoritative game ON DOS: server's roll, green destination highlight
