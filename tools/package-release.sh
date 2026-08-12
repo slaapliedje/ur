@@ -40,7 +40,7 @@ $BUILD/st/ur-falcon.prg|ur-falcon-$VERSION.prg|Atari Falcon — truecolor editio
 $BUILD/genesis/ur.bin|ur-genesis-$VERSION.bin|Sega Mega Drive / Genesis — BlastEm / Genesis Plus GX / MAME genesis (cartridge)
 $BUILD/amiga/ur.adf|ur-amiga-$VERSION.adf|Commodore Amiga — self-booting disk; MAME a500 / amiberry / FS-UAE / real hardware (KS1.3+)
 $BUILD/amiga/ur|ur-amiga-$VERSION|Commodore Amiga — the bare AmigaDOS executable (for your own HDD/Workbench setup)
-$BUILD/dos/ur.exe|ur-dos-$VERSION.exe|MS-DOS / IBM PC — real-mode .exe, VGA + PC speaker; DOSBox or real hardware
+$BUILD/dos/ur.exe|ur-dos-$VERSION.exe|MS-DOS / IBM PC — real-mode .exe, VGA + PC speaker + FujiNet online (RS-232, needs FUJINET.SYS); DOSBox or real hardware
 EOF
 }
 

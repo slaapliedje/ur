@@ -21,8 +21,11 @@ exposes a simple device interface.
 - **Operations:** open, read, write, close, status — the same conceptual model on
   every platform.
 - **Transport differs, API doesn't:** SIO bus on Atari, SmartPort on Apple II, IEC
-  bus on C64, **AdamNet** (serial, RJ12) on the Coleco Adam. `fujinet-lib` hides
-  these differences, so our client code is the same shape across platforms.
+  bus on C64, **AdamNet** (serial, RJ12) on the Coleco Adam, and **RS-232 + the
+  INT F5h `FUJINET.SYS` driver** on MS-DOS (the fifth online platform — see
+  [`src/dos/CLAUDE.md`](../dos/CLAUDE.md) for why it bypasses fujinet-lib's bus
+  layer). `fujinet-lib` hides these differences, so our client code is the same
+  shape across platforms.
 
 Use **[fujinet-lib](https://github.com/FujiNetWIFI/fujinet-lib)** for the `N:`
 calls — it is multi-toolchain and ships all four of our targets (atari, apple2,

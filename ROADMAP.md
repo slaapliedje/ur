@@ -225,19 +225,26 @@ the 6502 (cc65) and Z80 (z88dk).
       **Paula** singing the Hurrian Hymn through audio.device (FFT-verified).
       Verified end-to-end in MAME `a500`. See [`src/amiga/CLAUDE.md`](src/amiga/CLAUDE.md).
 - [x] **MS-DOS / IBM PC — playable** (`make dos` → `build/dos/ur.exe`; **Open
-      Watcom v2** `owcc -bdos`, small model — a ~16 KB real-mode MZ exe, and the
+      Watcom v2** `owcc -bdos`, small model — a ~24 KB real-mode MZ exe, and the
       **fourth CPU family**: x86 joins the 6502, Z80, 68000). VGA **mode 13h**
       (one byte/pixel — the friendliest framebuffer of any port) renders the ST
       board with the **TT build's 256-colour gradient ramps** (64-shade dusk sky,
       32-shade lit cell faces, sand ramp); the **PC speaker** (PIT ch2) plays the
       hymn (zero-crossing-verified: the B4–C5–D5–E5–F5 tetrachord) + SFX; ESC
-      quits to DOS. Built with the same toolchain as fujinet-lib's `msdos` target,
-      so DOS is groomed to become the **fifth FujiNet online platform**. Verified
-      end-to-end in DOSBox. See [`src/dos/CLAUDE.md`](src/dos/CLAUDE.md).
+      quits to DOS. Verified end-to-end in DOSBox.
+      See [`src/dos/CLAUDE.md`](src/dos/CLAUDE.md).
+- [x] **DOS FujiNet online — the FIFTH online platform.** The default `ur.exe`
+      carries the full online lobby (Online / name / host / leaderboard, AppKey
+      profile, lobby handoff) over the same `N:TCP` wire protocol. DOS talks to
+      FujiNet through `FUJINET.SYS` (the fujinet-msdos RS-232 driver) via
+      **software INT F5h**; `src/dos/urnet.c` drives the network device with the
+      canonical field-descriptor contract (fujinet-lib 4.11.2's msdos bus layer
+      predates it — appkeys still go through the lib). **Proven end-to-end
+      against the live server** in a fully emulated rig — FujiNet-PC (RS232
+      build, BoIP TCP) + DOSBox-X nullmodem + FreeDOS + FUJINET.SYS — with real
+      JOIN/ROLL/MOVE/STATE round trips vs the server's AI fallback. Fails
+      gracefully with no driver loaded. See [`src/dos/CLAUDE.md`](src/dos/CLAUDE.md).
 - [ ] (later) Sharp X68000, Neo Geo — also 68000, drivers present in MAME.
-- [ ] (later) **DOS FujiNet online** — port the `src/net` online loop against
-      fujinet-lib `msdos` (same Watcom toolchain; needs the PC FujiNet transport
-      story).
 
 ## Phase 8 — Polish & release
 - [x] **Visual parity across platforms** — all 11 targets now share the horizontal

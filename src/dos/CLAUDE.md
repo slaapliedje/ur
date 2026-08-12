@@ -1,19 +1,23 @@
-# src/dos — MS-DOS / IBM PC platform layer (offline port)
+# src/dos — MS-DOS / IBM PC platform layer (the FIFTH FujiNet online port)
 
-> **Status: playable — the fourth CPU family.** x86 real mode joins the 6502,
-> Z80, and 68000. `src/dos/main.c` is the Atari ST layer ported to **VGA mode
-> 13h** (320×200, 256 colours, one byte per pixel at A000:0000 — the shared
-> layout size with the friendliest pixel format of any port) and upgraded with
-> the **Atari TT build's gradient ramps**, which mode 13h's DAC does natively:
-> a 64-shade night→dusk-amber sky, 32-shade lit-from-top cell faces, a 16-shade
-> sand ramp. Sound is the **PC speaker** (PIT channel 2 square waves — 1-bit
-> like the Apple II, but with a free-running timer instead of cycle counting):
-> the Hurrian Hymn on the title, roll/capture/rosette/win SFX. Keyboard
-> number-key input like the other computer ports; green destination
-> highlights; ESC at the title exits to DOS. No FujiNet **yet** — but
-> fujinet-lib has an `msdos` target built with this same toolchain, so DOS is
-> a real candidate to become the *fifth online platform*. `make dos` →
-> `build/dos/ur.exe` (a ~16 KB real-mode MZ executable).
+> **Status: playable, local + FujiNet online — the fourth CPU family.** x86
+> real mode joins the 6502, Z80, and 68000. `src/dos/main.c` is the Atari ST
+> layer ported to **VGA mode 13h** (320×200, 256 colours, one byte per pixel
+> at A000:0000 — the shared layout size with the friendliest pixel format of
+> any port) and upgraded with the **Atari TT build's gradient ramps**, which
+> mode 13h's DAC does natively: a 64-shade night→dusk-amber sky, 32-shade
+> lit-from-top cell faces, a 16-shade sand ramp. Sound is the **PC speaker**
+> (PIT channel 2 square waves — 1-bit like the Apple II, but with a
+> free-running timer instead of cycle counting): the Hurrian Hymn on the
+> title, roll/capture/rosette/win SFX. Keyboard number-key input like the
+> other computer ports; green destination highlights; ESC at the title exits
+> to DOS. **FujiNet online is baked into the default binary** (like the
+> Atari/Adam): the full lobby menu (Online / Set name / Set host / Top ten),
+> the shared AppKey profile, the `N:TCP` server-authoritative loop — **proven
+> end-to-end against the live server** (see the rig below). Without a driver
+> the Online option degrades to a message. `make dos` → `build/dos/ur.exe`
+> (a ~24 KB real-mode MZ executable; `ONLINE=0` builds a lib-less local-only
+> variant).
 
 > Parent context: [`/CLAUDE.md`](../../CLAUDE.md). This layer implements the
 > `plat_*` contract from [`src/common`](../common/CLAUDE.md) via the shared
@@ -38,9 +42,64 @@
 Built with **owcc** (Watcom's POSIX-style driver): `-bdos -mcmodel=s -O2
 -fno-stack-check` → a 16-bit real-mode MZ `.exe`. Install = untar
 `ow-snapshot.tar.xz` anywhere (no root); `dos.mk` sets `WATCOM`, `INCLUDE`,
-and `PATH` itself. Chosen deliberately: **fujinet-lib's `msdos` target is
-built with the same wcc/wlib**, so a future online build links against it
-without a second toolchain.
+and `PATH` itself. Chosen deliberately: **fujinet-lib's `msdos` target and
+the FUJINET.SYS driver are built with the same wcc/wlib** — one toolchain for
+the whole stack.
+
+## FujiNet online (how DOS talks to a FujiNet)
+
+The PC has no SIO/IEC/AdamNet bus; FujiNet for the PC is the **RS-232
+adapter** on a COM port. The stack:
+
+- **`FUJINET.SYS`** (from [fujinet-msdos](https://github.com/FujiNetWIFI/fujinet-msdos);
+  a prebuilt `.sys` is on its releases page) loads in `CONFIG.SYS`
+  (`DEVICE=FUJINET.SYS FUJI_PORT=1 FUJI_BPS=9600`), speaks the FUJICOM SLIP
+  protocol over the UART, and installs a software **INT F5h** API.
+- The game calls INT F5 with the **canonical register contract**
+  (`include/fuji_f5.h` upstream): DL=direction, **DH=field descriptor**
+  (FUJI_FIELD_*), AL=device, AH=command, CX=aux12, SI=aux34, ES:BX/DI=payload.
+- ⚠️ **fujinet-lib 4.11.2's msdos bus layer predates the DH field descriptor**
+  — its network calls reach the FujiNet with zero aux fields ("Insufficient
+  open paramaters: 0" in the firmware log) even though its payload-only appkey
+  calls work fine. So `src/dos/urnet.c` drives the network device (0x71)
+  directly with the canonical contract (patterns after upstream
+  `ncopy/fujifs.c`: OPEN = write 256-byte devicespec with FIELD_A1_A2 aux
+  mode/trans; READ/WRITE = FIELD_B12 with the length in aux12; STATUS = read
+  the 4-byte {len,conn,err} block), while the **appkey profile still goes
+  through fujinet-lib** (`fuji_*_appkey` — proven compatible).
+- **Driver detection**: `_dos_getvect(0xF5) != 0` gates every FujiNet touch
+  (a null vector on bare DOS would crash on call). Under emulators the vector
+  may be a dummy IRET — then the INT F5 result byte ('C'/'E') check fails the
+  call cleanly instead. Either way: message, no hang.
+
+`online_game()` itself is the C64's, re-skinned for the VGA `text()` UI: JOIN →
+render STATE snapshots → send ROLL/MOVE intents; profile + lobby-handoff
+AppKeys; the `/top` leaderboard over `N:HTTP`.
+
+### The emulated end-to-end rig (all pieces, no hardware)
+
+Proven 2026-08-12 against the live server (`thefnords.com:1234`, the server's
+60 s AI fallback as the opponent — full JOIN/ROLL/MOVE/STATE round trips):
+
+1. **FujiNet-PC for RS232**: in fujinet-firmware, `./build.sh -p RS232 -b -y`
+   → `build/dist/fujinet`. In `fnconfig.ini` set `[BOIP] enabled=1 port=1985`
+   (leave `[Serial] port=` empty) — the RS232 bus then listens on TCP :1985
+   as a raw byte pipe (BoIP, né BeckerSocket).
+2. **Guest DOS floppy**: FreeDOS 1.3 boot floppy (`144m/x86BOOT.img` from
+   FD13-FloppyEdition), then via mtools: replace `FDCONFIG.SYS` with our
+   DEVICE line + `SHELL=\FREEDOS\BIN\COMMAND.COM ... /P=\FDAUTO.BAT`, add
+   `FUJINET.SYS` + `UR.EXE` (CRLF line endings!).
+3. **DOSBox-X** bridges guest COM1 to the BoIP listener:
+   `serial1=nullmodem server:127.0.0.1 port:1985 transparent:1`, autoexec
+   `imgmount a urboot.img -t floppy` + `boot a:`.
+4. Boot messages prove the link: the driver banner reports the **firmware
+   version read over the wire** and sets the DOS clock from FujiNet NTP.
+
+Rig gotchas: DOSBox-X under Xvfb needs `output=surface` but its window-id
+`import` captures go SOLID BLACK after the guest's mode switch (same trap as
+Hatari) — **capture the root window**. Killed DOSBox-X instances can leave a
+`kdialog` orphan holding the floppy image (`lsof`, kill it). The guest-boot
+UART reset drops/reconnects the nullmodem once — harmless.
 
 ## Gotchas (all hit during bring-up)
 
@@ -79,9 +138,8 @@ without a second toolchain.
 
 ### Still to do
 
-1. **FujiNet online** — fujinet-lib `msdos` (same Watcom toolchain) would make
-   DOS the fifth online platform; needs the `src/net` online loop ported and a
-   FujiNet-over-serial/parallel story for the PC.
-2. **Adlib/OPL2 FM** as an optional upgrade over the speaker (we already speak
+1. **Adlib/OPL2 FM** as an optional upgrade over the speaker (we already speak
    FM from the Genesis YM2612 work), with speaker fallback.
-3. Token glide / dice animation (`plat_animate` is a stub, like the ST's).
+2. Token glide / dice animation (`plat_animate` is a stub, like the ST's).
+3. Real-hardware online test (a physical FujiNet RS-232 on a real PC's COM
+   port) — the emulated chain is proven; hardware should be config-only.

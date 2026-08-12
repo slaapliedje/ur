@@ -39,19 +39,23 @@ and [`src/amiga/CLAUDE.md`](src/amiga/CLAUDE.md).
 …and a **fourth CPU family — x86 real mode**: the **MS-DOS / IBM PC** port
 (`make dos`, built with **Open Watcom v2** `owcc` into a 16-bit real-mode `.exe`,
 run in DOSBox): VGA mode 13h with the TT-style 256-colour gradient look + PC-speaker
-sound. Local-only today, but deliberately built with the same toolchain as
-fujinet-lib's `msdos` target, so DOS could become the *fifth FujiNet online
-platform*. See [`src/dos/CLAUDE.md`](src/dos/CLAUDE.md).
+sound — **and the FIFTH FujiNet online platform**: the default binary carries the
+full online lobby (same `N:TCP` wire protocol + server), talking INT F5h to the
+`FUJINET.SYS` RS-232 driver, proven end-to-end against the live server in an
+emulated rig (FujiNet-PC RS232 + DOSBox-X + FreeDOS). See
+[`src/dos/CLAUDE.md`](src/dos/CLAUDE.md).
 
 All four targets now have a working platform layer with local play **and FujiNet
 online**: **Atari** (carved board + PMG two-tone tokens + DLI sheen + POKEY),
 **Adam** (carved Graphics-II board + sprite tokens + SN76489), **C64** (carved
 multicolor board + two-tone sprite-token showcase + SID), and
-**Apple II** (lo-res *and* double-hi-res 16-colour boards + 1-bit speaker). Every
-target speaks the same `N:TCP` wire protocol to the Go server. The Atari and Adam
-online paths are the most exercised end-to-end; the C64/Apple II online builds are
-verified to boot + fail-gracefully without FujiNet (full cross-play needs FujiNet +
-the server). See each `src/<platform>/CLAUDE.md` and [`ROADMAP.md`](ROADMAP.md).
+**Apple II** (lo-res *and* double-hi-res 16-colour boards + 1-bit speaker) — plus a
+**fifth online platform, MS-DOS** (VGA + PC speaker, FujiNet RS-232 via INT F5h).
+Every target speaks the same `N:TCP` wire protocol to the Go server. The Atari,
+Adam, and DOS online paths are exercised end-to-end; the C64/Apple II online builds
+are verified to boot + fail-gracefully without FujiNet (full cross-play needs
+FujiNet + the server). See each `src/<platform>/CLAUDE.md` and
+[`ROADMAP.md`](ROADMAP.md).
 
 This order deliberately inverts the usual historical priority: back in the day,
 games tended to target the Apple II and C64 first — and often skipped the Atari and

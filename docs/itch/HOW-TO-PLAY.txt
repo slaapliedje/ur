@@ -53,8 +53,11 @@ show), then move one piece that many squares.
 
 Modes: 2-player hot-seat, or 1 player vs the computer (Easy /
 Normal / Hard). FujiNet online play (against the game server, and
-cross-platform) is built into the Atari and Coleco Adam binaries,
-and is in the separate "-online" C64 and Apple II downloads above.
+cross-platform) is built into the Atari, Coleco Adam, and MS-DOS
+binaries, and is in the separate "-online" C64 and Apple II
+downloads above. On DOS, online needs the FujiNet RS-232 adapter
+plus FUJINET.SYS loaded in CONFIG.SYS (from the fujinet-msdos
+project); without it the game plays locally as normal.
 
 ----------------------------------------------------------------
   CONTROLS

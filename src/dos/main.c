@@ -12,9 +12,14 @@
  * vertical-retrace flag (port 3DAh, ~70 Hz in mode 13h).
  *
  * Built with Open Watcom v2 (owcc -bdos, small model) into a real-mode MZ .exe;
- * runs in DOSBox or on anything PC-compatible with VGA. fujinet-lib has an msdos
- * target built with this same toolchain, so a FujiNet online build is a real
- * future option — this port ships local-only first, like every new port.
+ * runs in DOSBox or on anything PC-compatible with VGA.
+ *
+ * FujiNet online (-DUR_ONLINE, the default build) makes DOS the FIFTH FujiNet
+ * platform: fujinet-lib's msdos target (same Watcom toolchain) calls software
+ * INT F5h, which the fujinet-msdos driver (FUJINET.SYS in CONFIG.SYS) bridges
+ * to a FujiNet RS-232 adapter. Same N:TCP wire protocol and server as the
+ * Atari/Adam/C64/Apple II. With no driver loaded the INT F5 vector check (and
+ * the lib's own error paths) fail gracefully back to local play.
  */
 #include <i86.h>
 #include <conio.h>
@@ -24,6 +29,13 @@
 #include "ur_game.h"          /* shared controller + plat.h + ur.h */
 #include "music.h"            /* the Hurrian Hymn melody data (shared) */
 #include "font8.h"            /* shared 1bpp 8x8 font (from src/sms; -I in dos.mk) */
+
+#ifdef UR_ONLINE
+#include <dos.h>              /* _dos_getvect: is an INT F5 handler installed? */
+#include "proto.h"            /* the cross-platform wire protocol (same as Atari) */
+#include "urnet.h"            /* N: network over INT F5 directly (see urnet.h why) */
+#include "fujinet-fuji.h"     /* fuji_*_appkey: persistent profile on the FujiNet SD */
+#endif
 
 #define SCRW 320
 #define SCRH 200
@@ -42,6 +54,27 @@ static const uint8_t base_pal[16][3] = {   /* 6-bit RGB */
     {34, 38, 34}, { 8, 59,  8}, { 0,  4,  8}, {55, 29,  8},
     {38, 13,  4}, {46, 34,  8}, {63, 55, 21}, {63, 59, 50}
 };
+
+#ifdef UR_ONLINE
+#define UR_DEFAULT_HOST "thefnords.com"   /* the Ur server; runtime-configurable (menu 5) */
+
+/* FujiNet AppKey (persistent SD storage) for the local player profile. 0x5552='UR'.
+ * Mirrors the Atari/Adam/C64/Apple II builds so a profile set on one shows on all. */
+#define UR_CREATOR_ID  0x5552u
+#define UR_APP_ID      0x01
+#define UR_KEY_PROFILE 0x00
+/* FujiNet lobby handoff: the lobby writes the chosen server URL into creator
+ * 0x0001 / app 0x01 / key = our lobby appkey (UR_APPKEY=6). */
+#define UR_LOBBY_CREATOR 0x0001u
+#define UR_LOBBY_APP     0x01
+#define UR_LOBBY_APPKEY  0x06
+
+static char     g_name[UR_NAME_LEN + 1] = "";   /* player name + NUL; empty = unset */
+static uint16_t g_wins  = 0;                     /* games won vs the computer        */
+static char     g_host[33] = UR_DEFAULT_HOST;    /* server host/IP (<=32, persisted) */
+static char     g_net_url[64];                   /* N:TCP://<host>:1234/             */
+static char     g_top_url[64];                   /* N:HTTP://<host>:8080/top         */
+#endif
 
 static uint8_t __far *fbuf;   /* A000:0000 — one byte per pixel */
 
@@ -146,6 +179,14 @@ static void text_u(int px, int py, uint8_t v, uint16_t c)   /* 0..99 */
     b[n++] = (char)('0' + v % 10); b[n] = 0;
     text(px, py, b, c);
 }
+#ifdef UR_ONLINE
+static void text_u16(int px, int py, uint16_t v, uint16_t c)   /* 0..65535 */
+{
+    char b[6]; int n = 0, i;
+    do { b[n++] = (char)('0' + v % 10); v /= 10; } while (v);
+    for (i = n - 1; i >= 0; i--, px += 8) glyph(px, py, b[i], c);
+}
+#endif
 
 /* ---- board geometry (shared with every port) --------------------------- */
 #define BX 32                    /* board left (px)                      */
@@ -305,9 +346,12 @@ static void dos_music_note(unsigned char midi, unsigned char eighths)
     vbl((int)eighths * MUS_EIGHTH);
     spk_off(); vbl(1);                     /* note-off gap (articulation) */
 }
-static void play_hymn(void)                /* once on the title; skippable by a key */
+static uint8_t g_played_music = 0;
+static void play_hymn(void)                /* once at boot; skippable by a key */
 {
     uint16_t i;
+    if (g_played_music) return;            /* not on every return to the title */
+    g_played_music = 1;
     snd_silence();
     for (i = 0; i < ur_hymn_len; i++) {
         if (kbhit()) break;                /* key waiting -> skip (don't consume it) */
@@ -329,17 +373,22 @@ static void sfx_roll(void)                 /* dice rattle: jittered low clatter 
     spk_off();
 }
 
-static void sfx_for_result(const ur_move_result *res)
+static void sfx_capture(void)              /* falling clatter (no noise channel) */
 {
     int i;
+    for (i = 0; i < 8; i++) { spk_tone((uint16_t)(3600 + i * 260)); vbl(1); }
+    spk_off();
+}
+static void sfx_score(void)   { sfx_tone(1814,7); sfx_tone(1212,12); }
+static void sfx_rosette(void) { sfx_tone(2032,6); sfx_tone(1623,6); sfx_tone(1355,10); }
+
+static void sfx_for_result(const ur_move_result *res)
+{
     if (res->won)           { sfx_tone(2032,8); sfx_tone(1518,8); sfx_tone(1012,16); }
-    else if (res->captured) {                   /* falling clatter (no noise channel) */
-        for (i = 0; i < 8; i++) { spk_tone((uint16_t)(3600 + i * 260)); vbl(1); }
-        spk_off();
-    }
-    else if (res->scored)   { sfx_tone(1814,7); sfx_tone(1212,12); }
-    else if (res->rosette)  { sfx_tone(2032,6); sfx_tone(1623,6); sfx_tone(1355,10); }
-    else                    { sfx_tone(1814,5); }
+    else if (res->captured) sfx_capture();
+    else if (res->scored)   sfx_score();
+    else if (res->rosette)  sfx_rosette();
+    else                    sfx_tone(1814,5);
 }
 
 void    plat_roll(uint8_t roll) { (void)roll; sfx_roll(); }
@@ -407,6 +456,357 @@ uint8_t plat_pick_level(void)
     return (uint8_t)(k - '1');     /* UR_AI_EASY/NORMAL/HARD = 0/1/2 */
 }
 
+#ifdef UR_ONLINE
+/* ---- FujiNet online play (N:TCP, server-authoritative) ------------------ */
+/*
+ * Identical model and wire protocol to the Atari/Adam/C64/Apple II: the server
+ * is authoritative, the client sends JOIN/ROLL/MOVE intents and renders the
+ * STATE snapshots it sends back. fujinet-lib msdos rides software INT F5h,
+ * provided by FUJINET.SYS (the fujinet-msdos RS-232 driver) — so before any
+ * lib call we check that *something* hooks INT F5. On a machine without the
+ * driver the vector is null (real DOS) or a dummy IRET (DOSBox); the null
+ * check catches the first, and the lib's status-byte checks catch the second
+ * (an IRET echoes the device byte back in AL, which is not a valid 'C'/'E'/'N'
+ * result) — either way the Online option degrades to a message, never a hang.
+ */
+
+static int fn_present(void)               /* is an INT F5 handler installed? */
+{
+    return _dos_getvect(0xF5) != 0;
+}
+
+static char *url_append(char *d, const char *s)
+{
+    while (*s) *d++ = *s++;
+    return d;
+}
+
+static int is_host_char(char c)
+{
+    return (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '.' || c == '-';
+}
+
+/* Build the N:TCP / N:HTTP device specs from the configured host. Ports fixed. */
+static void build_urls(void)
+{
+    char *p;
+    p = g_net_url;
+    p = url_append(p, "N:TCP://");
+    p = url_append(p, g_host);
+    p = url_append(p, ":1234/");
+    *p = 0;
+    p = g_top_url;
+    p = url_append(p, "N:HTTP://");
+    p = url_append(p, g_host);
+    p = url_append(p, ":8080/top");
+    *p = 0;
+}
+
+/* Load name + wins + host from our appkey. 0 if no FujiNet/SD (keeps defaults). */
+static int profile_load(void)
+{
+    uint8_t  buf[MAX_APPKEY_LEN + 2];
+    uint16_t cnt = 0;
+    unsigned char i, n;
+
+    if (!fn_present()) return 0;
+    fuji_set_appkey_details(UR_CREATOR_ID, UR_APP_ID, DEFAULT);
+    if (!fuji_read_appkey(UR_KEY_PROFILE, &cnt, buf) || cnt < UR_NAME_LEN + 2)
+        return 0;
+    /* layout: name[UR_NAME_LEN] (NUL-padded), wins (2), hostlen (1), host[] */
+    n = 0;
+    for (i = 0; i < UR_NAME_LEN; i++) {
+        char ch = (char)buf[i];
+        if (ch == 0) break;
+        if ((ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == ' ')
+            g_name[n++] = ch;
+    }
+    while (n > 0 && g_name[n - 1] == ' ') n--;
+    g_name[n] = 0;
+    g_wins = (uint16_t)(buf[UR_NAME_LEN] | ((uint16_t)buf[UR_NAME_LEN + 1] << 8));
+    if (cnt >= UR_NAME_LEN + 3) {
+        unsigned char hl = buf[UR_NAME_LEN + 2];
+        if (hl > 0 && hl <= 32 && (uint16_t)(UR_NAME_LEN + 3 + hl) <= cnt) {
+            for (i = 0; i < hl; i++)
+                g_host[i] = (char)buf[UR_NAME_LEN + 3 + i];
+            g_host[hl] = 0;
+        }
+    }
+    return 1;
+}
+
+/* Persist name + wins + host. Silently no-ops if no FujiNet is attached. */
+static void profile_save(void)
+{
+    uint8_t buf[UR_NAME_LEN + 3 + 32];
+    unsigned char hl = 0, nl = 0, i;
+
+    if (!fn_present()) return;
+    while (g_name[nl] && nl < UR_NAME_LEN) nl++;
+    for (i = 0; i < UR_NAME_LEN; i++)
+        buf[i] = (i < nl) ? (uint8_t)g_name[i] : 0;
+    buf[UR_NAME_LEN]     = (uint8_t)(g_wins & 0xFF);
+    buf[UR_NAME_LEN + 1] = (uint8_t)(g_wins >> 8);
+    while (g_host[hl] && hl < 32) hl++;
+    buf[UR_NAME_LEN + 2] = hl;
+    for (i = 0; i < hl; i++)
+        buf[UR_NAME_LEN + 3 + i] = (uint8_t)g_host[i];
+    fuji_set_appkey_details(UR_CREATOR_ID, UR_APP_ID, DEFAULT);
+    fuji_write_appkey(UR_KEY_PROFILE, (uint16_t)(UR_NAME_LEN + 3 + hl), buf);
+}
+
+/* If the lobby launched us, parse the chosen server's host out of its handoff
+ * AppKey (e.g. "tcp://host:1234/") into g_host. Returns 1 if one was found. */
+static int lobby_host_from_appkey(void)
+{
+    uint8_t  buf[MAX_APPKEY_LEN + 2];
+    uint16_t cnt = 0;
+    unsigned char i, j, start = 0, found = 0;
+
+    if (!fn_present()) return 0;
+    fuji_set_appkey_details(UR_LOBBY_CREATOR, UR_LOBBY_APP, DEFAULT);
+    if (!fuji_read_appkey(UR_LOBBY_APPKEY, &cnt, buf) || cnt == 0)
+        return 0;
+    for (i = 0; (uint16_t)(i + 2) < cnt; i++)
+        if (buf[i] == ':' && buf[i + 1] == '/' && buf[i + 2] == '/') {
+            start = (unsigned char)(i + 3); found = 1; break;
+        }
+    if (!found) return 0;
+    j = 0;
+    for (i = start; i < cnt && j < 32; i++) {
+        if (buf[i] == ':' || buf[i] == '/') break;
+        g_host[j++] = (char)buf[i];
+    }
+    if (j == 0) return 0;
+    g_host[j] = 0;
+    return 1;
+}
+
+/* Status line on the shared message row (works over the board + menu screens). */
+static void ol_status(const char *s)
+{
+    frectw(0, 158, SCRW, 10, C_BG);
+    text(8, 158, s, C_WHITE);
+}
+
+/* Field editor: ENTER confirms, BACKSPACE deletes. hostmode allows '.'/'-';
+ * letters are upper-cased either way (the font is uppercase-only, and both DNS
+ * names and player names are case-insensitive here). Saves the profile. */
+static void edit_field(const char *prompt, char *dest, unsigned char maxlen,
+                       int hostmode)
+{
+    char tmp[40];
+    unsigned char len = 0, i;
+    int c;
+
+    while (dest[len] && len < maxlen) { tmp[len] = dest[len]; len++; }
+
+    clr(C_BG);
+    text(8, 8, prompt, C_GOLD);
+    text(8, 24, hostmode ? "LETTERS DIGITS . -" : "A-Z 0-9 SPACE", C_GREY);
+    text(8, 34, "ENTER = OK  BACKSPACE = DELETE", C_GREY);
+
+    for (;;) {
+        frectw(0, 56, SCRW, 10, C_BG);
+        for (i = 0; i < len; i++) glyph(8 + i * 8, 56, tmp[i], C_WHITE);
+        glyph(8 + len * 8, 56, '_', C_GOLD);
+        c = waitkey();
+        if (c == '\r' || c == '\n') break;
+        if (c == 8) { if (len) len--; continue; }   /* backspace */
+        if (len >= maxlen) continue;
+        {
+            char ch = (char)c;
+            if (ch >= 'a' && ch <= 'z') ch = (char)(ch - 32);
+            if (hostmode) {
+                if (is_host_char(ch)) tmp[len++] = ch;
+            } else if ((ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == ' ') {
+                tmp[len++] = ch;
+            }
+        }
+    }
+    tmp[len] = 0;
+    for (i = 0; i <= len; i++) dest[i] = tmp[i];
+    if (hostmode) build_urls();
+    profile_save();
+}
+
+/* Fetch the compact /top leaderboard over N:HTTP and show it: a count byte then
+ * up to 10 records of name[UR_NAME_LEN] + wins (uint16 LE). */
+static void show_leaderboard(void)
+{
+    uint8_t  buf[128];
+    uint16_t bw;
+    uint8_t  conn, err;
+    int16_t  n = 0;
+    unsigned char count, i, j, base;
+    char name[UR_NAME_LEN + 1];
+    uint16_t wins;
+
+    clr(C_BG);
+    text(8, 8, "LEADERBOARD", C_GOLD);
+
+    if (!fn_present() || urnet_open(g_top_url, 4 /* HTTP GET */, 0) != URNET_OK) {
+        text(8, 28, "COULD NOT REACH THE SERVER.", C_WHITE);
+        text(8, 44, "NEEDS FUJINET.SYS + A FUJINET,", C_GREY);
+        text(8, 54, "AND THE UR SERVER REACHABLE.", C_GREY);
+        text(8, 190, "PRESS A KEY TO RETURN", C_SHELL);
+        (void)waitkey();
+        return;
+    }
+    for (i = 0; i < 100; i++) {
+        if (urnet_status(&bw, &conn, &err) != URNET_OK) break;
+        if (bw > 0) { n = urnet_read(buf, sizeof(buf)); break; }
+        if (conn == 0) break;
+        vbl(3);
+    }
+    urnet_close();
+
+    if (n < 1) {
+        text(8, 28, "NO REPLY FROM SERVER.", C_WHITE);
+    } else if (buf[0] == 0) {
+        text(8, 28, "NO GAMES RECORDED YET.", C_WHITE);
+    } else {
+        count = buf[0];
+        text(8, 24, "#  NAME      WINS", C_GREY);
+        for (i = 0; i < count && i < 10; i++) {
+            int y = 36 + i * 10;
+            base = (unsigned char)(1 + i * (UR_NAME_LEN + 2));
+            if ((int16_t)(base + UR_NAME_LEN + 2) > n) break;
+            for (j = 0; j < UR_NAME_LEN; j++) name[j] = (char)buf[base + j];
+            name[UR_NAME_LEN] = 0;
+            wins = (uint16_t)(buf[base + UR_NAME_LEN] |
+                              ((uint16_t)buf[base + UR_NAME_LEN + 1] << 8));
+            text_u(8, y, (uint8_t)(i + 1), C_GOLD);
+            text(32, y, name, C_SHELL);
+            text_u16(112, y, wins, C_WHITE);
+        }
+    }
+    text(8, 190, "PRESS A KEY TO RETURN", C_SHELL);
+    (void)waitkey();
+}
+
+/* Poll for the next STATE. 1 = got one, 0 = disconnected/error, -1 = key pressed. */
+static int8_t read_state(ur_snapshot *snap)
+{
+    uint8_t  buf[UR_STATE_MSG_LEN];
+    uint16_t bw;
+    uint8_t  conn, err;
+    int16_t  n;
+
+    for (;;) {
+        if (kbhit()) { (void)getch(); return -1; }
+        if (urnet_status(&bw, &conn, &err) != URNET_OK) return 0;
+        if (bw >= UR_STATE_MSG_LEN) break;
+        if (conn == 0) return 0;
+        vbl(3);
+    }
+    n = urnet_read(buf, UR_STATE_MSG_LEN);
+    if (n < (int16_t)UR_STATE_MSG_LEN) return 0;
+    return ur_proto_decode_state(buf, (uint8_t)n, snap) ? 1 : 0;
+}
+
+/* Wait for the first STATE, counting down to the server's AI fallback. 1 = got a
+ * snapshot, 0 = disconnected, -1 = key pressed (play the computer locally). */
+static int8_t online_wait(ur_snapshot *snap)
+{
+    uint8_t  buf[UR_STATE_MSG_LEN];
+    uint16_t bw;
+    uint8_t  conn, err;
+    int16_t  n;
+    unsigned char secs = 60, ticks = 0;
+
+    text(8, 180, "COMPUTER JOINS IN", C_GREY);
+    text_u(152, 180, secs, C_WHITE);
+    for (;;) {
+        if (kbhit()) { (void)getch(); return -1; }
+        if (urnet_status(&bw, &conn, &err) != URNET_OK) return 0;
+        if (bw >= UR_STATE_MSG_LEN) {
+            n = urnet_read(buf, UR_STATE_MSG_LEN);
+            return (n >= (int16_t)UR_STATE_MSG_LEN &&
+                    ur_proto_decode_state(buf, (uint8_t)n, snap)) ? 1 : 0;
+        }
+        if (conn == 0) return 0;
+        vbl(7);
+        if (++ticks >= 10) {                    /* ~1 s at 70 Hz */
+            ticks = 0;
+            if (secs) secs--;
+            frectw(152, 180, 24, 8, C_BG);
+            text_u(152, 180, secs, C_WHITE);
+        }
+    }
+}
+
+/* Returns 1 if the player bailed out of waiting, to play the computer locally. */
+static int online_game(void)
+{
+    ur_snapshot snap;
+    uint8_t cmd[2 + UR_NAME_LEN + 2];
+    int8_t picked, rc;
+
+    clr(C_BG);
+    text(72, 8, "THE ROYAL GAME OF UR", C_GOLD);
+
+    if (!fn_present()) {
+        text(8, 28, "NO FUJINET DRIVER (INT F5).", C_WHITE);
+        text(8, 44, "LOAD FUJINET.SYS IN CONFIG.SYS", C_GREY);
+        text(8, 54, "WITH A FUJINET RS232 ATTACHED.", C_GREY);
+        text(8, 190, "PRESS A KEY TO RETURN", C_SHELL);
+        (void)waitkey();
+        return 0;
+    }
+    if (urnet_open(g_net_url, 12 /* read/write */, 0) != URNET_OK) {
+        ol_status("CONNECT FAILED. KEY..."); (void)waitkey(); return 0;
+    }
+    urnet_write(cmd, ur_proto_join(cmd, g_name));
+
+    text(8, 28, "CONNECTING TO:", C_WHITE);
+    text(8, 38, g_host, C_SHELL);
+    text(8, 60, "WAITING FOR AN OPPONENT...", C_WHITE);
+    text(8, 76, "OR PRESS A KEY TO PLAY", C_GREY);
+    text(8, 86, "THE COMPUTER LOCALLY", C_GREY);
+
+    rc = online_wait(&snap);
+    if (rc == -1) { urnet_close(); return 1; }
+    if (rc == 0) {
+        ol_status("DISCONNECTED. KEY..."); (void)waitkey();
+        urnet_close(); return 0;
+    }
+
+    for (;;) {
+        ur_g = snap.state;
+        if (snap.flags & UR_FLAG_CAPTURED)      sfx_capture();
+        else if (snap.flags & UR_FLAG_SCORED)   sfx_score();
+        else if (snap.flags & UR_FLAG_ROSETTE)  sfx_rosette();
+
+        if (snap.phase == UR_PHASE_OVER) {
+            plat_draw(UR_NO_ROLL, snap.winner == (int8_t)snap.seat
+                                ? "YOU WIN! KEY..." : "YOU LOSE. KEY...");
+            (void)waitkey();
+            break;
+        }
+        if (snap.state.turn != snap.seat) {
+            plat_draw(snap.phase == UR_PHASE_MOVE ? snap.roll : UR_NO_ROLL,
+                       "OPPONENTS TURN...");
+        } else if (snap.phase == UR_PHASE_ROLL) {
+            plat_draw(UR_NO_ROLL, "YOUR TURN - KEY TO ROLL");
+            (void)waitkey();
+            sfx_roll();
+            urnet_write(cmd, ur_proto_roll(cmd));
+        } else {
+            plat_draw(snap.roll, (const char *)0);
+            picked = plat_choose_move(snap.seat, snap.roll);
+            if (picked >= 0)
+                urnet_write(cmd, ur_proto_move(cmd, (unsigned char)picked));
+        }
+        rc = read_state(&snap);
+        if (rc == -1) break;
+        if (rc == 0) { ol_status("DISCONNECTED. KEY..."); (void)waitkey(); break; }
+    }
+    urnet_close();
+    return 0;
+}
+#endif /* UR_ONLINE */
+
 /* ---- video init + title / menu ----------------------------------------- */
 static void set_mode(uint16_t m) { union REGS r; r.w.ax = m; int86(0x10, &r, &r); }
 static void dacset(int i, int r, int g, int b)
@@ -430,38 +830,80 @@ static void video_init(void)
     snd_silence();                             /* quiet the speaker at boot */
 }
 
-static int title_menu(void)        /* returns vs_ai (1 = vs computer) */
+static int title_menu(void)        /* draws the title + menu; returns the key */
 {
     int k;
     title_scene();                 /* the Great Ziggurat of Ur at dusk */
     text(80, 8, "THE ROYAL GAME OF UR", C_GOLD);
     text(64, 20, "MESOPOTAMIA - C.2600 BCE", C_SHELL);
+#ifdef UR_ONLINE
+    text(8, 148, "SERVER", C_GREY);
+    text(64, 148, g_host, C_SHELL);
+    if (g_name[0]) {
+        text(200, 148, g_name, C_SHELL);
+        glyph(200 + 8 * (int)strlen(g_name) + 8, 148, 'W', C_GREY);
+        text_u16(200 + 8 * (int)strlen(g_name) + 16, 148, g_wins, C_WHITE);
+    }
+    text(24, 160,  "1) TWO PLAYERS", C_WHITE);
+    text(24, 170,  "2) VS COMPUTER", C_WHITE);
+    text(24, 180,  "3) ONLINE",      C_WHITE);
+    text(184, 160, "4) SET NAME",    C_WHITE);
+    text(184, 170, "5) SET HOST",    C_WHITE);
+    text(184, 180, "6) TOP TEN",     C_WHITE);
+    text(24, 192, "SELECT 1-6:", C_SHELL);
+#else
     text(88, 152, "1) TWO PLAYERS", C_WHITE);
     text(60, 164, "2) ONE PLAYER VS COMPUTER", C_WHITE);
     text(104, 180, "SELECT 1 OR 2:", C_SHELL);
+#endif
     text(272, 192, "IBM PC", C_GREY);
     play_hymn();                   /* the Hurrian Hymn, once, skippable by a key */
-    for (;;) {
-        k = waitkey();
-        if (k == '1') return 0;
-        if (k == '2') return 1;
-        if (k == 27) {             /* ESC: back to DOS (text mode restored) */
-            snd_silence();
-            set_mode(0x0003);
-            exit(0);
-        }
+    k = waitkey();
+    if (k == 27) {                 /* ESC: back to DOS (text mode restored) */
+        snd_silence();
+        set_mode(0x0003);
+        exit(0);
     }
+    return k;
+}
+
+/* Run a local game and show the result. ai1 = Dark is the computer (vs-AI);
+ * beating the computer bumps the online build's persistent win count. */
+static void run_and_show(uint8_t ai1)
+{
+    uint8_t winner = ur_run_game(ai1);
+#ifdef UR_ONLINE
+    if (ai1 && winner == 0) { g_wins++; profile_save(); }
+#endif
+    title_scene();                 /* victory beneath the ziggurat */
+    text(winner ? 120 : 116, 156, winner ? "DARK WINS!" : "LIGHT WINS!", C_GOLD);
+    text(108, 176, "PRESS ANY KEY", C_SHELL);
+    plat_wait();
 }
 
 int main(void)
 {
+    int k;
     video_init();
+#ifdef UR_ONLINE
+    profile_load();                /* name/wins/host from the FujiNet appkey, if any */
+    lobby_host_from_appkey();      /* launched from the lobby? use its server host   */
+    build_urls();                  /* N: URLs from the resolved host                 */
+#endif
     for (;;) {
-        uint8_t winner = ur_run_game((uint8_t)title_menu());
-        title_scene();             /* victory beneath the ziggurat */
-        text(winner ? 120 : 116, 156, winner ? "DARK WINS!" : "LIGHT WINS!", C_GOLD);
-        text(108, 176, "PRESS ANY KEY", C_SHELL);
-        plat_wait();
+        k = title_menu();
+#ifdef UR_ONLINE
+        if (k == '4') { edit_field("SET NAME", g_name, UR_NAME_LEN, 0); continue; }
+        if (k == '5') { edit_field("SET SERVER HOST", g_host, 32, 1);   continue; }
+        if (k == '6') { show_leaderboard(); continue; }
+        if (k == '3') {            /* online (server-authoritative) */
+            if (online_game())     /* bailed out of waiting -> play the computer */
+                run_and_show(1);
+            continue;
+        }
+#endif
+        if (k == '1' || k == '2')
+            run_and_show((uint8_t)(k == '2'));
     }
     return 0;
 }
