@@ -86,6 +86,13 @@ No container required if you install the toolchains directly:
   needs amitools (`pip install amitools` in any venv; `makefiles/amiga.mk`
   defaults `XDFTOOL` to `~/dev/toolchains/pyenv/bin/xdftool`). `make amiga`
   skips with a notice when the compiler is absent.
+- **Open Watcom v2 (MS-DOS)** — the 16-bit x86 C compiler (also what fujinet-lib's
+  `msdos` target uses). No root required: download `ow-snapshot.tar.xz` from the
+  [open-watcom-v2 releases](https://github.com/open-watcom/open-watcom-v2/releases)
+  and untar it to `~/dev/toolchains/watcom/`. `makefiles/dos.mk` defaults
+  `WATCOM_DIR` there and sets `WATCOM`/`INCLUDE`/`PATH` itself when it invokes
+  `owcc`, so nothing needs sourcing. `make dos` skips with a notice when it's
+  absent.
 
 The `Makefile` finds tools on your `PATH` (`cl65`, `zcc`, host `cc`), so a native
 install and the container are interchangeable for building.
@@ -100,6 +107,7 @@ install and the container are interchangeable for building.
 | Apple II | **AppleWin** / **MAME** / Virtual ][ | https://github.com/AppleWin/AppleWin |
 | Mega Drive / Genesis | **BlastEm** / **Genesis Plus GX** / **MAME** (`genesis`, the NTSC machine) | https://www.retrodev.com/blastem/ |
 | Amiga | **amiberry** / **FS-UAE** / **MAME** (`a500`; ignore its "not working" warning) | https://github.com/BlitterStudio/amiberry |
+| MS-DOS PC | **DOSBox** / DOSBox-X / 86Box (`dosbox build/dos/ur.exe`) | https://www.dosbox.com/ |
 | Networking (all) | **FujiNet-PC** | https://github.com/FujiNetWIFI/fujinet-pc |
 
 **FujiNet-PC** emulates the FujiNet device so you can test networking with no
@@ -134,6 +142,8 @@ make nes           # -> build/nes/ur.nes              (cc65; iNES NROM)
 make st            # -> build/st/ur.prg               (m68k-atari-mint-gcc; +STE/TT/FALCON=1)
 make genesis       # -> build/genesis/ur.bin          (SGDK 2.11; see toolchain note above)
 make amiga         # -> build/amiga/ur + ur.adf       (amiga-gcc + xdftool; see note above)
+# --- x86 real mode ---
+make dos           # -> build/dos/ur.exe              (Open Watcom owcc; see note above)
 make all           # the four primary platforms
 make clean
 ```

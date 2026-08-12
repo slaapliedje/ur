@@ -30,6 +30,7 @@ atari-st        ur-st-,ur-ste-,ur-tt-
 atari-falcon    ur-falcon-
 genesis         ur-genesis-
 amiga           ur-amiga-
+dos             ur-dos-
 '
 
 echo "[itch] building offline release bundle ($VERSION)…"

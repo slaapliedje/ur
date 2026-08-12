@@ -36,6 +36,13 @@ unchanged under GCC for the 68000, a third CPU family after the 6502 and Z80. Se
 [`src/st/CLAUDE.md`](src/st/CLAUDE.md), [`src/genesis/CLAUDE.md`](src/genesis/CLAUDE.md)
 and [`src/amiga/CLAUDE.md`](src/amiga/CLAUDE.md).
 
+…and a **fourth CPU family — x86 real mode**: the **MS-DOS / IBM PC** port
+(`make dos`, built with **Open Watcom v2** `owcc` into a 16-bit real-mode `.exe`,
+run in DOSBox): VGA mode 13h with the TT-style 256-colour gradient look + PC-speaker
+sound. Local-only today, but deliberately built with the same toolchain as
+fujinet-lib's `msdos` target, so DOS could become the *fifth FujiNet online
+platform*. See [`src/dos/CLAUDE.md`](src/dos/CLAUDE.md).
+
 All four targets now have a working platform layer with local play **and FujiNet
 online**: **Atari** (carved board + PMG two-tone tokens + DLI sheen + POKEY),
 **Adam** (carved Graphics-II board + sprite tokens + SN76489), **C64** (carved
@@ -182,6 +189,7 @@ src/
   nes/CLAUDE.md      ← NES / Famicom platform layer (6502 / cc65, local-only, no FujiNet)
   genesis/CLAUDE.md  ← Sega Mega Drive / Genesis layer (68000 / SGDK, local-only, no FujiNet)
   amiga/CLAUDE.md    ← Commodore Amiga layer (68000 / amiga-gcc, OCS + Paula, local-only)
+  dos/CLAUDE.md      ← MS-DOS / IBM PC layer (x86 real mode / Open Watcom, VGA + speaker)
 tests/               ← host unit tests for src/common
 server/              ← modern game server (future); see src/net/CLAUDE.md
 lib/                 ← fetched deps (fujinet-lib); git-ignored

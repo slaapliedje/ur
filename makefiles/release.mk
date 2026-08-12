@@ -11,11 +11,11 @@ UR_VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo d
 # flag (Atari and Adam already bake online into their default binary; the C64 and
 # Apple II ship an extra ur-online.* alongside their local default), PLUS the
 # 16-bit Atari ST family (ST + STe + TT + Falcon variants of the shared layer),
-# PLUS the Sega Mega Drive / Genesis (SGDK) and the Commodore Amiga (amiga-gcc)
-# — both skip with a notice when their toolchain is absent.
+# PLUS the Sega Mega Drive / Genesis (SGDK), the Commodore Amiga (amiga-gcc),
+# and MS-DOS (Open Watcom) — all skip with a notice when their toolchain is absent.
 RELEASE_TARGETS := atari a5200 c64 c64-online apple2 apple2-online \
                    adam coleco sms gamegear gb nes \
-                   st st-ste st-tt st-falcon genesis amiga
+                   st st-ste st-tt st-falcon genesis amiga dos
 
 .PHONY: release release-clean
 release: $(RELEASE_TARGETS) ## Build all platforms and bundle distributables into build/release/

@@ -33,6 +33,7 @@ load it in that machine's emulator, and play.
   ur-genesis-*.bin    Sega Mega Drive / Genesis     - BlastEm, Genesis Plus GX, MAME
   ur-amiga-*.adf      Commodore Amiga (bootable)    - amiberry, FS-UAE, WinUAE, MAME
   ur-amiga-*          (the bare Amiga executable, for your own HDD setup)
+  ur-dos-*.exe        MS-DOS / IBM PC (VGA)         - DOSBox, 86Box, real hardware
 
 (SHA256SUMS.txt lists checksums for every file.)
 
@@ -59,12 +60,13 @@ and is in the separate "-online" C64 and Apple II downloads above.
   CONTROLS
 ----------------------------------------------------------------
 Keyboard machines (Atari 8-bit, C64, Apple II, Atari ST/STe/TT/
-Falcon, Amiga):
+Falcon, Amiga, MS-DOS PC):
   - Menu: press the number of the option you want.
   - Roll: press any key when prompted.
   - Pick a move: press the number shown next to the move you want.
   On the ST family, drop the .prg on a (GEMDOS) drive and run it;
   legal move destinations light up green on the board.
+  On DOS, run UR.EXE (needs VGA); ESC at the title quits to DOS.
 
 Atari 5200: use the controller KEYPAD numbers (same as above).
 
